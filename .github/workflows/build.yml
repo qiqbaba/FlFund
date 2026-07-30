@@ -167,6 +167,27 @@ jobs:
           name: fl-fund-windows-setup-installer
           path: ./artifacts/windows
 
+      - name: Extract Release Notes from CHANGELOG
+        id: changelog
+        shell: bash
+        run: |
+          # 从 tag（如 v1.8.0）解析出版本号 1.8.0
+          VERSION="${GITHUB_REF_NAME#v}"
+          # 提取 CHANGELOG.md 中 "## <版本号>" 到下一个 "## " 之间的内容
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="$VERSION" '
+              $0 ~ "^## "ver"([^0-9.]|$)" { found=1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md > release_notes.md
+          fi
+          # 若未找到对应版本章节，写入提示占位内容
+          if [ ! -s release_notes.md ]; then
+            echo "本版本暂无更新说明，详见下方自动生成的变更记录。" > release_notes.md
+          fi
+          echo "--- Release Notes ---"
+          cat release_notes.md
+
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -174,6 +195,7 @@ jobs:
             ./artifacts/android/*.apk
             ./artifacts/windows/*.zip
             ./artifacts/windows/*.exe
+          body_path: release_notes.md
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

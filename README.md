@@ -7,6 +7,35 @@
 
 ---
 
+## 📸 功能截图
+
+### 持有基金
+资产统计、盈亏计算与买卖点标记，支持多选批量操作与上下文菜单。
+
+![持有基金](screenshots/holdings.png)
+
+### 自选看板
+自选基金实时估值看板，内置迷你趋势图与搜索定位。
+
+![自选看板](screenshots/watchlist.png)
+
+### 估值雷达
+指数 PE/PB 百分位估值监测，自动标记高低估状态与关联场外基金。
+
+![估值雷达](screenshots/valuation.png)
+
+### 策略中心
+策略回测与遗传算法参数寻优结果展示，支持交互式回测图表。
+
+![策略中心](screenshots/strategy.png)
+
+### 模拟盘
+信号驱动的模拟交易引擎，提供组合资产追踪与完整交易流水。
+
+![模拟盘](screenshots/simulation.png)
+
+---
+
 ## 🌟 核心特性
 
 ### 1. 策略回测与参数寻优 (Core Engine)
@@ -114,6 +143,12 @@ lib/
 │   │   └── unoptimized_badge.dart     # 未寻优提示徽章
 │   └── main_window.dart               # 主窗口布局（侧边栏、Tab 页签分发）
 └── main.dart                          # 应用入口与全局默认字体/亮暗主题配置
+screenshots/                           # README 功能截图
+├── holdings.png                       # 「持有基金」页面截图
+├── simulation.png                     # 「模拟盘」页面截图
+├── strategy.png                       # 「策略中心」页面截图
+├── valuation.png                      # 「估值雷达」页面截图
+└── watchlist.png                      # 「自选看板」页面截图
 ```
 
 ---
