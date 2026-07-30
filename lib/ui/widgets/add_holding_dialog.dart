@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
     show Colors, Icons, Material, MaterialType, AdaptiveTextSelectionToolbar;
 import 'package:flutter/services.dart';
@@ -570,8 +569,8 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark
-                  ? fluent.Colors.blue.withOpacity(0.2)
-                  : fluent.Colors.blue.withOpacity(0.1))
+                  ? fluent.Colors.blue.withValues(alpha: 0.2)
+                  : fluent.Colors.blue.withValues(alpha: 0.1))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
@@ -699,8 +698,8 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.02),
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.02),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
                           color: isDark ? Colors.white10 : Colors.black12),
@@ -781,8 +780,8 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.02)
-                            : Colors.black.withOpacity(0.02),
+                            ? Colors.white.withValues(alpha: 0.02)
+                            : Colors.black.withValues(alpha: 0.02),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                             color: isDark ? Colors.white10 : Colors.black12),
@@ -812,8 +811,8 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: isDark
-                              ? Colors.white.withOpacity(0.02)
-                              : Colors.black.withOpacity(0.01),
+                              ? Colors.white.withValues(alpha: 0.02)
+                              : Colors.black.withValues(alpha: 0.01),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isDark ? Colors.white24 : Colors.black26,
@@ -855,8 +854,8 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                     decoration: BoxDecoration(
                       border: Border.all(
                           color: isDark
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.black.withOpacity(0.05)),
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.05)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Column(
@@ -1245,7 +1244,7 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                                               fluent.FluentIcons.edit,
                                               size: 10,
                                               color: fluent.Colors.grey
-                                                  .withOpacity(0.8),
+                                                  .withValues(alpha: 0.8),
                                             ),
                                           ],
                                         ),

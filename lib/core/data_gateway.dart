@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
+import 'utils/safe_compute.dart';
 
 class FundDataGateway {
   static final FundDataGateway _instance = FundDataGateway._internal();
@@ -181,7 +182,7 @@ class FundDataGateway {
         final response = await _dio.get(url);
         if (response.statusCode == 200) {
           final text = response.data.toString();
-          final parsed = await compute(_parseEastMoneyWebHtml, text);
+          final parsed = await safeCompute(_parseEastMoneyWebHtml, text);
           if (parsed != null) return parsed;
         }
       } catch (e) {

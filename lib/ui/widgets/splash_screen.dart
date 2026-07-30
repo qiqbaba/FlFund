@@ -96,32 +96,30 @@ class _SplashScreenState extends State<SplashScreen> {
         : const [Color(0xFFE0F2F1), Color(0xFFF9FBFB)];
 
     final cardColor = isDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.white.withOpacity(0.85);
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.white.withValues(alpha: 0.85);
 
     final cardBorderColor = isDark
-        ? Colors.white.withOpacity(0.08)
-        : Colors.black.withOpacity(0.06);
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.06);
 
     final cardShadowColor = isDark
-        ? Colors.black.withOpacity(0.25)
-        : Colors.black.withOpacity(0.06);
+        ? Colors.black.withValues(alpha: 0.25)
+        : Colors.black.withValues(alpha: 0.06);
 
-    final titleColor = isDark
-        ? Colors.white
-        : const Color(0xFF0A161B);
+    final titleColor = isDark ? Colors.white : const Color(0xFF0A161B);
 
     final subtitleColor = isDark
-        ? Colors.white.withOpacity(0.65)
-        : const Color(0xFF0A161B).withOpacity(0.65);
+        ? Colors.white.withValues(alpha: 0.65)
+        : const Color(0xFF0A161B).withValues(alpha: 0.65);
 
     final progressBgColor = isDark
-        ? Colors.white.withOpacity(0.1)
-        : Colors.black.withOpacity(0.05);
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.black.withValues(alpha: 0.05);
 
     final statusTextColor = isDark
-        ? Colors.white.withOpacity(0.55)
-        : const Color(0xFF0A161B).withOpacity(0.55);
+        ? Colors.white.withValues(alpha: 0.55)
+        : const Color(0xFF0A161B).withValues(alpha: 0.55);
 
     return Scaffold(
       body: Container(
@@ -182,7 +180,8 @@ class _SplashScreenState extends State<SplashScreen> {
                   child: LinearProgressIndicator(
                     value: _progress,
                     backgroundColor: progressBgColor,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF009688)),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(Color(0xFF009688)),
                     minHeight: 6,
                   ),
                 ),
@@ -204,4 +203,3 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
-

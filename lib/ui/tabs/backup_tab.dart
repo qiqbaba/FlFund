@@ -139,7 +139,7 @@ class _BackupTabState extends State<BackupTab> {
 
   Widget _buildStrengthCriteria(String text, bool isMet, bool isDark) {
     const activeColor = Color(0xFF00E676);
-    final inactiveColor = Colors.grey.withOpacity(0.5);
+    final inactiveColor = Colors.grey.withValues(alpha: 0.5);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -156,7 +156,9 @@ class _BackupTabState extends State<BackupTab> {
           style: TextStyle(
             fontSize: 10,
             color: isMet
-                ? (isDark ? Colors.white.withOpacity(0.9) : Colors.black87)
+                ? (isDark
+                    ? Colors.white.withValues(alpha: 0.9)
+                    : Colors.black87)
                 : inactiveColor,
           ),
         ),
@@ -771,8 +773,8 @@ class _BackupTabState extends State<BackupTab> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : Colors.black.withOpacity(0.04),
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
       ),
@@ -956,8 +958,8 @@ class _BackupTabState extends State<BackupTab> {
               width: double.infinity,
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.02)
-                    : Colors.black.withOpacity(0.01),
+                    ? Colors.white.withValues(alpha: 0.02)
+                    : Colors.black.withValues(alpha: 0.01),
                 borderRadius: BorderRadius.circular(6),
                 border:
                     Border.all(color: isDark ? Colors.white10 : Colors.black12),
@@ -966,7 +968,7 @@ class _BackupTabState extends State<BackupTab> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.file_open_outlined,
-                      size: 36, color: Colors.grey.withOpacity(0.6)),
+                      size: 36, color: Colors.grey.withValues(alpha: 0.6)),
                   const SizedBox(height: 12),
                   fluent.Button(
                     onPressed: _pickImportFile,
@@ -1133,61 +1135,61 @@ class _BackupTabState extends State<BackupTab> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             const SizedBox(height: 8),
             isSmallScreen
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      fluent.RadioButton(
-                        checked: _isMergeMode,
-                        onChanged: (val) {
-                          if (val) setState(() => _isMergeMode = true);
-                        },
-                        content: const Text('合并导入 (保留本地已有基金，增量更新)',
-                            style: TextStyle(fontSize: 11)),
-                      ),
-                      const SizedBox(height: 8),
-                      fluent.RadioButton(
-                        checked: !_isMergeMode,
-                        onChanged: (val) {
-                          if (val) setState(() => _isMergeMode = false);
-                        },
-                        content: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('覆盖导入 (完全清空以备份文件为准)',
-                                style: TextStyle(fontSize: 11)),
-                            SizedBox(width: 4),
-                            Icon(Icons.report_problem_rounded,
-                                color: Colors.redAccent, size: 13),
-                          ],
+                ? RadioGroup<bool>(
+                    groupValue: _isMergeMode,
+                    onChanged: (v) {
+                      if (v != null) setState(() => _isMergeMode = v);
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        fluent.RadioButton<bool>(
+                          value: true,
+                          content: const Text('合并导入 (保留本地已有基金，增量更新)',
+                              style: TextStyle(fontSize: 11)),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        fluent.RadioButton<bool>(
+                          value: false,
+                          content: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('覆盖导入 (完全清空以备份文件为准)',
+                                  style: TextStyle(fontSize: 11)),
+                              SizedBox(width: 4),
+                              Icon(Icons.report_problem_rounded,
+                                  color: Colors.redAccent, size: 13),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   )
-                : Row(
-                    children: [
-                      fluent.RadioButton(
-                        checked: _isMergeMode,
-                        onChanged: (val) {
-                          if (val) setState(() => _isMergeMode = true);
-                        },
-                        content: const Text('合并导入 (保留本地已有基金，增量更新)'),
-                      ),
-                      const SizedBox(width: 20),
-                      fluent.RadioButton(
-                        checked: !_isMergeMode,
-                        onChanged: (val) {
-                          if (val) setState(() => _isMergeMode = false);
-                        },
-                        content: const Row(
-                          children: [
-                            Text('覆盖导入 (完全清空以备份文件为准)'),
-                            SizedBox(width: 4),
-                            Icon(Icons.report_problem_rounded,
-                                color: Colors.redAccent, size: 13),
-                          ],
+                : RadioGroup<bool>(
+                    groupValue: _isMergeMode,
+                    onChanged: (v) {
+                      if (v != null) setState(() => _isMergeMode = v);
+                    },
+                    child: Row(
+                      children: [
+                        fluent.RadioButton<bool>(
+                          value: true,
+                          content: const Text('合并导入 (保留本地已有基金，增量更新)'),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 20),
+                        fluent.RadioButton<bool>(
+                          value: false,
+                          content: const Row(
+                            children: [
+                              Text('覆盖导入 (完全清空以备份文件为准)'),
+                              SizedBox(width: 4),
+                              Icon(Icons.report_problem_rounded,
+                                  color: Colors.redAccent, size: 13),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
             const SizedBox(height: 20),
 
@@ -1377,8 +1379,8 @@ class _BackupTabState extends State<BackupTab> {
                                     horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: isDark
-                                      ? Colors.white.withOpacity(0.04)
-                                      : Colors.black.withOpacity(0.03),
+                                      ? Colors.white.withValues(alpha: 0.04)
+                                      : Colors.black.withValues(alpha: 0.03),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
                                     color: isDark
@@ -1570,8 +1572,10 @@ class _BackupTabState extends State<BackupTab> {
                                           height: 4,
                                           width: double.infinity,
                                           color: isDark
-                                              ? Colors.white.withOpacity(0.1)
-                                              : Colors.black.withOpacity(0.05),
+                                              ? Colors.white
+                                                  .withValues(alpha: 0.1)
+                                              : Colors.black
+                                                  .withValues(alpha: 0.05),
                                           child: Align(
                                             alignment: Alignment.centerLeft,
                                             child: FractionallySizedBox(
@@ -1708,12 +1712,12 @@ class _BackupTabState extends State<BackupTab> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color:
-                                    const Color(0xFF00E676).withOpacity(0.08),
+                                color: const Color(0xFF00E676)
+                                    .withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
                                     color: const Color(0xFF00E676)
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                               ),
                               child: Row(
                                 children: [
@@ -1854,7 +1858,7 @@ class _SyncConflictDialogState extends State<SyncConflictDialog> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.15),
+                            color: Colors.orange.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -1884,10 +1888,11 @@ class _SyncConflictDialogState extends State<SyncConflictDialog> {
                               decoration: BoxDecoration(
                                 color: currentRes ==
                                         SyncConflictResolution.keepLocal
-                                    ? const Color(0xFF00E676).withOpacity(0.08)
+                                    ? const Color(0xFF00E676)
+                                        .withValues(alpha: 0.08)
                                     : (isDark
-                                        ? Colors.white.withOpacity(0.02)
-                                        : Colors.black.withOpacity(0.01)),
+                                        ? Colors.white.withValues(alpha: 0.02)
+                                        : Colors.black.withValues(alpha: 0.01)),
                                 border: Border.all(
                                   color: currentRes ==
                                           SyncConflictResolution.keepLocal
@@ -1904,18 +1909,16 @@ class _SyncConflictDialogState extends State<SyncConflictDialog> {
                                 children: [
                                   Row(
                                     children: [
-                                      fluent.RadioButton(
-                                        checked: currentRes ==
-                                            SyncConflictResolution.keepLocal,
-                                        onChanged: (val) {
-                                          if (val) {
-                                            setState(() {
-                                              _resolutions[code] =
-                                                  SyncConflictResolution
-                                                      .keepLocal;
-                                            });
-                                          }
-                                        },
+                                      Icon(
+                                        currentRes ==
+                                                SyncConflictResolution.keepLocal
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_unchecked,
+                                        size: 18,
+                                        color: currentRes ==
+                                                SyncConflictResolution.keepLocal
+                                            ? const Color(0xFF00E676)
+                                            : Colors.grey,
                                       ),
                                       const SizedBox(width: 6),
                                       const Text('保留本地',
@@ -1960,10 +1963,11 @@ class _SyncConflictDialogState extends State<SyncConflictDialog> {
                               decoration: BoxDecoration(
                                 color: currentRes ==
                                         SyncConflictResolution.keepCloud
-                                    ? const Color(0xFF00E676).withOpacity(0.08)
+                                    ? const Color(0xFF00E676)
+                                        .withValues(alpha: 0.08)
                                     : (isDark
-                                        ? Colors.white.withOpacity(0.02)
-                                        : Colors.black.withOpacity(0.01)),
+                                        ? Colors.white.withValues(alpha: 0.02)
+                                        : Colors.black.withValues(alpha: 0.01)),
                                 border: Border.all(
                                   color: currentRes ==
                                           SyncConflictResolution.keepCloud
@@ -1980,18 +1984,16 @@ class _SyncConflictDialogState extends State<SyncConflictDialog> {
                                 children: [
                                   Row(
                                     children: [
-                                      fluent.RadioButton(
-                                        checked: currentRes ==
-                                            SyncConflictResolution.keepCloud,
-                                        onChanged: (val) {
-                                          if (val) {
-                                            setState(() {
-                                              _resolutions[code] =
-                                                  SyncConflictResolution
-                                                      .keepCloud;
-                                            });
-                                          }
-                                        },
+                                      Icon(
+                                        currentRes ==
+                                                SyncConflictResolution.keepCloud
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_unchecked,
+                                        size: 18,
+                                        color: currentRes ==
+                                                SyncConflictResolution.keepCloud
+                                            ? const Color(0xFF00E676)
+                                            : Colors.grey,
                                       ),
                                       const SizedBox(width: 6),
                                       const Text('保留云端',
@@ -2147,7 +2149,7 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
             boxShadow: widget.isSelected
                 ? [
                     BoxShadow(
-                      color: activeColor.withOpacity(0.2),
+                      color: activeColor.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     )
@@ -2156,7 +2158,7 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
                     ? [
                         BoxShadow(
                           color: Colors.black
-                              .withOpacity(widget.isDark ? 0.3 : 0.05),
+                              .withValues(alpha: widget.isDark ? 0.3 : 0.05),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         )
@@ -2196,8 +2198,8 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
                     height: 12,
                     decoration: BoxDecoration(
                       color: widget.mode == 'Light'
-                          ? Colors.black.withOpacity(0.05)
-                          : Colors.white.withOpacity(0.08),
+                          ? Colors.black.withValues(alpha: 0.05)
+                          : Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(2),
                     ),
                     child: Row(
@@ -2236,8 +2238,8 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: widget.mode == 'Light'
-                          ? Colors.black.withOpacity(0.04)
-                          : Colors.white.withOpacity(0.06),
+                          ? Colors.black.withValues(alpha: 0.04)
+                          : Colors.white.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -2250,8 +2252,8 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: widget.mode == 'Light'
-                          ? Colors.black.withOpacity(0.04)
-                          : Colors.white.withOpacity(0.06),
+                          ? Colors.black.withValues(alpha: 0.04)
+                          : Colors.white.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -2264,8 +2266,8 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
                   height: 28,
                   child: Container(
                     color: widget.mode == 'Light'
-                        ? Colors.white.withOpacity(0.9)
-                        : Colors.black.withOpacity(0.4),
+                        ? Colors.white.withValues(alpha: 0.9)
+                        : Colors.black.withValues(alpha: 0.4),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

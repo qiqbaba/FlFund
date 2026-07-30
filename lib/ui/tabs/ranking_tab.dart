@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart'
     show
@@ -471,14 +470,15 @@ class _RankingTabState extends State<RankingTab> {
 
       // 优先触发了买入信号的行高亮显示（淡红色），其次触发了卖出信号的行高亮显示（淡绿色），再次置顶行高亮背景，普通行无背景
       final Color? rowBgColor = isBuySignal
-          ? ThemeColors.getRedText(isDark).withOpacity(isDark ? 0.20 : 0.12)
+          ? ThemeColors.getRedText(isDark)
+              .withValues(alpha: isDark ? 0.20 : 0.12)
           : (isSellSignal
               ? ThemeColors.getGreenText(isDark)
-                  .withOpacity(isDark ? 0.20 : 0.12)
+                  .withValues(alpha: isDark ? 0.20 : 0.12)
               : (currentModel.isPinned
                   ? (isDark
-                      ? Colors.white.withOpacity(0.03)
-                      : Colors.yellow.withOpacity(0.05))
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : Colors.yellow.withValues(alpha: 0.05))
                   : null));
 
       // 提取长按/右键回调，传递给 CopyableText 确保手势统一处理
@@ -588,11 +588,11 @@ class _RankingTabState extends State<RankingTab> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 4, vertical: 1),
                           decoration: BoxDecoration(
-                            color:
-                                Colors.amber.withOpacity(isDark ? 0.15 : 0.12),
+                            color: Colors.amber
+                                .withValues(alpha: isDark ? 0.15 : 0.12),
                             border: Border.all(
                                 color: Colors.amber
-                                    .withOpacity(isDark ? 0.4 : 0.6),
+                                    .withValues(alpha: isDark ? 0.4 : 0.6),
                                 width: 0.5),
                             borderRadius: BorderRadius.circular(3),
                           ),
@@ -626,7 +626,7 @@ class _RankingTabState extends State<RankingTab> {
 
                     if (isBuySignal) {
                       final badgeBg = isDark
-                          ? const Color(0xFFC62828).withOpacity(0.9)
+                          ? const Color(0xFFC62828).withValues(alpha: 0.9)
                           : const Color(0xFFFFEBEE);
                       final badgeBorder = isDark
                           ? const Color(0xFFE57373)
@@ -689,14 +689,14 @@ class _RankingTabState extends State<RankingTab> {
                           currentModel.getRecentBuyTriggerIndex(maxDays: 3);
                       if (recentBuyIdx != null) {
                         final badgeBg = isDark
-                            ? Colors.red.withOpacity(0.15)
-                            : const Color(0xFFFFEBEE).withOpacity(0.4);
+                            ? Colors.red.withValues(alpha: 0.15)
+                            : const Color(0xFFFFEBEE).withValues(alpha: 0.4);
                         final badgeBorder = isDark
-                            ? Colors.red.withOpacity(0.4)
-                            : const Color(0xFFEF9A9A).withOpacity(0.5);
+                            ? Colors.red.withValues(alpha: 0.4)
+                            : const Color(0xFFEF9A9A).withValues(alpha: 0.5);
                         final badgeTextColor = isDark
                             ? Colors.white70
-                            : const Color(0xFFC62828).withOpacity(0.8);
+                            : const Color(0xFFC62828).withValues(alpha: 0.8);
                         final String dayText =
                             recentBuyIdx == 1 ? '昨日' : '$recentBuyIdx天前';
 
@@ -775,7 +775,7 @@ class _RankingTabState extends State<RankingTab> {
 
                     if (isSellSignal) {
                       final badgeBg = isDark
-                          ? const Color(0xFF2E7D32).withOpacity(0.9)
+                          ? const Color(0xFF2E7D32).withValues(alpha: 0.9)
                           : const Color(0xFFE8F5E9);
                       final badgeBorder = isDark
                           ? const Color(0xFF81C784)
@@ -909,7 +909,8 @@ class _RankingTabState extends State<RankingTab> {
                             navs: currentModel.navs,
                             dates: currentModel.dates,
                             todayEstimateNav: double.tryParse(currentModel.gsz),
-                            todayEstimatePct: double.tryParse(currentModel.gszzl),
+                            todayEstimatePct:
+                                double.tryParse(currentModel.gszzl),
                             todayEstimateTime: currentModel.gztime,
                           ),
                         );
@@ -1101,8 +1102,8 @@ class _RankingTabState extends State<RankingTab> {
                       height: 55,
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.06)
-                            : Colors.black.withOpacity(0.04),
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.04),
                         border: Border(
                           bottom: BorderSide(
                               color: isDark ? Colors.white10 : Colors.black12),
@@ -1155,8 +1156,8 @@ class _RankingTabState extends State<RankingTab> {
                             height: 55,
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.white.withOpacity(0.06)
-                                  : Colors.black.withOpacity(0.04),
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : Colors.black.withValues(alpha: 0.04),
                               border: Border(
                                 bottom: BorderSide(
                                     color: isDark
@@ -1176,7 +1177,8 @@ class _RankingTabState extends State<RankingTab> {
                               controller: rightVerticalController,
                               child: RefreshIndicator(
                                 onRefresh: () async {
-                                  await fundProvider.fetchRankings(isForce: true);
+                                  await fundProvider.fetchRankings(
+                                      isForce: true);
                                 },
                                 child: ListView.builder(
                                   padding: EdgeInsets.zero,
@@ -1235,8 +1237,8 @@ class _RankingTabState extends State<RankingTab> {
                       height: 55,
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.06)
-                            : Colors.black.withOpacity(0.04),
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.04),
                         border: const Border(
                           left: BorderSide(color: Colors.transparent, width: 5),
                         ),
@@ -1322,15 +1324,15 @@ class _RankingTabState extends State<RankingTab> {
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.black.withOpacity(0.05))
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.05))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: isSelected
                 ? (isDark
-                    ? Colors.white.withOpacity(0.15)
-                    : Colors.black.withOpacity(0.1))
+                    ? Colors.white.withValues(alpha: 0.15)
+                    : Colors.black.withValues(alpha: 0.1))
                 : Colors.transparent,
           ),
         ),
@@ -1347,8 +1349,8 @@ class _RankingTabState extends State<RankingTab> {
                 color: isSelected
                     ? (isDark ? Colors.white : Colors.black)
                     : (isDark
-                        ? Colors.white.withOpacity(0.6)
-                        : Colors.black.withOpacity(0.6)),
+                        ? Colors.white.withValues(alpha: 0.6)
+                        : Colors.black.withValues(alpha: 0.6)),
               ),
             ),
           ],

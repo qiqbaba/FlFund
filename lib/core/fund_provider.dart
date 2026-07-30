@@ -6,6 +6,7 @@ import 'config.dart';
 import 'db_manager.dart';
 import 'data_gateway.dart';
 import 'utils/pinyin_search.dart';
+import 'utils/safe_compute.dart';
 import 'backtest_engine.dart';
 import 'simulation_provider.dart';
 
@@ -789,7 +790,7 @@ class FundProvider extends ChangeNotifier {
               List<String>.from(onlineHis['dates'] ?? []);
           double? ma120Val;
           if (navs.length >= 120) {
-            final maResult = await compute(_calculateMaInIsolate, navs);
+            final maResult = await safeCompute(_calculateMaInIsolate, navs);
             ma120Val = maResult.closedMa120;
           }
           await db.saveHistory(
@@ -807,7 +808,8 @@ class FundProvider extends ChangeNotifier {
                     List<String>.from(proxyHis['dates'] ?? []);
                 double? pMa120Val;
                 if (pNavs.length >= 120) {
-                  final maResult = await compute(_calculateMaInIsolate, pNavs);
+                  final maResult =
+                      await safeCompute(_calculateMaInIsolate, pNavs);
                   pMa120Val = maResult.closedMa120;
                 }
                 await db.saveHistory(
@@ -835,7 +837,7 @@ class FundProvider extends ChangeNotifier {
           double? dbMa120 = history['ma120'] as double?;
           if (dbMa120 == null && rawNavs.length >= 120) {
             // 本地尚无缓存，使用 Isolate 计算后回写数据库
-            final maResult = await compute(_calculateMaInIsolate, rawNavs);
+            final maResult = await safeCompute(_calculateMaInIsolate, rawNavs);
             model.closedMa120 = maResult.closedMa120;
             model.sumOf119 = maResult.sumOf119;
             await db.updateMa120(model.code, maResult.closedMa120);
@@ -1214,7 +1216,8 @@ class FundProvider extends ChangeNotifier {
 
       // 天天基金官方全市场开放式基金盘中实时估值排行榜接口 (GSZZL 估算日涨跌幅排序)
       // 服务器单页硬编码限制最多返回30只，通过并发拉取前5页获取真正全市场前150只基金
-      Future<List<Map<String, dynamic>>> fetchPagedValuations(String sort) async {
+      Future<List<Map<String, dynamic>>> fetchPagedValuations(
+          String sort) async {
         try {
           final List<Future<Response>> tasks = [];
           for (int p = 1; p <= 5; p++) {
@@ -1260,7 +1263,8 @@ class FundProvider extends ChangeNotifier {
   }
 
   /// 降级备用源：新浪财经全市场基金实时排行榜
-  Future<List<Map<String, dynamic>>> _fetchRankingsFallbackSina(String sort) async {
+  Future<List<Map<String, dynamic>>> _fetchRankingsFallbackSina(
+      String sort) async {
     final List<Map<String, dynamic>> result = [];
     try {
       final dio = FundDataGateway().dio;
@@ -1276,13 +1280,17 @@ class FundProvider extends ChangeNotifier {
         final todayStr = FundUIModel._cachedToday;
         for (final item in list) {
           if (item is! Map) continue;
-          final code = item['symbol']?.toString() ?? item['code']?.toString() ?? '';
+          final code =
+              item['symbol']?.toString() ?? item['code']?.toString() ?? '';
           if (code.isEmpty) continue;
           final name = item['name']?.toString() ?? '';
-          final gsz = item['gz']?.toString() ?? item['dwjz']?.toString() ?? '0.00';
-          final gszzl = item['gz_rate']?.toString() ?? item['zdf']?.toString() ?? '0.00';
+          final gsz =
+              item['gz']?.toString() ?? item['dwjz']?.toString() ?? '0.00';
+          final gszzl =
+              item['gz_rate']?.toString() ?? item['zdf']?.toString() ?? '0.00';
           final dwjz = item['dwjz']?.toString() ?? gsz;
-          final jzrq = item['jzrq']?.toString() ?? item['date']?.toString() ?? todayStr;
+          final jzrq =
+              item['jzrq']?.toString() ?? item['date']?.toString() ?? todayStr;
 
           result.add({
             'bzdm': code,
@@ -1370,7 +1378,8 @@ class FundProvider extends ChangeNotifier {
         result.add({
           'bzdm': code,
           'jjjc': name,
-          'jzrq': item['FSRQ']?.toString() ?? item['JZDB']?.toString() ?? todayStr,
+          'jzrq':
+              item['FSRQ']?.toString() ?? item['JZDB']?.toString() ?? todayStr,
           'dwjz': item['DWJZ']?.toString() ?? gsz,
           'gsz': gsz,
           'gszzl': gszzl,
@@ -1495,12 +1504,14 @@ class FundProvider extends ChangeNotifier {
 
           double pep = double.tryParse(item['PEP']?.toString() ?? '') ?? -1.0;
           if (pep < 0 && djItem != null) {
-            pep = double.tryParse(djItem['pe_percentile']?.toString() ?? '') ?? -1.0;
+            pep = double.tryParse(djItem['pe_percentile']?.toString() ?? '') ??
+                -1.0;
           }
 
           double pbp = double.tryParse(item['PBP']?.toString() ?? '') ?? -1.0;
           if (pbp < 0 && djItem != null) {
-            pbp = double.tryParse(djItem['pb_percentile']?.toString() ?? '') ?? -1.0;
+            pbp = double.tryParse(djItem['pb_percentile']?.toString() ?? '') ??
+                -1.0;
           }
 
           if (pe != '--' || pb != '--') {
@@ -1531,12 +1542,18 @@ class FundProvider extends ChangeNotifier {
           if (indexBlacklist.contains(cleanCode)) continue;
 
           final djItem = entry.value as Map;
-          final indexName = djItem['name']?.toString() ?? djItem['index_name']?.toString() ?? cleanCode;
+          final indexName = djItem['name']?.toString() ??
+              djItem['index_name']?.toString() ??
+              cleanCode;
           final pe = djItem['pe']?.toString() ?? '--';
           final pb = djItem['pb']?.toString() ?? '--';
 
-          double pep = double.tryParse(djItem['pe_percentile']?.toString() ?? '') ?? -1.0;
-          double pbp = double.tryParse(djItem['pb_percentile']?.toString() ?? '') ?? -1.0;
+          double pep =
+              double.tryParse(djItem['pe_percentile']?.toString() ?? '') ??
+                  -1.0;
+          double pbp =
+              double.tryParse(djItem['pb_percentile']?.toString() ?? '') ??
+                  -1.0;
 
           String tag = '正常';
           final List<String> tags = [];

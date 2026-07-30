@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'safe_compute.dart';
 
 class FundRegistryItem {
   final String code;
@@ -63,13 +64,13 @@ class PinyinSearch {
     try {
       final jsonStr =
           await rootBundle.loadString('assets/funds_registry_cache.json');
-      // 使用 compute 移入后台 Isolate 运行，实现启动页极速加载与动画流畅
-      final items = await compute(_parseRegistryJson, jsonStr);
+      final items = await safeCompute(_parseRegistryJson, jsonStr);
       _registry.clear();
       _registry.addAll(items);
       _isLoaded = true;
     } catch (e) {
       // 捕获异常，防止影响主应用加载
+      debugPrint('[PinyinSearch] 基金字典加载失败: $e');
       _isLoaded = false;
     }
   }

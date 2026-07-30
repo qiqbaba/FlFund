@@ -48,8 +48,8 @@ class AppConfig extends ChangeNotifier {
   List<Map<String, String>> customApis = [];
   bool freezeColumns = false;
   bool ocrPreferClassC = true;
-  String supabaseUrl = '';
-  String supabaseAnonKey = '';
+  String supabaseUrl = 'https://zaslmgurbafajgoafpat.supabase.co';
+  String supabaseAnonKey = 'sb_publishable__bq-rBeyAvgANPAzX_daKg_ua76Nj4U';
 
   double volatilityLowThreshold = 15.0;
   double volatilityHighThreshold = 48.0;

@@ -859,8 +859,8 @@ class _FundChartDialogState extends State<FundChartDialog> {
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black
-                                          .withOpacity(isDark ? 0.4 : 0.1),
+                                      color: Colors.black.withValues(
+                                          alpha: isDark ? 0.4 : 0.1),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     )
@@ -1089,7 +1089,7 @@ class _MainChartPainter extends CustomPainter {
 
     // 2. 绘制背景网格与 Y 轴刻度
     final gridPaint = Paint()
-      ..color = isDark ? Colors.white10 : Colors.black.withOpacity(0.04)
+      ..color = isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.04)
       ..strokeWidth = 1.0;
 
     final textStyle = TextStyle(
@@ -1159,8 +1159,8 @@ class _MainChartPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Colors.blue.withOpacity(isDark ? 0.25 : 0.15),
-          Colors.blue.withOpacity(0.0),
+          Colors.blue.withValues(alpha: isDark ? 0.25 : 0.15),
+          Colors.blue.withValues(alpha: 0.0),
         ],
       ).createShader(
           Rect.fromLTRB(plotLeft, mapY(plotMax), plotLeft, mapY(plotMin)));
@@ -1351,7 +1351,7 @@ class _IndicatorChartPainter extends CustomPainter {
 
     // 1. 绘制网格背景线
     final gridPaint = Paint()
-      ..color = isDark ? Colors.white10 : Colors.black.withOpacity(0.04)
+      ..color = isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.04)
       ..strokeWidth = 1.0;
 
     final textStyle = TextStyle(
@@ -1367,7 +1367,8 @@ class _IndicatorChartPainter extends CustomPainter {
         final double y = mapY(val);
         // 绘制虚线
         final dashPaint = Paint()
-          ..color = isDark ? Colors.white10 : Colors.black.withOpacity(0.05)
+          ..color =
+              isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)
           ..strokeWidth = 1.0;
         double curX = plotLeft;
         while (curX < plotRight) {
@@ -1429,7 +1430,8 @@ class _IndicatorChartPainter extends CustomPainter {
       fillPath.lineTo(plotLeft + (points - 1) * xStep, mapY(50.0));
       fillPath.close();
       final fillPaint = Paint()
-        ..color = const Color(0xFFFFA502).withOpacity(isDark ? 0.05 : 0.03);
+        ..color =
+            const Color(0xFFFFA502).withValues(alpha: isDark ? 0.05 : 0.03);
       canvas.drawPath(fillPath, fillPaint);
 
       // 高亮圆点

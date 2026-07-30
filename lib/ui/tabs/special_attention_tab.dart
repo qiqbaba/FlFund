@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart'
@@ -881,9 +880,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                   decoration: BoxDecoration(
                                                     color: isDark
                                                         ? Colors.white
-                                                            .withOpacity(0.06)
+                                                            .withValues(
+                                                                alpha: 0.06)
                                                         : Colors.black
-                                                            .withOpacity(0.04),
+                                                            .withValues(
+                                                                alpha: 0.04),
                                                     border: Border(
                                                       bottom: BorderSide(
                                                           color: isDark
@@ -957,12 +958,12 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                   decoration: BoxDecoration(
                                                     gradient: LinearGradient(
                                                       colors: [
-                                                        Colors.black
-                                                            .withOpacity(isDark
+                                                        Colors.black.withValues(
+                                                            alpha: isDark
                                                                 ? 0.35
                                                                 : 0.15),
-                                                        Colors.black
-                                                            .withOpacity(0.0),
+                                                        Colors.black.withValues(
+                                                            alpha: 0.0),
                                                       ],
                                                       begin:
                                                           Alignment.centerLeft,
@@ -992,10 +993,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                     decoration: BoxDecoration(
                                                       color: isDark
                                                           ? Colors.white
-                                                              .withOpacity(0.06)
+                                                              .withValues(
+                                                                  alpha: 0.06)
                                                           : Colors.black
-                                                              .withOpacity(
-                                                                  0.04),
+                                                              .withValues(
+                                                                  alpha: 0.04),
                                                       border: Border(
                                                         bottom: BorderSide(
                                                             color: isDark
@@ -1076,9 +1078,9 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                               decoration: BoxDecoration(
                                                 color: isDark
                                                     ? Colors.white
-                                                        .withOpacity(0.06)
-                                                    : Colors.black
-                                                        .withOpacity(0.04),
+                                                        .withValues(alpha: 0.06)
+                                                    : Colors.black.withValues(
+                                                        alpha: 0.04),
                                                 border: const Border(
                                                   left: BorderSide(
                                                       color: Colors.transparent,
@@ -1166,13 +1168,14 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
 
     // 优先触发了买入信号的行高亮显示（淡红色），其次触发了卖出信号的行高亮显示（淡绿色），再次置顶行高亮背景，普通行无背景
     final Color? rowBgColor = isBuySignal
-        ? ThemeColors.getRedText(isDark).withOpacity(isDark ? 0.20 : 0.12)
+        ? ThemeColors.getRedText(isDark).withValues(alpha: isDark ? 0.20 : 0.12)
         : (isSellSignal
-            ? ThemeColors.getGreenText(isDark).withOpacity(isDark ? 0.20 : 0.12)
+            ? ThemeColors.getGreenText(isDark)
+                .withValues(alpha: isDark ? 0.20 : 0.12)
             : (model.isPinned
                 ? (isDark
-                    ? Colors.white.withOpacity(0.03)
-                    : Colors.yellow.withOpacity(0.05))
+                    ? Colors.white.withValues(alpha: 0.03)
+                    : Colors.yellow.withValues(alpha: 0.05))
                 : null));
 
     final double change =
@@ -1295,10 +1298,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 4, vertical: 1),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(isDark ? 0.15 : 0.12),
+                          color: Colors.amber
+                              .withValues(alpha: isDark ? 0.15 : 0.12),
                           border: Border.all(
-                              color:
-                                  Colors.amber.withOpacity(isDark ? 0.4 : 0.6),
+                              color: Colors.amber
+                                  .withValues(alpha: isDark ? 0.4 : 0.6),
                               width: 0.5),
                           borderRadius: BorderRadius.circular(3),
                         ),
@@ -1343,7 +1347,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
 
                   if (isBuySignal) {
                     final badgeBg = isDark
-                        ? const Color(0xFFC62828).withOpacity(0.9)
+                        ? const Color(0xFFC62828).withValues(alpha: 0.9)
                         : const Color(0xFFFFEBEE);
                     final badgeBorder = isDark
                         ? const Color(0xFFE57373)
@@ -1406,14 +1410,14 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                         model.getRecentBuyTriggerIndex(maxDays: 3);
                     if (recentBuyIdx != null) {
                       final badgeBg = isDark
-                          ? Colors.red.withOpacity(0.15)
-                          : const Color(0xFFFFEBEE).withOpacity(0.4);
+                          ? Colors.red.withValues(alpha: 0.15)
+                          : const Color(0xFFFFEBEE).withValues(alpha: 0.4);
                       final badgeBorder = isDark
-                          ? Colors.red.withOpacity(0.4)
-                          : const Color(0xFFEF9A9A).withOpacity(0.5);
+                          ? Colors.red.withValues(alpha: 0.4)
+                          : const Color(0xFFEF9A9A).withValues(alpha: 0.5);
                       final badgeTextColor = isDark
                           ? Colors.white70
-                          : const Color(0xFFC62828).withOpacity(0.8);
+                          : const Color(0xFFC62828).withValues(alpha: 0.8);
                       final String dayText =
                           recentBuyIdx == 1 ? '昨日' : '$recentBuyIdx天前';
 
@@ -1491,7 +1495,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
 
                   if (isSellSignal) {
                     final badgeBg = isDark
-                        ? const Color(0xFF2E7D32).withOpacity(0.9)
+                        ? const Color(0xFF2E7D32).withValues(alpha: 0.9)
                         : const Color(0xFFE8F5E9);
                     final badgeBorder = isDark
                         ? const Color(0xFF81C784)

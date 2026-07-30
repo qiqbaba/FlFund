@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import '../widgets/scaled_checkbox.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/fund_provider.dart';
 import '../../core/utils/theme_colors.dart';
+import '../../core/utils/safe_compute.dart';
 import '../../core/backtest_engine.dart';
 import '../../core/ga_optimizer.dart';
 import '../widgets/copyable_text.dart';
@@ -322,12 +322,12 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     color: isDark
-                        ? Colors.white.withOpacity(0.02)
-                        : Colors.black.withOpacity(0.015),
+                        ? Colors.white.withValues(alpha: 0.02)
+                        : Colors.black.withValues(alpha: 0.015),
                     border: Border.all(
                       color: isDark
-                          ? Colors.white.withOpacity(0.05)
-                          : Colors.black.withOpacity(0.05),
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.05),
                     ),
                   ),
                   child: Row(
@@ -336,7 +336,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: iconBgColor.withOpacity(0.12),
+                          color: iconBgColor.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(icon, color: iconBgColor, size: 16),
@@ -438,7 +438,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.08),
+              color: accentColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
@@ -677,32 +677,28 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                 ],
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  fluent.RadioButton(
-                    checked: _optMode == OptMode.single,
-                    onChanged: _isOptimizing || _isBatchOptimizing
-                        ? null
-                        : (checked) {
-                            if (checked) {
-                              setState(() => _optMode = OptMode.single);
-                            }
-                          },
-                    content: const Text('单只基金'),
-                  ),
-                  const SizedBox(width: 20),
-                  fluent.RadioButton(
-                    checked: _optMode == OptMode.batch,
-                    onChanged: _isOptimizing || _isBatchOptimizing
-                        ? null
-                        : (checked) {
-                            if (checked) {
-                              setState(() => _optMode = OptMode.batch);
-                            }
-                          },
-                    content: const Text('板块批量'),
-                  ),
-                ],
+              RadioGroup<OptMode>(
+                groupValue: _optMode,
+                onChanged: (v) {
+                  if (v != null && !_isOptimizing && !_isBatchOptimizing) {
+                    setState(() => _optMode = v);
+                  }
+                },
+                child: Row(
+                  children: [
+                    fluent.RadioButton<OptMode>(
+                      value: OptMode.single,
+                      content: const Text('单只基金'),
+                      enabled: !_isOptimizing && !_isBatchOptimizing,
+                    ),
+                    const SizedBox(width: 20),
+                    fluent.RadioButton<OptMode>(
+                      value: OptMode.batch,
+                      content: const Text('板块批量'),
+                      enabled: !_isOptimizing && !_isBatchOptimizing,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 15),
               const fluent.Divider(),
@@ -961,36 +957,30 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                     style: TextStyle(
                         fontWeight: fluent.FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    fluent.RadioButton(
-                      checked: _batchDimension == BatchDimension.tabSource,
-                      onChanged: _isBatchOptimizing
-                          ? null
-                          : (checked) {
-                              if (checked) {
-                                setState(() =>
-                                    _batchDimension = BatchDimension.tabSource);
-                              }
-                            },
-                      content: const Text('自选 Tab 来源',
-                          style: TextStyle(fontSize: 12)),
-                    ),
-                    const SizedBox(width: 16),
-                    fluent.RadioButton(
-                      checked: _batchDimension == BatchDimension.fundSector,
-                      onChanged: _isBatchOptimizing
-                          ? null
-                          : (checked) {
-                              if (checked) {
-                                setState(() => _batchDimension =
-                                    BatchDimension.fundSector);
-                              }
-                            },
-                      content:
-                          const Text('基金分类板块', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
+                RadioGroup<BatchDimension>(
+                  groupValue: _batchDimension,
+                  onChanged: (v) {
+                    if (v != null && !_isBatchOptimizing) {
+                      setState(() => _batchDimension = v);
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      fluent.RadioButton<BatchDimension>(
+                        value: BatchDimension.tabSource,
+                        content: const Text('自选 Tab 来源',
+                            style: TextStyle(fontSize: 12)),
+                        enabled: !_isBatchOptimizing,
+                      ),
+                      const SizedBox(width: 16),
+                      fluent.RadioButton<BatchDimension>(
+                        value: BatchDimension.fundSector,
+                        content: const Text('基金分类板块',
+                            style: TextStyle(fontSize: 12)),
+                        enabled: !_isBatchOptimizing,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 const fluent.Divider(),
@@ -1379,7 +1369,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                 handleBuiltInTouches: true,
                 touchTooltipData: LineTouchTooltipData(
                   getTooltipColor: (touchedSpot) =>
-                      Colors.blueGrey.withOpacity(0.85),
+                      Colors.blueGrey.withValues(alpha: 0.85),
                   fitInsideHorizontally: true,
                   fitInsideVertically: true,
                   getTooltipItems: (touchedSpots) {
@@ -1421,7 +1411,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                 LineChartBarData(
                   spots: _getChartSpots(),
                   isCurved: false,
-                  color: Colors.blue.withOpacity(0.65),
+                  color: Colors.blue.withValues(alpha: 0.65),
                   barWidth: 1.5,
                   dotData: const FlDotData(show: false),
                 ),
@@ -1545,8 +1535,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                   Container(
                     height: 55,
                     color: isDark
-                        ? Colors.white.withOpacity(0.06)
-                        : Colors.black.withOpacity(0.04),
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.04),
                     padding: EdgeInsets.zero,
                     child: Row(
                       children: columns.map((col) {
@@ -1661,8 +1651,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                     child: fluent.ProgressBar(
                       value: progressPct,
                       backgroundColor: isDark
-                          ? Colors.white.withOpacity(0.08)
-                          : Colors.black.withOpacity(0.08),
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.08),
                       activeColor: Colors.blue,
                     ),
                   ),
@@ -1734,8 +1724,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
     final rowColor = result.status == '计算中'
         ? (isDark
-            ? Colors.white.withOpacity(0.02)
-            : Colors.blue.withOpacity(0.03))
+            ? Colors.white.withValues(alpha: 0.02)
+            : Colors.blue.withValues(alpha: 0.03))
         : null;
 
     return Container(
@@ -2027,8 +2017,10 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         if (history == null || history['navs'] == null) {
           final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
           if (onlineHis != null) {
-            final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
-            final List<String> dates = List<String>.from(onlineHis['dates'] ?? []);
+            final List<double> navs =
+                List<double>.from(onlineHis['navs'] ?? []);
+            final List<String> dates =
+                List<String>.from(onlineHis['dates'] ?? []);
             await FundHistoryDB()
                 .saveHistory(proxyCode, onlineHis['jzrq'], navs, dates);
             history = await FundHistoryDB().getHistory(proxyCode);
@@ -2058,13 +2050,15 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           final lastDate = DateTime.tryParse(dates.last);
           if (firstDate != null && lastDate != null) {
             final years = lastDate.difference(firstDate).inDays / 365.0;
-            durationStr = "${years.toThousand(precision: 1)}年 (${dates.length}天)";
+            durationStr =
+                "${years.toThousand(precision: 1)}年 (${dates.length}天)";
           } else {
             durationStr = "${dates.length}天";
           }
         }
         try {
-          final optStrategy = await FundHistoryDB().getOptimalStrategy(fund.code);
+          final optStrategy =
+              await FundHistoryDB().getOptimalStrategy(fund.code);
           int? sX;
           double? sPct;
           if (optStrategy != null && optStrategy['sell_x'] != null) {
@@ -2089,7 +2083,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               ? (optStrategy!['macd_filter_enabled'] == 1)
               : defaultMacd;
 
-          final optResult = await compute(_runStrategyOptimizationInIsolate, {
+          final optResult =
+              await safeCompute(_runStrategyOptimizationInIsolate, {
             'navs': navs,
             'dates': dates,
             'useMaFilter': true,
@@ -2334,8 +2329,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                     Container(
                       height: 55,
                       color: isDark
-                          ? Colors.white.withOpacity(0.06)
-                          : Colors.black.withOpacity(0.04),
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.04),
                       padding: EdgeInsets.zero,
                       child: Row(
                         children: columns.map((col) {
@@ -2589,7 +2584,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
       // 在 Dart 中，通过 compute 可以直接在新后台 Isolate 里并发运算，防止界面卡顿
       // 核心优化：将买入和卖出寻优统一合入后台 Isolate 计算，保证主线程零负荷
-      final optResult = await compute(_runStrategyOptimizationInIsolate, {
+      final optResult = await safeCompute(_runStrategyOptimizationInIsolate, {
         'navs': navs,
         'dates': dates,
         'useMaFilter': true,
@@ -2703,8 +2698,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: isDark
-              ? Colors.white.withOpacity(0.04)
-              : Colors.black.withOpacity(0.02),
+              ? Colors.white.withValues(alpha: 0.04)
+              : Colors.black.withValues(alpha: 0.02),
           border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
         ),
         child: Row(
@@ -2712,7 +2707,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: baseColor.withOpacity(0.12),
+                color: baseColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: baseColor, size: 20),
@@ -2824,12 +2819,10 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 // 核心优化：合并买入和卖出寻优，在后台 Isolate 一起算完再回传
 Map<String, dynamic>? _runStrategyOptimizationInIsolate(
     Map<String, dynamic> params) {
-  final List<double> navs = (params['navs'] as List<dynamic>?)
-          ?.cast<double>() ??
-      [];
-  final List<String> dates = (params['dates'] as List<dynamic>?)
-          ?.cast<String>() ??
-      [];
+  final List<double> navs =
+      (params['navs'] as List<dynamic>?)?.cast<double>() ?? [];
+  final List<String> dates =
+      (params['dates'] as List<dynamic>?)?.cast<String>() ?? [];
   final bool useMaFilter = params['useMaFilter'] ?? false;
   final double? trailingDropPct = params['trailingDropPct'];
   final int? sellX = params['sellX'];

@@ -31,7 +31,9 @@ class ThemeColors {
 
   /// 低估单元格背景色 (绿色系)
   static Color getLowPercentileBg(bool isDark) {
-    return isDark ? const Color(0xFF1B5E20).withOpacity(0.65) : const Color(0xFFA5D6A7);
+    return isDark
+        ? const Color(0xFF1B5E20).withValues(alpha: 0.65)
+        : const Color(0xFFA5D6A7);
   }
 
   /// 低估单元格文字颜色 (绿色系)
@@ -41,7 +43,9 @@ class ThemeColors {
 
   /// 高估单元格背景色 (红色系)
   static Color getHighPercentileBg(bool isDark) {
-    return isDark ? const Color(0xFFB71C1C).withOpacity(0.65) : const Color(0xFFEF9A9A);
+    return isDark
+        ? const Color(0xFFB71C1C).withValues(alpha: 0.65)
+        : const Color(0xFFEF9A9A);
   }
 
   /// 高估单元格文字颜色 (红色系)

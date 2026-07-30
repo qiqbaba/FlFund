@@ -52,7 +52,7 @@ class _MainWindowState extends State<MainWindow> {
     _fundProvider.addListener(_onFundProviderChanged);
     _fundProvider.onOpenDrawer = () {
       if (mounted) {
-        _navigationViewKey.currentState?.minimalPaneOpen = true;
+        _navigationViewKey.currentState?.isMinimalPaneOpen = true;
       }
     };
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
@@ -384,9 +384,9 @@ class _MainWindowState extends State<MainWindow> {
                     backgroundColor:
                         fluent.WidgetStateProperty.resolveWith((states) {
                       if (states.contains(fluent.WidgetState.hovered)) {
-                        return Colors.orange.withOpacity(0.2);
+                        return Colors.orange.withValues(alpha: 0.2);
                       }
-                      return Colors.orange.withOpacity(0.12);
+                      return Colors.orange.withValues(alpha: 0.12);
                     }),
                     padding: fluent.WidgetStateProperty.all(
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -394,7 +394,8 @@ class _MainWindowState extends State<MainWindow> {
                     shape: fluent.WidgetStateProperty.all(
                       RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(color: Colors.orange.withOpacity(0.5)),
+                        side: BorderSide(
+                            color: Colors.orange.withValues(alpha: 0.5)),
                       ),
                     ),
                   ),
@@ -425,7 +426,7 @@ class _MainWindowState extends State<MainWindow> {
 
     return PopScope(
       canPop: false, // 拦截系统物理返回
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
         // 若当前不在“持有基金” Tab (0)，则先切回 Tab 0
@@ -457,35 +458,45 @@ class _MainWindowState extends State<MainWindow> {
       },
       child: fluent.NavigationView(
         key: _navigationViewKey,
-        appBar: isSmallScreen
+        titleBar: isSmallScreen
             ? null
-            : fluent.NavigationAppBar(
+            : SizedBox(
                 height: isDesktop ? 32.0 : 50.0,
-                automaticallyImplyLeading: false,
-                title: isDesktop
-                    ? DragToMoveArea(child: titleWidget)
-                    : titleWidget,
-                actions: isDesktop
-                    ? WindowCaption(
-                        brightness: isDark
-                            ? fluent.Brightness.dark
-                            : fluent.Brightness.light,
-                        backgroundColor: Colors.transparent,
-                      )
-                    : null,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: isDesktop
+                          ? DragToMoveArea(child: titleWidget)
+                          : titleWidget,
+                    ),
+                    if (isDesktop)
+                      SizedBox(
+                        // WindowCaption 内部是 Row+Expanded 结构，必须给定有界宽度，
+                        // 否则作为 Row 的非 flex 子项会收到无限宽约束而布局崩溃。
+                        // 138 = 最小化/最大化/关闭三个按钮 (46 x 3)。
+                        width: 138,
+                        child: WindowCaption(
+                          brightness: isDark
+                              ? fluent.Brightness.dark
+                              : fluent.Brightness.light,
+                          backgroundColor: Colors.transparent,
+                        ),
+                      ),
+                  ],
+                ),
               ),
         pane: fluent.NavigationPane(
           selected: currentTabIndex,
           onChanged: (index) {
             fundProviderListenFalse.setCurrentTabIndex(index);
             if (isSmallScreen) {
-              _navigationViewKey.currentState?.minimalPaneOpen = false;
+              _navigationViewKey.currentState?.isMinimalPaneOpen = false;
             }
           },
           // 如果是小屏设备，切换到抽屉 (minimal) 模式，以节省空间；宽屏保持展开 (open) 模式
           displayMode: isSmallScreen
               ? fluent.PaneDisplayMode.minimal
-              : fluent.PaneDisplayMode.open,
+              : fluent.PaneDisplayMode.expanded,
           size: fluent.NavigationPaneSize(
             openWidth: dynamicOpenWidth, // 使用动态计算的宽度
           ),

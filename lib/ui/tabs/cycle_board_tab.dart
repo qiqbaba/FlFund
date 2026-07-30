@@ -159,13 +159,13 @@ class CycleBoardTab extends StatelessWidget {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.04)
+                            ? Colors.white.withValues(alpha: 0.04)
                             : Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isDark
-                              ? Colors.white.withOpacity(0.08)
-                              : Colors.black.withOpacity(0.08),
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.08),
                         ),
                       ),
                       child: Column(
@@ -188,13 +188,13 @@ class CycleBoardTab extends StatelessWidget {
                                 horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.white.withOpacity(0.02)
-                                  : Colors.black.withOpacity(0.015),
+                                  ? Colors.white.withValues(alpha: 0.02)
+                                  : Colors.black.withValues(alpha: 0.015),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                   color: isDark
-                                      ? Colors.white.withOpacity(0.05)
-                                      : Colors.black.withOpacity(0.04)),
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.black.withValues(alpha: 0.04)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,9 +272,14 @@ class CycleBoardTab extends StatelessWidget {
                                                   fundName: model.name,
                                                   navs: model.navs,
                                                   dates: model.dates,
-                                                  todayEstimateNav: double.tryParse(model.gsz),
-                                                  todayEstimatePct: double.tryParse(model.gszzl),
-                                                  todayEstimateTime: model.gztime,
+                                                  todayEstimateNav:
+                                                      double.tryParse(
+                                                          model.gsz),
+                                                  todayEstimatePct:
+                                                      double.tryParse(
+                                                          model.gszzl),
+                                                  todayEstimateTime:
+                                                      model.gztime,
                                                 ),
                                               );
                                             },
@@ -364,8 +369,9 @@ class CycleBoardTab extends StatelessWidget {
                                     child: fluent.ProgressBar(
                                       value: effectivePct,
                                       backgroundColor: isDark
-                                          ? Colors.white.withOpacity(0.08)
-                                          : Colors.black.withOpacity(0.08),
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : Colors.black
+                                              .withValues(alpha: 0.08),
                                       activeColor: stageColor,
                                     ),
                                   ),

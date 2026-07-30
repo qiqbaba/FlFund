@@ -48,86 +48,88 @@ class _SimulationTabState extends State<SimulationTab> {
     required bool isDark,
   }) {
     return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.black.withOpacity(0.08),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.08),
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.55)
+                  : Colors.black54,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white.withOpacity(0.55) : Colors.black54,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (subTitle != null && subValue != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: Text(
+                    subTitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white38 : Colors.black45,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    subValue,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: subColor ??
+                          (isDark ? Colors.white70 : Colors.black87),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
             ),
-            if (subTitle != null && subValue != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      subTitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white38 : Colors.black45,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      subValue,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: subColor ??
-                            (isDark ? Colors.white70 : Colors.black87),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ],
-        ),
-      );
+        ],
+      ),
+    );
   }
 
   // 二次重置账户的弹窗
@@ -341,45 +343,45 @@ class _SimulationTabState extends State<SimulationTab> {
                       children: [
                         Expanded(
                           child: _buildOverviewCard(
-                          context: context,
-                          title: '当前模拟总资产 (元)',
-                          value:
-                              '￥${simProvider.totalAssets.toThousand(precision: 2)}',
-                          color: assetsColor,
-                          subTitle: '初始资金',
-                          subValue:
-                              '￥${simProvider.initialBalance.toThousand(precision: 2)}',
-                          isDark: isDark,
-                        ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildOverviewCard(
-                          context: context,
-                          title: '账户盈亏 / 收益率',
-                          value:
-                              '$profitSign￥${profit.toThousand(precision: 2)}',
-                          color: profitColor,
-                          subTitle: '总盈亏比例',
-                          subValue:
-                              '${profitRate.toThousand(precision: 2, showSign: true)}%',
-                          subColor: profitColor,
-                          isDark: isDark,
-                        ),
+                            context: context,
+                            title: '当前模拟总资产 (元)',
+                            value:
+                                '￥${simProvider.totalAssets.toThousand(precision: 2)}',
+                            color: assetsColor,
+                            subTitle: '初始资金',
+                            subValue:
+                                '￥${simProvider.initialBalance.toThousand(precision: 2)}',
+                            isDark: isDark,
+                          ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: _buildOverviewCard(
-                          context: context,
-                          title: '可用模拟资金 (元)',
-                          value:
-                              '￥${simProvider.availableBalance.toThousand(precision: 2)}',
-                          color: assetsColor,
-                          subTitle: '持仓总市值',
-                          subValue:
-                              '￥${simProvider.totalPositionValue.toThousand(precision: 2)}',
-                          isDark: isDark,
+                            context: context,
+                            title: '账户盈亏 / 收益率',
+                            value:
+                                '$profitSign￥${profit.toThousand(precision: 2)}',
+                            color: profitColor,
+                            subTitle: '总盈亏比例',
+                            subValue:
+                                '${profitRate.toThousand(precision: 2, showSign: true)}%',
+                            subColor: profitColor,
+                            isDark: isDark,
+                          ),
                         ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildOverviewCard(
+                            context: context,
+                            title: '可用模拟资金 (元)',
+                            value:
+                                '￥${simProvider.availableBalance.toThousand(precision: 2)}',
+                            color: assetsColor,
+                            subTitle: '持仓总市值',
+                            subValue:
+                                '￥${simProvider.totalPositionValue.toThousand(precision: 2)}',
+                            isDark: isDark,
+                          ),
                         ),
                       ],
                     ),
@@ -390,13 +392,13 @@ class _SimulationTabState extends State<SimulationTab> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.white.withOpacity(0.02)
-                          : Colors.black.withOpacity(0.015),
+                          ? Colors.white.withValues(alpha: 0.02)
+                          : Colors.black.withValues(alpha: 0.015),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isDark
-                            ? Colors.white.withOpacity(0.06)
-                            : Colors.black.withOpacity(0.06),
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.06),
                       ),
                     ),
                     child: Column(
@@ -605,8 +607,8 @@ class _SimulationTabState extends State<SimulationTab> {
                           Icon(Icons.account_balance_wallet_outlined,
                               size: 36,
                               color: isDark
-                                  ? Colors.white.withOpacity(0.3)
-                                  : Colors.black.withOpacity(0.3)),
+                                  ? Colors.white.withValues(alpha: 0.3)
+                                  : Colors.black.withValues(alpha: 0.3)),
                           const SizedBox(height: 12),
                           const Text('当前无任何模拟持仓。',
                               style:
@@ -636,13 +638,13 @@ class _SimulationTabState extends State<SimulationTab> {
                               horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? Colors.white.withOpacity(0.03)
+                                ? Colors.white.withValues(alpha: 0.03)
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isDark
-                                  ? Colors.white.withOpacity(0.06)
-                                  : Colors.black.withOpacity(0.06),
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : Colors.black.withValues(alpha: 0.06),
                             ),
                           ),
                           child: isSmallScreen
@@ -663,9 +665,12 @@ class _SimulationTabState extends State<SimulationTab> {
                                               fundName: assocFund.name,
                                               navs: assocFund.navs,
                                               dates: assocFund.dates,
-                                              todayEstimateNav: double.tryParse(assocFund.gsz),
-                                              todayEstimatePct: double.tryParse(assocFund.gszzl),
-                                              todayEstimateTime: assocFund.gztime,
+                                              todayEstimateNav: double.tryParse(
+                                                  assocFund.gsz),
+                                              todayEstimatePct: double.tryParse(
+                                                  assocFund.gszzl),
+                                              todayEstimateTime:
+                                                  assocFund.gztime,
                                             ),
                                           );
                                         } else {
@@ -768,7 +773,7 @@ class _SimulationTabState extends State<SimulationTab> {
                                           backgroundColor:
                                               WidgetStateProperty.all(Colors
                                                   .redAccent
-                                                  .withOpacity(0.1)),
+                                                  .withValues(alpha: 0.1)),
                                           foregroundColor:
                                               WidgetStateProperty.all(
                                                   Colors.redAccent),
@@ -798,9 +803,14 @@ class _SimulationTabState extends State<SimulationTab> {
                                                 fundName: assocFund.name,
                                                 navs: assocFund.navs,
                                                 dates: assocFund.dates,
-                                                todayEstimateNav: double.tryParse(assocFund.gsz),
-                                                todayEstimatePct: double.tryParse(assocFund.gszzl),
-                                                todayEstimateTime: assocFund.gztime,
+                                                todayEstimateNav:
+                                                    double.tryParse(
+                                                        assocFund.gsz),
+                                                todayEstimatePct:
+                                                    double.tryParse(
+                                                        assocFund.gszzl),
+                                                todayEstimateTime:
+                                                    assocFund.gztime,
                                               ),
                                             );
                                           } else {
@@ -912,7 +922,7 @@ class _SimulationTabState extends State<SimulationTab> {
                                         backgroundColor:
                                             WidgetStateProperty.all(Colors
                                                 .redAccent
-                                                .withOpacity(0.1)),
+                                                .withValues(alpha: 0.1)),
                                         foregroundColor:
                                             WidgetStateProperty.all(
                                                 Colors.redAccent),
@@ -960,13 +970,13 @@ class _SimulationTabState extends State<SimulationTab> {
                               horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? Colors.white.withOpacity(0.015)
-                                : Colors.black.withOpacity(0.01),
+                                ? Colors.white.withValues(alpha: 0.015)
+                                : Colors.black.withValues(alpha: 0.01),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isDark
-                                  ? Colors.white.withOpacity(0.04)
-                                  : Colors.black.withOpacity(0.04),
+                                  ? Colors.white.withValues(alpha: 0.04)
+                                  : Colors.black.withValues(alpha: 0.04),
                             ),
                           ),
                           child: isSmallScreen
@@ -980,7 +990,8 @@ class _SimulationTabState extends State<SimulationTab> {
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: txColor.withOpacity(0.15),
+                                            color:
+                                                txColor.withValues(alpha: 0.15),
                                             borderRadius:
                                                 BorderRadius.circular(4),
                                           ),
@@ -1085,7 +1096,7 @@ class _SimulationTabState extends State<SimulationTab> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: txColor.withOpacity(0.15),
+                                        color: txColor.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(

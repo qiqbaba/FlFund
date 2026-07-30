@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Colors, Icons, Material, MaterialType, AdaptiveTextSelectionToolbar;
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart'
+    show Colors, Icons, Material, MaterialType, AdaptiveTextSelectionToolbar;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -101,14 +100,18 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
 
     if (_selectedProvider == 'zhipu') {
       initialKey = _zhipuApiKey;
-      initialUrl = _zhipuApiUrl.isEmpty ? 'https://open.bigmodel.cn/api/paas/v4' : _zhipuApiUrl;
+      initialUrl = _zhipuApiUrl.isEmpty
+          ? 'https://open.bigmodel.cn/api/paas/v4'
+          : _zhipuApiUrl;
       initialModel = _zhipuModel.isEmpty ? 'glm-4.6v-flash' : _zhipuModel;
     } else if (_selectedProvider == 'mimo') {
       initialKey = _mimoApiKey;
-      initialUrl = _mimoApiUrl.isEmpty ? 'https://api.xiaomimimo.com/v1' : _mimoApiUrl;
+      initialUrl =
+          _mimoApiUrl.isEmpty ? 'https://api.xiaomimimo.com/v1' : _mimoApiUrl;
       initialModel = _mimoModel.isEmpty ? 'mimo-v2.5' : _mimoModel;
     } else if (_selectedProvider.startsWith('custom_')) {
-      final item = appConfig.customApis.firstWhere((e) => e['id'] == _selectedProvider, orElse: () => {});
+      final item = appConfig.customApis
+          .firstWhere((e) => e['id'] == _selectedProvider, orElse: () => {});
       if (item.isNotEmpty) {
         _customApiKey = item['key'] ?? '';
         _customApiUrl = item['url'] ?? '';
@@ -183,7 +186,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
     });
 
     try {
-      const prompt = '这是一张自选基金列表截图，请帮我从中识别出所有的基金信息。请务必只提取截图中明确写出的信息，杜绝任何联想或脑补。\n\n'
+      const prompt =
+          '这是一张自选基金列表截图，请帮我从中识别出所有的基金信息。请务必只提取截图中明确写出的信息，杜绝任何联想或脑补。\n\n'
           '针对列表中的每一项基金，识别规则如下：\n'
           '1. 请在截图中寻找6位数字的基金代码（例如：001234）以及对应的基金名称（例如：天弘恒生科技ETF联接C）。\n'
           '2. 将它们分别提取为 code 和 name。\n\n'
@@ -209,18 +213,22 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
 
           // 若代码为空但名称不为空，尝试通过本地字典模糊搜索匹配代码
           if (code.isEmpty && name.isNotEmpty) {
-            final matched = pinyinSearch.matchFundByName(name, preferClassC: appConfig.ocrPreferClassC);
+            final matched = pinyinSearch.matchFundByName(name,
+                preferClassC: appConfig.ocrPreferClassC);
             if (matched != null) {
               code = matched.code;
               name = matched.name; // 用官方标准的基金名字修正
-              debugPrint('[本地字典匹配] 成功模糊匹配到官方标准基金: ${matched.code} - ${matched.name}');
+              debugPrint(
+                  '[本地字典匹配] 成功模糊匹配到官方标准基金: ${matched.code} - ${matched.name}');
             } else {
               debugPrint('[本地字典匹配] 模糊匹配失败: "$name"');
             }
           }
 
           // 不再强行过滤，允许保留未匹配的项，由用户手动修正
-          if (code.isNotEmpty && RegExp(r'^\d{6}$').hasMatch(code) && name.isEmpty) {
+          if (code.isNotEmpty &&
+              RegExp(r'^\d{6}$').hasMatch(code) &&
+              name.isEmpty) {
             final matched = pinyinSearch.search(code);
             if (matched.isNotEmpty) {
               name = matched.first.name;
@@ -261,7 +269,6 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
         _isRecognizing = false;
         _selectedProvider = appConfig.defaultOcrProvider;
       });
-
     } catch (e) {
       debugPrint('图片识别失败: $e');
       final errorMsg = OcrService.parseApiError(e);
@@ -272,9 +279,9 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
     }
   }
 
-
   // 保存截图识别到的全部自选勾选项
-  void _saveOcrImport(BuildContext context, AppConfig appConfig, FundProvider fundProvider) {
+  void _saveOcrImport(
+      BuildContext context, AppConfig appConfig, FundProvider fundProvider) {
     if (_selectedOcrIndices.isEmpty) return;
 
     // 检查是否有勾选的项未匹配到有效的 6 位代码
@@ -282,7 +289,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
       final item = _ocrResults[idx];
       final code = item['code']?.toString() ?? '';
       if (code.isEmpty || !RegExp(r'^\d{6}$').hasMatch(code)) {
-        _showError('存在未成功匹配有效6位基金代码的已勾选项（如“${item['name']}”）。请先点击该项进行修正，或取消勾选该项后再导入。');
+        _showError(
+            '存在未成功匹配有效6位基金代码的已勾选项（如“${item['name']}”）。请先点击该项进行修正，或取消勾选该项后再导入。');
         return;
       }
     }
@@ -294,14 +302,15 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
       final item = _ocrResults[idx];
       final code = item['code'];
       final originalName = item['name'];
-      
+
       String name = originalName;
       String sector = '其它';
 
       // 先到字典里找更准确的官方名称与类型分类
       final searchResults = pinyinSearch.search(code);
       if (searchResults.isNotEmpty) {
-        final matched = searchResults.firstWhere((r) => r.code == code, orElse: () => searchResults.first);
+        final matched = searchResults.firstWhere((r) => r.code == code,
+            orElse: () => searchResults.first);
         name = matched.name;
         sector = matched.type;
       }
@@ -342,7 +351,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
   }
 
   // 保存手动添加的自选基金
-  void _saveManualAdd(BuildContext context, AppConfig appConfig, FundProvider fundProvider) {
+  void _saveManualAdd(
+      BuildContext context, AppConfig appConfig, FundProvider fundProvider) {
     if (_selectedFund == null) return;
 
     final code = _selectedFund!.code;
@@ -386,9 +396,12 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
               constraints: const BoxConstraints(maxWidth: 400, maxHeight: 380),
               title: Row(
                 children: [
-                  Icon(fluent.FluentIcons.edit, size: 18, color: fluent.Colors.blue),
+                  Icon(fluent.FluentIcons.edit,
+                      size: 18, color: fluent.Colors.blue),
                   const SizedBox(width: 8),
-                  const Text('修正基金匹配', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const Text('修正基金匹配',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 ],
               ),
               content: Container(
@@ -400,23 +413,28 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                     children: [
                       Text(
                         '当前匹配: ${_ocrResults[index]['name']}',
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.grey),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         '代码: ${_ocrResults[index]['code']}',
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
-                      const Text('搜索目标官方基金', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      const Text('搜索目标官方基金',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 11)),
                       const SizedBox(height: 6),
                       SizedBox(
                         width: double.infinity,
                         child: fluent.AutoSuggestBox<FundRegistryItem>(
                           controller: searchController,
                           items: localSearchResults.map((item) {
-                            final label = '${item.code} - ${item.name} (${item.type})';
+                            final label =
+                                '${item.code} - ${item.name} (${item.type})';
                             return fluent.AutoSuggestBoxItem<FundRegistryItem>(
                               value: item,
                               label: label,
@@ -470,7 +488,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
     );
   }
 
-    Widget _buildTabButton(int index, String label, IconData icon, bool isDark) {
+  Widget _buildTabButton(int index, String label, IconData icon, bool isDark) {
     final isSelected = _tabIndex == index;
     return GestureDetector(
       onTap: () {
@@ -483,25 +501,33 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
-              ? fluent.Colors.blue.withOpacity(isDark ? 0.2 : 0.1)
+              ? fluent.Colors.blue.withValues(alpha: isDark ? 0.2 : 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? fluent.Colors.blue : (isDark ? Colors.white12 : Colors.black12),
+            color: isSelected
+                ? fluent.Colors.blue
+                : (isDark ? Colors.white12 : Colors.black12),
             width: 1.5,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: isSelected ? fluent.Colors.blue : (isDark ? Colors.white70 : Colors.black87)),
+            Icon(icon,
+                size: 16,
+                color: isSelected
+                    ? fluent.Colors.blue
+                    : (isDark ? Colors.white70 : Colors.black87)),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? fluent.Colors.blue : (isDark ? Colors.white70 : Colors.black87),
+                color: isSelected
+                    ? fluent.Colors.blue
+                    : (isDark ? Colors.white70 : Colors.black87),
               ),
             ),
           ],
@@ -530,9 +556,11 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildTabButton(0, '手动输入', Icons.keyboard_alt_rounded, isDark),
+                  _buildTabButton(
+                      0, '手动输入', Icons.keyboard_alt_rounded, isDark),
                   const SizedBox(width: 16),
-                  _buildTabButton(1, '截图识别', Icons.screenshot_monitor_rounded, isDark),
+                  _buildTabButton(
+                      1, '截图识别', Icons.screenshot_monitor_rounded, isDark),
                 ],
               ),
               const SizedBox(height: 20),
@@ -555,14 +583,17 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
               // TAB 0: 手动输入
               if (_tabIndex == 0) ...[
                 if (_selectedFund == null) ...[
-                  const Text('1. 搜索并选择基金', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  const Text('1. 搜索并选择基金',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: fluent.AutoSuggestBox<FundRegistryItem>(
                       controller: _manualSearchController,
                       items: _searchResults.map((item) {
-                        final label = '${item.code} - ${item.name} (${item.type})';
+                        final label =
+                            '${item.code} - ${item.name} (${item.type})';
                         return fluent.AutoSuggestBoxItem<FundRegistryItem>(
                           value: item,
                           label: label,
@@ -599,9 +630,12 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.02),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+                      border: Border.all(
+                          color: isDark ? Colors.white10 : Colors.black12),
                     ),
                     child: Row(
                       children: [
@@ -611,18 +645,21 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                             children: [
                               Text(
                                 _selectedFund!.name,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 '代码: ${_selectedFund!.code}  |  分类: ${_selectedFund!.type}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.grey),
                               ),
                             ],
                           ),
                         ),
                         fluent.IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                          icon: const Icon(Icons.close_rounded,
+                              size: 16, color: Colors.grey),
                           onPressed: () {
                             setState(() {
                               _selectedFund = null;
@@ -645,9 +682,12 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                       height: 110,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.02),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.02)
+                            : Colors.black.withValues(alpha: 0.02),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+                        border: Border.all(
+                            color: isDark ? Colors.white10 : Colors.black12),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
@@ -662,7 +702,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                       alignment: Alignment.centerRight,
                       child: fluent.Button(
                         onPressed: _pickImage,
-                        child: const Text('重新选择', style: TextStyle(fontSize: 11)),
+                        child:
+                            const Text('重新选择', style: TextStyle(fontSize: 11)),
                       ),
                     ),
                   ] else ...[
@@ -672,7 +713,9 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                         height: 110,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.01),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.02)
+                              : Colors.black.withValues(alpha: 0.01),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isDark ? Colors.white24 : Colors.black26,
@@ -683,9 +726,12 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_photo_alternate_rounded, size: 32, color: fluent.Colors.blue),
+                            Icon(Icons.add_photo_alternate_rounded,
+                                size: 32, color: fluent.Colors.blue),
                             const SizedBox(height: 6),
-                            const Text('点击选择基金自选列表截图', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            const Text('点击选择基金自选列表截图',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey)),
                           ],
                         ),
                       ),
@@ -710,7 +756,10 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                   // 2. 折叠 API 配置
                   Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                      border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.05)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Column(
@@ -723,15 +772,25 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                             });
                           },
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
                             child: Row(
                               children: [
-                                Icon(Icons.settings_rounded, size: 14, color: isDark ? Colors.white54 : Colors.black54),
+                                Icon(Icons.settings_rounded,
+                                    size: 14,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black54),
                                 const SizedBox(width: 6),
-                                const Text('大模型 API 配置 (截图识别)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                const Text('大模型 API 配置 (截图识别)',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
                                 const Spacer(),
                                 Icon(
-                                  _isConfigExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                                  _isConfigExpanded
+                                      ? Icons.expand_less_rounded
+                                      : Icons.expand_more_rounded,
                                   size: 16,
                                   color: Colors.grey,
                                 ),
@@ -749,7 +808,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('API 提供商', style: TextStyle(fontSize: 10)),
+                                const Text('API 提供商',
+                                    style: TextStyle(fontSize: 10)),
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
@@ -759,69 +819,134 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                           'zhipu',
                                           'mimo',
                                           'custom',
-                                          ...appConfig.customApis.map((item) => item['id']!)
-                                        ].contains(_selectedProvider)) ? _selectedProvider : 'zhipu',
+                                          ...appConfig.customApis
+                                              .map((item) => item['id']!)
+                                        ].contains(_selectedProvider))
+                                            ? _selectedProvider
+                                            : 'zhipu',
                                         items: [
                                           fluent.ComboBoxItem(
                                             value: 'zhipu',
-                                            child: Text('智谱GLM', style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black87)),
+                                            child: Text('智谱GLM',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : Colors.black87)),
                                           ),
                                           fluent.ComboBoxItem(
                                             value: 'mimo',
-                                            child: Text('小米MIMO', style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black87)),
+                                            child: Text('小米MIMO',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : Colors.black87)),
                                           ),
                                           fluent.ComboBoxItem(
                                             value: 'custom',
-                                            child: Text('自定义 (新建)', style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black87)),
+                                            child: Text('自定义 (新建)',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : Colors.black87)),
                                           ),
                                           ...appConfig.customApis.map((item) {
                                             return fluent.ComboBoxItem(
                                               value: item['id']!,
-                                              child: Text(item['name'] ?? '自定义 API', style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black87)),
+                                              child: Text(
+                                                  item['name'] ?? '自定义 API',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: isDark
+                                                          ? Colors.white
+                                                          : Colors.black87)),
                                             );
                                           }),
                                         ],
                                         onChanged: (val) {
-                                          if (val != null && val != _selectedProvider) {
-                                            _saveCurrentToTemp(_selectedProvider);
+                                          if (val != null &&
+                                              val != _selectedProvider) {
+                                            _saveCurrentToTemp(
+                                                _selectedProvider);
                                             setState(() {
                                               _selectedProvider = val;
                                               if (val == 'zhipu') {
-                                                _apiKeyController.text = _zhipuApiKey;
-                                                _apiUrlController.text = _zhipuApiUrl.isEmpty ? 'https://open.bigmodel.cn/api/paas/v4' : _zhipuApiUrl;
-                                                _modelController.text = _zhipuModel.isEmpty ? 'glm-4.6v-flash' : _zhipuModel;
+                                                _apiKeyController.text =
+                                                    _zhipuApiKey;
+                                                _apiUrlController
+                                                    .text = _zhipuApiUrl
+                                                        .isEmpty
+                                                    ? 'https://open.bigmodel.cn/api/paas/v4'
+                                                    : _zhipuApiUrl;
+                                                _modelController.text =
+                                                    _zhipuModel.isEmpty
+                                                        ? 'glm-4.6v-flash'
+                                                        : _zhipuModel;
                                               } else if (val == 'mimo') {
-                                                _apiKeyController.text = _mimoApiKey;
-                                                _apiUrlController.text = _mimoApiUrl.isEmpty ? 'https://api.xiaomimimo.com/v1' : _mimoApiUrl;
-                                                _modelController.text = _mimoModel.isEmpty ? 'mimo-v2.5' : _mimoModel;
-                                              } else if (val.startsWith('custom_')) {
-                                                final item = appConfig.customApis.firstWhere((e) => e['id'] == val, orElse: () => {});
+                                                _apiKeyController.text =
+                                                    _mimoApiKey;
+                                                _apiUrlController
+                                                    .text = _mimoApiUrl
+                                                        .isEmpty
+                                                    ? 'https://api.xiaomimimo.com/v1'
+                                                    : _mimoApiUrl;
+                                                _modelController.text =
+                                                    _mimoModel.isEmpty
+                                                        ? 'mimo-v2.5'
+                                                        : _mimoModel;
+                                              } else if (val
+                                                  .startsWith('custom_')) {
+                                                final item = appConfig
+                                                    .customApis
+                                                    .firstWhere(
+                                                        (e) => e['id'] == val,
+                                                        orElse: () => {});
                                                 if (item.isNotEmpty) {
-                                                  _apiKeyController.text = item['key'] ?? '';
-                                                  _apiUrlController.text = item['url'] ?? '';
-                                                  _modelController.text = item['model'] ?? '';
+                                                  _apiKeyController.text =
+                                                      item['key'] ?? '';
+                                                  _apiUrlController.text =
+                                                      item['url'] ?? '';
+                                                  _modelController.text =
+                                                      item['model'] ?? '';
                                                 }
                                               } else {
-                                                _apiKeyController.text = _customApiKey;
-                                                _apiUrlController.text = _customApiUrl;
-                                                _modelController.text = _customModel;
+                                                _apiKeyController.text =
+                                                    _customApiKey;
+                                                _apiUrlController.text =
+                                                    _customApiUrl;
+                                                _modelController.text =
+                                                    _customModel;
                                               }
                                             });
                                           }
                                         },
                                       ),
                                     ),
-                                    if (_selectedProvider.startsWith('custom_')) ...[
+                                    if (_selectedProvider
+                                        .startsWith('custom_')) ...[
                                       const SizedBox(width: 8),
                                       fluent.IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                                        icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: Colors.redAccent,
+                                            size: 16),
                                         onPressed: () {
                                           final toDelete = _selectedProvider;
                                           setState(() {
                                             _selectedProvider = 'zhipu';
-                                            _apiKeyController.text = _zhipuApiKey;
-                                            _apiUrlController.text = _zhipuApiUrl.isEmpty ? 'https://open.bigmodel.cn/api/paas/v4' : _zhipuApiUrl;
-                                            _modelController.text = _zhipuModel.isEmpty ? 'glm-4.6v-flash' : _zhipuModel;
+                                            _apiKeyController.text =
+                                                _zhipuApiKey;
+                                            _apiUrlController
+                                                .text = _zhipuApiUrl
+                                                    .isEmpty
+                                                ? 'https://open.bigmodel.cn/api/paas/v4'
+                                                : _zhipuApiUrl;
+                                            _modelController.text =
+                                                _zhipuModel.isEmpty
+                                                    ? 'glm-4.6v-flash'
+                                                    : _zhipuModel;
                                           });
                                           appConfig.deleteCustomApi(toDelete);
                                         },
@@ -830,14 +955,21 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                const Text('API Key (密钥)', style: TextStyle(fontSize: 10)),
+                                const Text('API Key (密钥)',
+                                    style: TextStyle(fontSize: 10)),
                                 const SizedBox(height: 4),
                                 GestureDetector(
                                   onSecondaryTapDown: (details) {
-                                    PasteHelper.showPasteMenu(context, details.globalPosition, _apiKeyController);
+                                    PasteHelper.showPasteMenu(
+                                        context,
+                                        details.globalPosition,
+                                        _apiKeyController);
                                   },
                                   onLongPressStart: (details) {
-                                    PasteHelper.showPasteMenu(context, details.globalPosition, _apiKeyController);
+                                    PasteHelper.showPasteMenu(
+                                        context,
+                                        details.globalPosition,
+                                        _apiKeyController);
                                   },
                                   child: fluent.TextBox(
                                     controller: _apiKeyController,
@@ -848,16 +980,23 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                             : '输入 API 密钥...',
                                     obscureText: true,
                                     enableInteractiveSelection: true,
-                                    suffix: PasteHelper.buildPasteSuffix(context: context, controller: _apiKeyController),
-                                    contextMenuBuilder: (context, editableTextState) {
+                                    suffix: PasteHelper.buildPasteSuffix(
+                                        context: context,
+                                        controller: _apiKeyController),
+                                    contextMenuBuilder:
+                                        (context, editableTextState) {
                                       return Material(
                                         type: MaterialType.transparency,
-                                        child: AdaptiveTextSelectionToolbar.buttonItems(
-                                          anchors: editableTextState.contextMenuAnchors,
+                                        child: AdaptiveTextSelectionToolbar
+                                            .buttonItems(
+                                          anchors: editableTextState
+                                              .contextMenuAnchors,
                                           buttonItems: [
                                             ContextMenuButtonItem(
                                               onPressed: () {
-                                                editableTextState.pasteText(SelectionChangedCause.toolbar);
+                                                editableTextState.pasteText(
+                                                    SelectionChangedCause
+                                                        .toolbar);
                                               },
                                               type: ContextMenuButtonType.paste,
                                               label: '粘贴',
@@ -869,15 +1008,19 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                const Text('Base URL (接口地址)', style: TextStyle(fontSize: 10)),
+                                const Text('Base URL (接口地址)',
+                                    style: TextStyle(fontSize: 10)),
                                 const SizedBox(height: 4),
                                 fluent.TextBox(
                                   controller: _apiUrlController,
-                                  placeholder: '例如: https://open.bigmodel.cn/api/paas/v4',
-                                  readOnly: _selectedProvider != 'custom' && !_selectedProvider.startsWith('custom_'),
+                                  placeholder:
+                                      '例如: https://open.bigmodel.cn/api/paas/v4',
+                                  readOnly: _selectedProvider != 'custom' &&
+                                      !_selectedProvider.startsWith('custom_'),
                                 ),
                                 const SizedBox(height: 8),
-                                const Text('Model (模型名称，需支持 Vision 输入)', style: TextStyle(fontSize: 10)),
+                                const Text('Model (模型名称，需支持 Vision 输入)',
+                                    style: TextStyle(fontSize: 10)),
                                 const SizedBox(height: 4),
                                 fluent.TextBox(
                                   controller: _modelController,
@@ -902,7 +1045,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                         SizedBox(height: 16),
                         Text(
                           'AI 正在识别自选截图中的基金...',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                         SizedBox(height: 6),
                         Text(
@@ -916,10 +1060,14 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                   // 4. 识别结果列表
                   Row(
                     children: [
-                      Text('识别到的基金列表 (共 ${_ocrResults.length} 只，已选 ${_selectedOcrIndices.length} 只，可直接点击修改名称/代码)：', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      Text(
+                          '识别到的基金列表 (共 ${_ocrResults.length} 只，已选 ${_selectedOcrIndices.length} 只，可直接点击修改名称/代码)：',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 11)),
                       const Spacer(),
                       fluent.Button(
-                        child: const Text('重选截图', style: TextStyle(fontSize: 10)),
+                        child:
+                            const Text('重选截图', style: TextStyle(fontSize: 10)),
                         onPressed: () {
                           setState(() {
                             _ocrResults = [];
@@ -932,13 +1080,15 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                   Container(
                     height: 240,
                     decoration: BoxDecoration(
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+                      border: Border.all(
+                          color: isDark ? Colors.white10 : Colors.black12),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: ListView.separated(
                       padding: const EdgeInsets.all(8),
                       itemCount: _ocrResults.length,
-                      separatorBuilder: (context, index) => const fluent.Divider(),
+                      separatorBuilder: (context, index) =>
+                          const fluent.Divider(),
                       itemBuilder: (context, index) {
                         final item = _ocrResults[index];
                         final isSelected = _selectedOcrIndices.contains(index);
@@ -966,11 +1116,13 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                   message: '点击修正基金官方匹配',
                                   child: GestureDetector(
                                     behavior: HitTestBehavior.opaque,
-                                    onTap: () => _showEditFundDialog(context, index),
+                                    onTap: () =>
+                                        _showEditFundDialog(context, index),
                                     child: MouseRegion(
                                       cursor: SystemMouseCursors.click,
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
@@ -980,33 +1132,41 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                                   style: const TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 12,
-                                                    decoration: TextDecoration.underline,
+                                                    decoration: TextDecoration
+                                                        .underline,
                                                   ),
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                               const SizedBox(width: 4),
                                               Icon(
                                                 fluent.FluentIcons.edit,
                                                 size: 11,
-                                                color: fluent.Colors.grey.withOpacity(0.8),
+                                                color: fluent.Colors.grey
+                                                    .withValues(alpha: 0.8),
                                               ),
                                             ],
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            item['code'].toString().isEmpty 
-                                                ? '代码: 未匹配 (点击修正)' 
-                                                : (RegExp(r'^\d{6}$').hasMatch(item['code'].toString()) 
-                                                    ? '代码: ${item['code']}' 
+                                            item['code'].toString().isEmpty
+                                                ? '代码: 未匹配 (点击修正)'
+                                                : (RegExp(r'^\d{6}$').hasMatch(
+                                                        item['code'].toString())
+                                                    ? '代码: ${item['code']}'
                                                     : '代码: ${item['code']} (格式不符，点击修正)'),
                                             style: TextStyle(
-                                              fontSize: 11, 
-                                              color: RegExp(r'^\d{6}$').hasMatch(item['code'].toString()) 
-                                                  ? Colors.grey 
+                                              fontSize: 11,
+                                              color: RegExp(r'^\d{6}$')
+                                                      .hasMatch(item['code']
+                                                          .toString())
+                                                  ? Colors.grey
                                                   : fluent.Colors.orange,
-                                              fontWeight: RegExp(r'^\d{6}$').hasMatch(item['code'].toString())
+                                              fontWeight: RegExp(r'^\d{6}$')
+                                                      .hasMatch(item['code']
+                                                          .toString())
                                                   ? FontWeight.normal
                                                   : FontWeight.bold,
                                             ),

@@ -61,7 +61,8 @@ class _ExpandableSearchBoxState extends State<ExpandableSearchBox> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = fluent.FluentTheme.of(context).brightness == fluent.Brightness.dark;
+    final isDark =
+        fluent.FluentTheme.of(context).brightness == fluent.Brightness.dark;
     final double targetWidth = _isExpanded ? widget.width : 32.0;
 
     return AnimatedContainer(
@@ -75,7 +76,9 @@ class _ExpandableSearchBoxState extends State<ExpandableSearchBox> {
           physics: const NeverScrollableScrollPhysics(),
           child: SizedBox(
             width: widget.width,
-            child: _isExpanded ? _buildTextBox(isDark) : _buildSearchIconButton(isDark),
+            child: _isExpanded
+                ? _buildTextBox(isDark)
+                : _buildSearchIconButton(isDark),
           ),
         ),
       ),
@@ -97,9 +100,9 @@ class _ExpandableSearchBoxState extends State<ExpandableSearchBox> {
               color: isDark ? Colors.white70 : Colors.black87,
             ),
             style: fluent.ButtonStyle(
-              backgroundColor: fluent.WidgetStateProperty.all(
-                isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04)
-              ),
+              backgroundColor: fluent.WidgetStateProperty.all(isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.04)),
               shape: fluent.WidgetStateProperty.all(const CircleBorder()),
             ),
             onPressed: () {
