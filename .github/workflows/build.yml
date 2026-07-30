@@ -111,6 +111,14 @@ jobs:
         run: |
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "FlFund-${{ steps.version.outputs.full_version }}-windows-portable.zip"
 
+      - name: Download ChineseSimplified Language File
+        shell: pwsh
+        run: |
+          $innoLangPath = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
+          if (-not (Test-Path "$innoLangPath\ChineseSimplified.isl")) {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl" -OutFile "$innoLangPath\ChineseSimplified.isl"
+          }
+
       - name: Build Windows Installer (Inno Setup)
         shell: pwsh
         run: |
