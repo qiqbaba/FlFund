@@ -1,8 +1,8 @@
 ext {
     flutter = [
-        compileSdkVersion: 34,
+        compileSdkVersion: 36,
         minSdkVersion: 21,
-        targetSdkVersion: 34,
+        targetSdkVersion: 36,
         ndkVersion: "23.1.7779620"
     ]
 }
@@ -46,21 +46,6 @@ subprojects {
         if (proj.name == "app") {
             return
         }
-        if (proj.extensions.findByName("android") != null) {
-            proj.android {
-                if (compileSdkVersion != null) {
-                    if (compileSdkVersion == 'android-35' || compileSdkVersion == 35) {
-                        compileSdkVersion 34
-                    }
-                }
-                try {
-                    if (compileSdk == 35) {
-                        compileSdk = 34
-                    }
-                } catch (Exception e) {}
-            }
-        }
-        
         if (proj.extensions.findByName("android") != null) {
             try {
                 proj.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile) {
