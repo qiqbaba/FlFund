@@ -1,0 +1,170 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Determine Version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" =~ ^refs/tags/v(.*)$ ]]; then
+            VERSION_NAME="${BASH_REMATCH[1]}"
+          else
+            PUB_VER=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+            VERSION_NAME="${PUB_VER}"
+          fi
+          BUILD_NUMBER="${{ github.run_number }}"
+          echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "build_number=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "full_version=v${VERSION_NAME}+${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION_NAME}+${BUILD_NUMBER}"
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Android Release APK
+        run: |
+          flutter build apk --release \
+            --build-name=${{ steps.version.outputs.version_name }} \
+            --build-number=${{ steps.version.outputs.build_number }}
+
+      - name: Rename APK Output
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/FlFund-${{ steps.version.outputs.full_version }}-android.apk"
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fl-fund-android-apk
+          path: build/app/outputs/flutter-apk/FlFund-${{ steps.version.outputs.full_version }}-android.apk
+
+  build-windows:
+    name: Build Windows App & Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Determine Version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" =~ ^refs/tags/v(.*)$ ]]; then
+            VERSION_NAME="${BASH_REMATCH[1]}"
+          else
+            PUB_VER=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+            VERSION_NAME="${PUB_VER}"
+          fi
+          BUILD_NUMBER="${{ github.run_number }}"
+          echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "build_number=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "full_version=v${VERSION_NAME}+${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION_NAME}+${BUILD_NUMBER}"
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Build Windows Release
+        run: |
+          flutter build windows --release \
+            --build-name=${{ steps.version.outputs.version_name }} \
+            --build-number=${{ steps.version.outputs.build_number }}
+
+      - name: Compress Portable Windows Release Zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "FlFund-${{ steps.version.outputs.full_version }}-windows-portable.zip"
+
+      - name: Build Windows Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          iscc /DAppVersion="${{ steps.version.outputs.version_name }}" windows/installer.iss
+          Move-Item -Path "build/windows/installer/FlFund-Setup.exe" -Destination "FlFund-${{ steps.version.outputs.full_version }}-windows-setup.exe"
+
+      - name: Upload Windows Portable Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fl-fund-windows-portable-zip
+          path: FlFund-${{ steps.version.outputs.full_version }}-windows-portable.zip
+
+      - name: Upload Windows Setup Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fl-fund-windows-setup-installer
+          path: FlFund-${{ steps.version.outputs.full_version }}-windows-setup.exe
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-android, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fl-fund-android-apk
+          path: ./artifacts/android
+
+      - name: Download Windows Portable Zip Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fl-fund-windows-portable-zip
+          path: ./artifacts/windows
+
+      - name: Download Windows Setup Installer Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fl-fund-windows-setup-installer
+          path: ./artifacts/windows
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./artifacts/android/*.apk
+            ./artifacts/windows/*.zip
+            ./artifacts/windows/*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
