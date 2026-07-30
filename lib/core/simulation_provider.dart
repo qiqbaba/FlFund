@@ -14,6 +14,8 @@ class SimulatedPosition {
   double volume; // 持有份额
   double buyPrice; // 平均买入成本价
   double currentPrice; // 最新估值/净值
+  String buyDateStr; // 首次买入的核算净值日期 (用于到期平仓计算)
+  int gridCount; // 已加仓次数 (网格加仓计数)
 
   SimulatedPosition({
     required this.code,
@@ -21,6 +23,8 @@ class SimulatedPosition {
     required this.volume,
     required this.buyPrice,
     required this.currentPrice,
+    this.buyDateStr = '',
+    this.gridCount = 0,
   });
 
   double get amount {
@@ -46,20 +50,25 @@ class SimulatedPosition {
   }
 
   Map<String, dynamic> toJson() => {
-    'code': code,
-    'name': name,
-    'volume': volume,
-    'buyPrice': buyPrice,
-    'currentPrice': currentPrice,
-  };
+        'code': code,
+        'name': name,
+        'volume': volume,
+        'buyPrice': buyPrice,
+        'currentPrice': currentPrice,
+        'buyDateStr': buyDateStr,
+        'gridCount': gridCount,
+      };
 
-  factory SimulatedPosition.fromJson(Map<String, dynamic> json) => SimulatedPosition(
-    code: json['code'] ?? '',
-    name: json['name'] ?? '',
-    volume: (json['volume'] as num).toDouble(),
-    buyPrice: (json['buyPrice'] as num).toDouble(),
-    currentPrice: (json['currentPrice'] as num).toDouble(),
-  );
+  factory SimulatedPosition.fromJson(Map<String, dynamic> json) =>
+      SimulatedPosition(
+        code: json['code'] ?? '',
+        name: json['name'] ?? '',
+        volume: (json['volume'] as num).toDouble(),
+        buyPrice: (json['buyPrice'] as num).toDouble(),
+        currentPrice: (json['currentPrice'] as num).toDouble(),
+        buyDateStr: json['buyDateStr'] ?? '',
+        gridCount: json['gridCount'] ?? 0,
+      );
 }
 
 class SimulatedTransaction {
@@ -70,8 +79,8 @@ class SimulatedTransaction {
   final double price;
   final double volume;
   final double amount;
-  final DateTime dateTime;     // 操作系统时间
-  final String dateTimeStr;    // 成交的核算净值日期，比如 "2026-07-03"
+  final DateTime dateTime; // 操作系统时间
+  final String dateTimeStr; // 成交的核算净值日期，比如 "2026-07-03"
   final String signalReason;
 
   SimulatedTransaction({
@@ -88,30 +97,31 @@ class SimulatedTransaction {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'code': code,
-    'name': name,
-    'type': type,
-    'price': price,
-    'volume': volume,
-    'amount': amount,
-    'dateTime': dateTime.toIso8601String(),
-    'dateTimeStr': dateTimeStr,
-    'signalReason': signalReason,
-  };
+        'id': id,
+        'code': code,
+        'name': name,
+        'type': type,
+        'price': price,
+        'volume': volume,
+        'amount': amount,
+        'dateTime': dateTime.toIso8601String(),
+        'dateTimeStr': dateTimeStr,
+        'signalReason': signalReason,
+      };
 
-  factory SimulatedTransaction.fromJson(Map<String, dynamic> json) => SimulatedTransaction(
-    id: json['id'] ?? '',
-    code: json['code'] ?? '',
-    name: json['name'] ?? '',
-    type: json['type'] ?? '',
-    price: (json['price'] as num).toDouble(),
-    volume: (json['volume'] as num).toDouble(),
-    amount: (json['amount'] as num).toDouble(),
-    dateTime: DateTime.parse(json['dateTime']),
-    dateTimeStr: json['dateTimeStr'] ?? '',
-    signalReason: json['signalReason'] ?? '',
-  );
+  factory SimulatedTransaction.fromJson(Map<String, dynamic> json) =>
+      SimulatedTransaction(
+        id: json['id'] ?? '',
+        code: json['code'] ?? '',
+        name: json['name'] ?? '',
+        type: json['type'] ?? '',
+        price: (json['price'] as num).toDouble(),
+        volume: (json['volume'] as num).toDouble(),
+        amount: (json['amount'] as num).toDouble(),
+        dateTime: DateTime.parse(json['dateTime']),
+        dateTimeStr: json['dateTimeStr'] ?? '',
+        signalReason: json['signalReason'] ?? '',
+      );
 }
 
 class SimulationProvider extends ChangeNotifier {
@@ -120,15 +130,23 @@ class SimulationProvider extends ChangeNotifier {
   SimulationProvider._internal();
 
   bool _isLoaded = false;
-  
+
   // 并发控制锁，防止 checkAndExecute 被重入
   bool _isExecuting = false;
-  
+
   double initialBalance = 1000000.0;
   double availableBalance = 1000000.0;
   double defaultBuyAmount = 10000.0;
   bool isAutoTradeEnabled = true;
-  
+
+  // === 风控与仓位管理参数 ===
+  static const int maxTotalPositions = 25; // 全局最大同时持仓数
+  static const int maxDailyBuys = 5; // 单日最大买入笔数
+  static const int maxGridCount = 3; // 单只基金最大网格加仓次数
+  static const double stopLossPct = -15.0; // 固定止损线 (-15%)
+  static const int defaultHoldMax = 90; // 默认最大持仓天数 (无策略参数时的回退值)
+  static const double defaultTargetProfit = 8.0; // 默认止盈线 (无策略参数时的回退值)
+
   Map<String, SimulatedPosition> positions = {};
   List<SimulatedTransaction> transactions = [];
 
@@ -147,7 +165,7 @@ class SimulationProvider extends ChangeNotifier {
     final v = totalAssets - initialBalance;
     return v.isFinite ? v : 0.0;
   }
-  
+
   // 获取总收益率
   double get totalProfitRate {
     if (initialBalance <= 0) return 0.0;
@@ -200,17 +218,22 @@ class SimulationProvider extends ChangeNotifier {
       if (await file.exists()) {
         final content = await file.readAsString(encoding: utf8);
         final Map<String, dynamic> jsonMap = json.decode(content);
-        
-        initialBalance = (jsonMap['initialBalance'] as num?)?.toDouble() ?? 1000000.0;
-        availableBalance = (jsonMap['availableBalance'] as num?)?.toDouble() ?? 1000000.0;
-        defaultBuyAmount = (jsonMap['defaultBuyAmount'] as num?)?.toDouble() ?? 10000.0;
+
+        initialBalance =
+            (jsonMap['initialBalance'] as num?)?.toDouble() ?? 1000000.0;
+        availableBalance =
+            (jsonMap['availableBalance'] as num?)?.toDouble() ?? 1000000.0;
+        defaultBuyAmount =
+            (jsonMap['defaultBuyAmount'] as num?)?.toDouble() ?? 10000.0;
         isAutoTradeEnabled = jsonMap['isAutoTradeEnabled'] ?? true;
-        
+
         final posMap = jsonMap['positions'] as Map<String, dynamic>? ?? {};
-        positions = posMap.map((key, val) => MapEntry(key, SimulatedPosition.fromJson(val)));
-        
+        positions = posMap
+            .map((key, val) => MapEntry(key, SimulatedPosition.fromJson(val)));
+
         final txList = jsonMap['transactions'] as List<dynamic>? ?? [];
-        transactions = txList.map((val) => SimulatedTransaction.fromJson(val)).toList();
+        transactions =
+            txList.map((val) => SimulatedTransaction.fromJson(val)).toList();
       }
       _isLoaded = true;
 
@@ -227,7 +250,7 @@ class SimulationProvider extends ChangeNotifier {
   Future<void> saveSimData() async {
     // 保存前防御性清理，防止损坏数据被写入磁盘
     _sanitizeValues();
-    
+
     try {
       final file = await _getSimFile();
       final Map<String, dynamic> jsonMap = {
@@ -285,21 +308,21 @@ class SimulationProvider extends ChangeNotifier {
     // 2. 时间范围在 14:40 - 15:00 之间 (以分钟为单位判断)
     final minutes = now.hour * 60 + now.minute;
     const startMinutes = 14 * 60 + 40; // 14:40
-    const endMinutes = 15 * 60;        // 15:00
+    const endMinutes = 15 * 60; // 15:00
     return minutes >= startMinutes && minutes < endMinutes;
   }
 
   // 信号检测与交易执行
   Future<void> checkAndExecute(List<FundUIModel> funds) async {
     if (!isAutoTradeEnabled) return;
-    
+
     // 并发重入保护：防止多次 refreshAll 或手动触发同时执行
     if (_isExecuting) {
       debugPrint('[Simulation] 检测到并发重入，跳过本次执行');
       return;
     }
     _isExecuting = true;
-    
+
     try {
       await _checkAndExecuteInternal(funds);
     } finally {
@@ -314,18 +337,30 @@ class SimulationProvider extends ChangeNotifier {
     final now = DateTime.now();
     final todayStr = now.toIso8601String().substring(0, 10);
     final bool tailTrade = isTailTradeTime();
+    int dailyBuyCount = 0; // 当日买入计数器
 
-    // 1. 静默同步当前持仓中基金的最新净值/估值（在不交易时，市值也需根据最新的收盘或实时估值随动更新）
+    // 统计当日已发生的买入笔数（防止重启后重复计数）
+    for (final tx in transactions) {
+      if (tx.type == 'BUY' && tx.dateTimeStr == todayStr) {
+        dailyBuyCount++;
+      }
+    }
+
+    // 1. 静默同步当前持仓中基金的最新净值/估值
     for (final pos in positions.values) {
-      final matchingFund = funds.firstWhere((f) => f.code == pos.code, orElse: () => FundUIModel(code: '', name: '', sector: ''));
+      final matchingFund = funds.firstWhere((f) => f.code == pos.code,
+          orElse: () => FundUIModel(code: '', name: '', sector: ''));
       if (matchingFund.code.isNotEmpty) {
         double? currentPrice;
         if (tailTrade && matchingFund.isTodayValuation) {
           currentPrice = double.tryParse(matchingFund.gsz);
         }
-        currentPrice ??= matchingFund.navs.isNotEmpty ? matchingFund.navs.first : null;
+        currentPrice ??=
+            matchingFund.navs.isNotEmpty ? matchingFund.navs.first : null;
 
-        if (currentPrice != null && currentPrice > 0.0 && currentPrice.isFinite) {
+        if (currentPrice != null &&
+            currentPrice > 0.0 &&
+            currentPrice.isFinite) {
           if (pos.currentPrice != currentPrice) {
             pos.currentPrice = currentPrice;
             changed = true;
@@ -346,13 +381,12 @@ class SimulationProvider extends ChangeNotifier {
       String signalReasonSuffix;
 
       if (tailTrade && fund.isTodayValuation) {
-        // 交易日下午两点四十之后：以当时的估值进行买入、卖出计算
         evalIndex = 0;
-        price = double.tryParse(fund.gsz) ?? (fund.navs.isNotEmpty ? fund.navs.first : 0.0);
+        price = double.tryParse(fund.gsz) ??
+            (fund.navs.isNotEmpty ? fund.navs.first : 0.0);
         tradeDateStr = todayStr;
         signalReasonSuffix = ' (尾盘估值信号)';
       } else {
-        // 其它时间段（早盘、午盘、停盘后或非交易日）：以上一个交易日的收盘净值进行计算
         evalIndex = fund.isTodayValuation ? 1 : 0;
         price = fund.navs.isNotEmpty ? fund.navs.first : 0.0;
         tradeDateStr = fund.dates.isNotEmpty ? fund.dates.first : todayStr;
@@ -361,91 +395,204 @@ class SimulationProvider extends ChangeNotifier {
 
       if (price <= 0.0 || !price.isFinite) continue;
 
-      // A. 自动买入信号触发
-      if (fund.isBuySignalAt(evalIndex)) {
-        // 检查该结算净值日期 (tradeDateStr) 是否已经对该基金买入过
-        final bool alreadyBoughtOnDate = transactions.any((tx) => 
-          tx.code == code && 
-          tx.type == 'BUY' && 
-          tx.dateTimeStr == tradeDateStr
-        );
+      final bool isHeld = positions.containsKey(code);
 
-        final bool isHeld = positions.containsKey(code);
+      // ========== A. 卖出判断（优先级高于买入，且同日互斥） ==========
+      if (isHeld) {
+        final pos = positions[code]!;
+        final double profitRate = pos.buyPrice > 0
+            ? ((price - pos.buyPrice) / pos.buyPrice) * 100.0
+            : 0.0;
 
-        if (!isHeld && !alreadyBoughtOnDate && availableBalance >= 100.0) {
-          final double buyAmt = math.min(defaultBuyAmount, availableBalance);
-          final double volume = buyAmt / price;
-          if (!volume.isFinite) continue;
+        // T+1 限制：同一净值日刚买入的基金不能在同一天卖出
+        final lastBuyTx = transactions.firstWhere(
+            (tx) => tx.code == code && tx.type == 'BUY',
+            orElse: () => SimulatedTransaction(
+                id: '',
+                code: '',
+                name: '',
+                type: '',
+                price: 0,
+                volume: 0,
+                amount: 0,
+                dateTime: DateTime(2000),
+                dateTimeStr: ''));
+        final bool isBoughtSameDate =
+            lastBuyTx.id.isNotEmpty && lastBuyTx.dateTimeStr == tradeDateStr;
 
-          availableBalance -= buyAmt;
-          positions[code] = SimulatedPosition(
-            code: code,
-            name: name,
-            volume: volume,
-            buyPrice: price,
-            currentPrice: price,
-          );
+        // 防止同结算日内重复卖出
+        final bool alreadySoldOnDate = transactions.any((tx) =>
+            tx.code == code &&
+            tx.type == 'SELL' &&
+            tx.dateTimeStr == tradeDateStr);
 
-          transactions.insert(0, SimulatedTransaction(
-            id: 'TX_${DateTime.now().millisecondsSinceEpoch}_$code',
-            code: code,
-            name: name,
-            type: 'BUY',
-            price: price,
-            volume: volume,
-            amount: buyAmt,
-            dateTime: DateTime.now(),
-            dateTimeStr: tradeDateStr,
-            signalReason: '买入信号触发$signalReasonSuffix',
-          ));
-          changed = true;
+        if (!isBoughtSameDate && !alreadySoldOnDate) {
+          String? sellReason;
+
+          // I. 固定止损平仓
+          if (profitRate <= stopLossPct) {
+            sellReason =
+                '止损平仓(${profitRate.toStringAsFixed(1)}%≤${stopLossPct.toStringAsFixed(0)}%)$signalReasonSuffix';
+          }
+
+          // II. 固定目标止盈平仓
+          if (sellReason == null) {
+            final double targetProfit =
+                (fund.optimalStrategy?['target_profit'] as num?)?.toDouble() ??
+                    defaultTargetProfit;
+            if (profitRate >= targetProfit) {
+              sellReason =
+                  '止盈平仓(${profitRate.toStringAsFixed(1)}%≥${targetProfit.toStringAsFixed(1)}%)$signalReasonSuffix';
+            }
+          }
+
+          // III. 到期平仓
+          if (sellReason == null && pos.buyDateStr.isNotEmpty) {
+            final int holdMax =
+                fund.optimalStrategy?['hold_max'] ?? defaultHoldMax;
+            try {
+              final buyDate = DateTime.parse(pos.buyDateStr);
+              final tradeDate = DateTime.parse(tradeDateStr);
+              final int holdDays = tradeDate.difference(buyDate).inDays;
+              if (holdDays >= holdMax) {
+                sellReason =
+                    '到期平仓(持仓${holdDays}天≥${holdMax}天)$signalReasonSuffix';
+              }
+            } catch (_) {/* 日期解析失败则跳过到期判断 */}
+          }
+
+          // IV. 卖出信号平仓
+          if (sellReason == null && fund.isSellSignalAt(evalIndex)) {
+            sellReason = '卖出信号触发$signalReasonSuffix';
+          }
+
+          // 执行卖出
+          if (sellReason != null) {
+            final double sellVolume = pos.volume;
+            final double sellAmt = sellVolume * price;
+            if (sellAmt.isFinite && sellAmt > 0) {
+              availableBalance += sellAmt;
+              positions.remove(code);
+
+              transactions.insert(
+                  0,
+                  SimulatedTransaction(
+                    id: 'TX_${DateTime.now().millisecondsSinceEpoch}_$code',
+                    code: code,
+                    name: name,
+                    type: 'SELL',
+                    price: price,
+                    volume: sellVolume,
+                    amount: sellAmt,
+                    dateTime: DateTime.now(),
+                    dateTimeStr: tradeDateStr,
+                    signalReason: sellReason,
+                  ));
+              changed = true;
+            }
+            continue; // 同日互斥：已卖出则跳过该基金的买入判断
+          }
+        } else {
+          continue; // T+1 或已卖出，跳过买入判断
         }
       }
 
-      // B. 自动卖出信号触发
-      if (fund.isSellSignalAt(evalIndex)) {
-        final bool isHeld = positions.containsKey(code);
-        if (isHeld) {
-          // T+1 限制：同一净值日刚买入的基金不能在同一天卖出
-          final lastBuyTx = transactions.firstWhere(
-            (tx) => tx.code == code && tx.type == 'BUY',
-            orElse: () => SimulatedTransaction(
-              id: '', code: '', name: '', type: '', price: 0, volume: 0, amount: 0, dateTime: DateTime(2000), dateTimeStr: ''
-            )
-          );
-          final bool isBoughtSameDate = lastBuyTx.id.isNotEmpty && lastBuyTx.dateTimeStr == tradeDateStr;
+      // ========== B. 买入判断 ==========
+      if (!fund.isBuySignalAt(evalIndex)) continue;
 
-          // 防止同结算日内重复卖出
-          final bool alreadySoldOnDate = transactions.any((tx) => 
-            tx.code == code && 
-            tx.type == 'SELL' && 
-            tx.dateTimeStr == tradeDateStr
-          );
+      // 检查该结算净值日期是否已经对该基金买入过
+      final bool alreadyBoughtOnDate = transactions.any((tx) =>
+          tx.code == code &&
+          tx.type == 'BUY' &&
+          tx.dateTimeStr == tradeDateStr);
+      if (alreadyBoughtOnDate) continue;
 
-          if (!isBoughtSameDate && !alreadySoldOnDate) {
-            final pos = positions[code]!;
-            final double sellVolume = pos.volume;
-            final double sellAmt = sellVolume * price;
-            if (!sellAmt.isFinite) continue;
+      // 单日买入笔数限制
+      if (dailyBuyCount >= maxDailyBuys) continue;
 
-            availableBalance += sellAmt;
-            positions.remove(code);
+      final bool stillHeld = positions.containsKey(code);
 
-            transactions.insert(0, SimulatedTransaction(
+      if (!stillHeld) {
+        // --- 新建仓位 ---
+        // 全局最大持仓数限制
+        if (positions.length >= maxTotalPositions) continue;
+        if (availableBalance < 100.0) continue;
+
+        final double buyAmt = math.min(defaultBuyAmount, availableBalance);
+        final double volume = buyAmt / price;
+        if (!volume.isFinite) continue;
+
+        availableBalance -= buyAmt;
+        positions[code] = SimulatedPosition(
+          code: code,
+          name: name,
+          volume: volume,
+          buyPrice: price,
+          currentPrice: price,
+          buyDateStr: tradeDateStr,
+          gridCount: 0,
+        );
+
+        transactions.insert(
+            0,
+            SimulatedTransaction(
               id: 'TX_${DateTime.now().millisecondsSinceEpoch}_$code',
               code: code,
               name: name,
-              type: 'SELL',
+              type: 'BUY',
               price: price,
-              volume: sellVolume,
-              amount: sellAmt,
+              volume: volume,
+              amount: buyAmt,
               dateTime: DateTime.now(),
               dateTimeStr: tradeDateStr,
-              signalReason: '卖出信号触发$signalReasonSuffix',
+              signalReason: '买入信号触发$signalReasonSuffix',
             ));
-            changed = true;
-          }
-        }
+        dailyBuyCount++;
+        changed = true;
+      } else {
+        // --- 网格加仓：已持有但价格继续下跌时追加买入摊低成本 ---
+        final pos = positions[code]!;
+        if (pos.gridCount >= maxGridCount) continue;
+        if (availableBalance < 100.0) continue;
+
+        // 网格步进检查：当前价格必须相对上次买入价下跌超过网格间距
+        final double buyDrop =
+            (fund.optimalStrategy?['buy_drop'] as num?)?.toDouble() ?? 5.0;
+        final double gridSpacingPct = (buyDrop * 0.3).clamp(1.0, 5.0);
+        final double dropFromBuy =
+            ((price - pos.buyPrice) / pos.buyPrice) * 100.0;
+        if (dropFromBuy > -gridSpacingPct) continue; // 跌幅不够，不加仓
+
+        final double buyAmt = math.min(defaultBuyAmount, availableBalance);
+        final double volume = buyAmt / price;
+        if (!volume.isFinite) continue;
+
+        availableBalance -= buyAmt;
+        // 更新平均成本
+        final double totalCost = pos.volume * pos.buyPrice + buyAmt;
+        final double totalVolume = pos.volume + volume;
+        pos.volume = totalVolume;
+        pos.buyPrice = totalCost / totalVolume;
+        pos.currentPrice = price;
+        pos.gridCount++;
+
+        transactions.insert(
+            0,
+            SimulatedTransaction(
+              id: 'TX_${DateTime.now().millisecondsSinceEpoch}_$code',
+              code: code,
+              name: name,
+              type: 'BUY',
+              price: price,
+              volume: volume,
+              amount: buyAmt,
+              dateTime: DateTime.now(),
+              dateTimeStr: tradeDateStr,
+              signalReason:
+                  '网格加仓(第${pos.gridCount}次,跌${dropFromBuy.toStringAsFixed(1)}%)$signalReasonSuffix',
+            ));
+        dailyBuyCount++;
+        changed = true;
       }
     }
 
@@ -456,13 +603,19 @@ class SimulationProvider extends ChangeNotifier {
   }
 
   // 手动买入 API（微调与测试）
-  Future<bool> manualBuy(String code, String name, double amount, double price) async {
-    if (availableBalance < amount || amount <= 0 || price <= 0 || !price.isFinite) return false;
+  Future<bool> manualBuy(
+      String code, String name, double amount, double price) async {
+    if (availableBalance < amount ||
+        amount <= 0 ||
+        price <= 0 ||
+        !price.isFinite) return false;
     await loadSimData();
 
     final volume = amount / price;
     if (!volume.isFinite) return false;
     availableBalance -= amount;
+
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
 
     if (positions.containsKey(code)) {
       final pos = positions[code]!;
@@ -471,6 +624,7 @@ class SimulationProvider extends ChangeNotifier {
       pos.volume = totalVolume;
       pos.buyPrice = totalCost / totalVolume;
       pos.currentPrice = price;
+      pos.gridCount++;
     } else {
       positions[code] = SimulatedPosition(
         code: code,
@@ -478,21 +632,25 @@ class SimulationProvider extends ChangeNotifier {
         volume: volume,
         buyPrice: price,
         currentPrice: price,
+        buyDateStr: todayStr,
+        gridCount: 0,
       );
     }
 
-    transactions.insert(0, SimulatedTransaction(
-      id: 'TX_M_${DateTime.now().millisecondsSinceEpoch}_$code',
-      code: code,
-      name: name,
-      type: 'BUY',
-      price: price,
-      volume: volume,
-      amount: amount,
-      dateTime: DateTime.now(),
-      dateTimeStr: DateTime.now().toIso8601String().substring(0, 10),
-      signalReason: '手动买入',
-    ));
+    transactions.insert(
+        0,
+        SimulatedTransaction(
+          id: 'TX_M_${DateTime.now().millisecondsSinceEpoch}_$code',
+          code: code,
+          name: name,
+          type: 'BUY',
+          price: price,
+          volume: volume,
+          amount: amount,
+          dateTime: DateTime.now(),
+          dateTimeStr: todayStr,
+          signalReason: '手动买入',
+        ));
 
     await saveSimData();
     notifyListeners();
@@ -501,7 +659,8 @@ class SimulationProvider extends ChangeNotifier {
 
   // 手动卖出 API
   Future<bool> manualSell(String code, double price) async {
-    if (!positions.containsKey(code) || price <= 0 || !price.isFinite) return false;
+    if (!positions.containsKey(code) || price <= 0 || !price.isFinite)
+      return false;
     await loadSimData();
 
     final pos = positions[code]!;
@@ -512,18 +671,20 @@ class SimulationProvider extends ChangeNotifier {
     availableBalance += sellAmt;
     positions.remove(code);
 
-    transactions.insert(0, SimulatedTransaction(
-      id: 'TX_M_${DateTime.now().millisecondsSinceEpoch}_$code',
-      code: code,
-      name: pos.name,
-      type: 'SELL',
-      price: price,
-      volume: sellVolume,
-      amount: sellAmt,
-      dateTime: DateTime.now(),
-      dateTimeStr: DateTime.now().toIso8601String().substring(0, 10),
-      signalReason: '手动卖出',
-    ));
+    transactions.insert(
+        0,
+        SimulatedTransaction(
+          id: 'TX_M_${DateTime.now().millisecondsSinceEpoch}_$code',
+          code: code,
+          name: pos.name,
+          type: 'SELL',
+          price: price,
+          volume: sellVolume,
+          amount: sellAmt,
+          dateTime: DateTime.now(),
+          dateTimeStr: DateTime.now().toIso8601String().substring(0, 10),
+          signalReason: '手动卖出',
+        ));
 
     await saveSimData();
     notifyListeners();
@@ -532,14 +693,18 @@ class SimulationProvider extends ChangeNotifier {
 
   // 防御性校验：确保所有数值为有限值，防止 Infinity/NaN 污染
   void _sanitizeValues() {
-    if (!initialBalance.isFinite || initialBalance < 0) initialBalance = 1000000.0;
-    if (!availableBalance.isFinite || availableBalance < 0) availableBalance = initialBalance;
-    if (!defaultBuyAmount.isFinite || defaultBuyAmount <= 0) defaultBuyAmount = 10000.0;
+    if (!initialBalance.isFinite || initialBalance < 0)
+      initialBalance = 1000000.0;
+    if (!availableBalance.isFinite || availableBalance < 0)
+      availableBalance = initialBalance;
+    if (!defaultBuyAmount.isFinite || defaultBuyAmount <= 0)
+      defaultBuyAmount = 10000.0;
 
     // 可用余额合理性上限：最多允许盈利 500%
     final double maxReasonableBalance = initialBalance + (initialBalance * 5.0);
     if (availableBalance > maxReasonableBalance) {
-      debugPrint('[Simulation] 警告: 可用余额异常偏高 (¥${availableBalance.toStringAsFixed(0)})，已截断至初始资金');
+      debugPrint(
+          '[Simulation] 警告: 可用余额异常偏高 (¥${availableBalance.toStringAsFixed(0)})，已截断至初始资金');
       availableBalance = initialBalance;
     }
 

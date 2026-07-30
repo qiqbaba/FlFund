@@ -246,28 +246,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     _batchHorizontalScrollController.dispose();
     _batchVerticalScrollController.dispose();
     _singleHorizontalScrollController.dispose();
+    _fundSearchController.dispose();
     super.dispose();
-  }
-
-  void _showStrategyIntroDialog(bool isDark) {
-    fluent.showDialog(
-      context: context,
-      builder: (context) {
-        return fluent.ContentDialog(
-          title: const Text('寻优策略全面介绍'),
-          content: Container(
-            constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
-            child: _buildStrategyIntroCard(isDark, embedded: true),
-          ),
-          actions: [
-            fluent.FilledButton(
-              child: const Text('我知道了'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Widget _buildStrategyIntroCard(bool isDark, {bool embedded = false}) {
@@ -307,8 +287,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final double width = constraints.maxWidth;
-              final isTwoColumn = width > 480;
-              final itemWidth = isTwoColumn ? (width - 12) / 2 : width;
+              final isTwoColumn = width > 520;
 
               Widget buildFeatureItem({
                 required IconData icon,
@@ -317,27 +296,46 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                 required Color iconBgColor,
               }) {
                 return Container(
-                  width: itemWidth,
-                  padding: const EdgeInsets.all(12.0),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     color: isDark
-                        ? Colors.white.withValues(alpha: 0.02)
-                        : Colors.black.withValues(alpha: 0.015),
+                        ? Colors.white.withValues(alpha: 0.03)
+                        : Colors.white,
                     border: Border.all(
                       color: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.black.withValues(alpha: 0.05),
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.06),
                     ),
+                    boxShadow: isDark
+                        ? []
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 左侧彩色竖条 + 图标
                       Container(
-                        padding: const EdgeInsets.all(6),
+                        width: 3,
+                        height: 36,
+                        margin: const EdgeInsets.only(right: 10),
                         decoration: BoxDecoration(
-                          color: iconBgColor.withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
+                          color: iconBgColor.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: iconBgColor.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(icon, color: iconBgColor, size: 16),
                       ),
@@ -349,30 +347,36 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                             Text(
                               title,
                               style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
                                 color: titleColor,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 7),
                             ...bulletPoints.map((point) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 4.0),
+                                  padding: const EdgeInsets.only(bottom: 5.0),
                                   child: Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text('• ',
-                                          style: TextStyle(
-                                              color: iconBgColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11)),
+                                      Container(
+                                        width: 5,
+                                        height: 5,
+                                        margin: const EdgeInsets.only(
+                                            top: 5, right: 7),
+                                        decoration: BoxDecoration(
+                                          color: iconBgColor.withValues(
+                                              alpha: 0.5),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
                                       Expanded(
                                         child: Text(
                                           point,
                                           style: TextStyle(
                                               fontSize: 11,
                                               color: descColor,
-                                              height: 1.3),
+                                              height: 1.4),
                                         ),
                                       ),
                                     ],
@@ -386,48 +390,87 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                 );
               }
 
-              return SingleChildScrollView(
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    buildFeatureItem(
-                      icon: fluent.FluentIcons.git_graph,
-                      title: '🧬 遗传算法参数寻优 (GA)',
-                      iconBgColor: Colors.blue,
-                      bulletPoints: [
-                        '智能演化：在几千组买入天数、下跌阈值和止盈目标的参数组合中进行遗传迭代。',
-                        '个性定制：针对不同波动率的基金自动生成适配的网格，高波动高宽幅，低波动低门槛。',
-                      ],
-                    ),
-                    buildFeatureItem(
-                      icon: fluent.FluentIcons.shield_alert,
-                      title: '🛡️ 趋势风控与均线过滤器',
-                      iconBgColor: Colors.orange,
-                      bulletPoints: [
-                        '均线过滤：引入250日移动均线（年线），处于下行空头趋势时自动减少买入，规避无底深渊。',
-                        '移动止损：在达到止盈点后开启追踪止损，锁定高位利润，防止坐“过山车”。',
-                      ],
-                    ),
-                    buildFeatureItem(
-                      icon: fluent.FluentIcons.sign_out,
-                      title: '🚪 卖出信号二次寻优',
-                      iconBgColor: Colors.redAccent,
-                      bulletPoints: [
-                        '出场优化：寻找除了固定止盈外的最优卖出时间，在“套牢X天且反弹跌幅收窄”的维度智能平仓。',
-                        '回撤控制：控制最长持仓周期，平衡资金占用时间与网格循环效率。',
-                      ],
-                    ),
-                    buildFeatureItem(
-                      icon: fluent.FluentIcons.database_activity,
-                      title: '💻 异步并发与本地策略库',
-                      iconBgColor: Colors.purple,
-                      bulletPoints: [
-                        '后台计算：在后台独立 Isolate 线程中并发寻优，完全避免界面卡顿。',
-                        '无缝同步：寻优成功后自动写入本地 SQLite 策略数据库，与主面板的日度信号监控无缝连接。',
-                      ],
-                    ),
+              final List<Widget> featureItems = [
+                buildFeatureItem(
+                  icon: fluent.FluentIcons.git_graph,
+                  title: '🧬 遗传算法参数寻优 (GA)',
+                  iconBgColor: Colors.blue,
+                  bulletPoints: [
+                    '智能演化：在几千组买入天数、下跌阈值和止盈目标的参数组合中进行遗传迭代。',
+                    '个性定制：针对不同波动率的基金自动生成适配的网格，高波动高宽幅，低波动低门槛。',
                   ],
+                ),
+                buildFeatureItem(
+                  icon: fluent.FluentIcons.shield_alert,
+                  title: '🛡️ 趋势风控与均线过滤器',
+                  iconBgColor: Colors.orange,
+                  bulletPoints: [
+                    '均线过滤：引入动态自适应均线（默认120日），处于下行空头趋势时自动减少买入，规避无底深渊。',
+                    '移动止损：在达到止盈点后开启追踪止损，锁定高位利润，防止坐“过山车”。',
+                    'RSI/MACD 双重过滤：结合 RSI 超卖区间与 MACD 金叉信号，过滤下跌途中的假低点。',
+                  ],
+                ),
+                buildFeatureItem(
+                  icon: fluent.FluentIcons.sign_out,
+                  title: '🚪 卖出信号二次寻优',
+                  iconBgColor: Colors.redAccent,
+                  bulletPoints: [
+                    '出场优化：寻找除了固定止盈外的最优卖出时间，在“X天内涨幅达P%”的维度智能平仓。',
+                    '回撤控制：控制最长持仓周期，平衡资金占用时间与网格循环效率。',
+                  ],
+                ),
+                buildFeatureItem(
+                  icon: fluent.FluentIcons.lock,
+                  title: '🔒 模拟盘风控体系',
+                  iconBgColor: Colors.teal,
+                  bulletPoints: [
+                    '四重平仓保护：固定止损(-15%) + 目标止盈 + 到期平仓 + 卖出信号，与回测引擎逻辑完全对齐。',
+                    '网格加仓：持仓基金继续下跌时自动追加买入摊低成本（最多3次），配合步进间距降噪过滤。',
+                    '仓位管控：全局最大持仓25只 + 单日最多买入5笔 + 同日买卖互斥，防止集中建仓和无效交易。',
+                  ],
+                ),
+                buildFeatureItem(
+                  icon: fluent.FluentIcons.database_activity,
+                  title: '💻 异步并发与本地策略库',
+                  iconBgColor: Colors.purple,
+                  bulletPoints: [
+                    '后台计算：在后台独立 Isolate 线程中并发寻优，完全避免界面卡顿。',
+                    '无缝同步：寻优成功后自动写入本地 SQLite 策略数据库，与主面板的日度信号监控无缝连接。',
+                  ],
+                ),
+              ];
+
+              // 等高行布局：同行两卡强制等宽等高，奇数末尾卡片横跨整行，保证排版整齐
+              final List<Widget> rows = [];
+              if (isTwoColumn) {
+                for (int i = 0; i < featureItems.length; i += 2) {
+                  if (rows.isNotEmpty) rows.add(const SizedBox(height: 14));
+                  if (i + 1 < featureItems.length) {
+                    rows.add(IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: featureItems[i]),
+                          const SizedBox(width: 16),
+                          Expanded(child: featureItems[i + 1]),
+                        ],
+                      ),
+                    ));
+                  } else {
+                    rows.add(featureItems[i]);
+                  }
+                }
+              } else {
+                for (int i = 0; i < featureItems.length; i++) {
+                  if (rows.isNotEmpty) rows.add(const SizedBox(height: 14));
+                  rows.add(featureItems[i]);
+                }
+              }
+
+              return SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: rows,
                 ),
               );
             },
@@ -493,7 +536,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
   Future<void> _loadSingleDuration() async {
     if (_selectedCode == null || _singleOptResult == null) return;
-    final proxyCode = AppConfig.indexProxyMap[_selectedCode!] ?? _selectedCode!;
+    final String targetCode = _selectedCode!;
+    final proxyCode = AppConfig.indexProxyMap[targetCode] ?? targetCode;
     var history = await FundHistoryDB().getHistory(proxyCode);
     if (history == null || history['navs'] == null) {
       final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
@@ -505,10 +549,10 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         history = await FundHistoryDB().getHistory(proxyCode);
       }
     }
-    if (!mounted) return;
+    if (!mounted || _selectedCode != targetCode) return;
     if (history == null || history['navs'] == null) {
       setState(() {
-        if (_singleOptResult?.code == _selectedCode) {
+        if (_singleOptResult?.code == targetCode) {
           _singleOptResult?.status = '无历史数据';
           _singleOptResult?.dataDuration = '--';
           _singleOptResult?.dataDurationDays = 0;
@@ -533,11 +577,10 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         durationStr = "${dates.length}天";
       }
     }
-    final optStrategy =
-        await FundHistoryDB().getOptimalStrategy(_selectedCode!);
-    if (!mounted) return;
+    final optStrategy = await FundHistoryDB().getOptimalStrategy(targetCode);
+    if (!mounted || _selectedCode != targetCode) return;
     final fundProvider = Provider.of<FundProvider>(context, listen: false);
-    final fund = fundProvider.myFunds[_selectedCode];
+    final fund = fundProvider.myFunds[targetCode];
 
     double defaultRsi = 35.0;
     bool defaultMacd = true;
@@ -553,7 +596,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     }
 
     setState(() {
-      if (_singleOptResult?.code == _selectedCode) {
+      if (_singleOptResult?.code == targetCode) {
         _singleOptResult?.dataDuration = durationStr;
         _singleOptResult?.dataDurationDays = durationDays;
         _chartNavs = navs;
@@ -600,14 +643,25 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     // 检查是否有快捷跳转的回测基金代码
     if (fundProvider.selectedBacktestCode != null) {
       final code = fundProvider.selectedBacktestCode!;
-      // 必须在自选列表里有该产品才选中
-      if (list.any((f) => f.code == code)) {
+      // 必须在自选列表里有该产品才选中；寻优进行中禁止切换，防止异步结果归属到错误基金
+      if (!_isOptimizing &&
+          !_isBatchOptimizing &&
+          list.any((f) => f.code == code)) {
         _selectedCode = code;
         _optMode = OptMode.single; // 强制切换回单只模式进行回测
+        _backtestResult = null; // 清空旧回测结果，避免展示上一只基金的图表与指标
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         fundProvider.clearSelectedBacktestCode();
       });
+    }
+
+    // 若当前选中的基金已被删除，重置选中状态
+    if (_selectedCode != null && !list.any((f) => f.code == _selectedCode)) {
+      _selectedCode = null;
+      _singleOptResult = null;
+      _backtestResult = null;
+      _lastSyncedCode = null;
     }
 
     if (_selectedCode == null && list.isNotEmpty) {
@@ -654,28 +708,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('🎯 寻优模式选择',
-                      style: TextStyle(
-                          fontWeight: fluent.FontWeight.bold, fontSize: 14)),
-                  fluent.HyperlinkButton(
-                    style: fluent.ButtonStyle(
-                      padding: fluent.WidgetStateProperty.all(EdgeInsets.zero),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(fluent.FluentIcons.info, size: 12),
-                        SizedBox(width: 4),
-                        Text('策略说明', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                    onPressed: () => _showStrategyIntroDialog(isDark),
-                  ),
-                ],
-              ),
+              const Text('🎯 寻优模式选择',
+                  style: TextStyle(
+                      fontWeight: fluent.FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 10),
               RadioGroup<OptMode>(
                 groupValue: _optMode,
@@ -2413,10 +2448,11 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
   // 1. 运行单次回测
   Future<void> _runSingleBacktest() async {
     if (_selectedCode == null) return;
+    final String targetCode = _selectedCode!;
     setState(() {
       _singleOptResult?.status = '计算中';
     });
-    final proxyCode = AppConfig.indexProxyMap[_selectedCode!] ?? _selectedCode!;
+    final proxyCode = AppConfig.indexProxyMap[targetCode] ?? targetCode;
     var history = await FundHistoryDB().getHistory(proxyCode);
     if (history == null || history['navs'] == null) {
       final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
@@ -2428,7 +2464,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         history = await FundHistoryDB().getHistory(proxyCode);
       }
     }
-    if (!mounted) return;
+    if (!mounted || _selectedCode != targetCode) return;
     if (history == null || history['navs'] == null) {
       setState(() {
         _singleOptResult?.status = '无历史数据';
@@ -2452,12 +2488,12 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     final List<String> dates =
         List<String>.from(history['dates'] ?? []).reversed.toList();
 
-    final optStrategy =
-        await FundHistoryDB().getOptimalStrategy(_selectedCode!);
+    final optStrategy = await FundHistoryDB().getOptimalStrategy(targetCode);
     int? sX;
     double? sPct;
     int maPeriod = 120; // 默认兼容老策略
     double maEnvelopePct = 0.0;
+    int holdMax = 90;
     if (optStrategy != null) {
       if (optStrategy['sell_x'] != null) {
         final int encodedVal = optStrategy['sell_x'];
@@ -2473,24 +2509,33 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         maPeriod = optStrategy['ma_period'] ?? 0;
         maEnvelopePct = optStrategy['ma_envelope_pct'] ?? 0.0;
       }
+      // 读取策略库中的最长持仓周期，保证回测与寻优评估口径一致
+      holdMax = (optStrategy['hold_max'] as int?) ?? 90;
     }
+    if (!mounted || _selectedCode != targetCode) return;
 
-    final res = BacktestEngine.runBacktest(
-      allNavs: navs,
-      allDates: dates,
-      buyDays: _buyDays,
-      buyDropPct: _buyDrop,
-      targetProfitPct: _targetProfit,
-      useMaFilter: true,
-      maPeriod: maPeriod,
-      maEnvelopePct: maEnvelopePct,
-      trailingDropPct: 2.0,
-      sellX: sX,
-      sellPct: sPct,
-      rsiFilterLimit: _rsiFilterLimit,
-      useMacdFilter: _useMacdFilter,
-      slippagePct: _slippagePct,
-    );
+    // 在后台执行回测与卖出信号寻优，避免阻塞 UI 线程
+    final computeResult = await safeCompute(_runSingleBacktestInIsolate, {
+      'navs': navs,
+      'dates': dates,
+      'buyDays': _buyDays,
+      'buyDrop': _buyDrop,
+      'targetProfit': _targetProfit,
+      'maPeriod': maPeriod,
+      'maEnvelopePct': maEnvelopePct,
+      'holdMax': holdMax,
+      'sellX': sX,
+      'sellPct': sPct,
+      'rsiFilterLimit': _rsiFilterLimit,
+      'useMacdFilter': _useMacdFilter,
+      'slippagePct': _slippagePct,
+      'gridSpacingPct': (_buyDrop * 0.3).clamp(1.0, 5.0),
+    });
+    final BacktestResult res = computeResult['result'] as BacktestResult;
+    final Map<String, dynamic>? sellOpt =
+        computeResult['sellOpt'] as Map<String, dynamic>?;
+
+    if (!mounted || _selectedCode != targetCode) return;
 
     // 计算时长字符串
     String durationStr = '--';
@@ -2506,19 +2551,16 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       }
     }
 
-    final sellOpt =
-        SellSignalOptimizer.optimize(allNavs: navs, allDates: dates);
-
     setState(() {
       _backtestResult = res;
       _chartNavs = navs;
       _chartDates = dates;
       _updateSpotsCache(); // 更新折线图数据点缓存
       final fundProvider = Provider.of<FundProvider>(context, listen: false);
-      final fundName = fundProvider.myFunds[_selectedCode!]?.name ?? '';
-      final sector = fundProvider.myFunds[_selectedCode!]?.sector ?? '';
+      final fundName = fundProvider.myFunds[targetCode]?.name ?? '';
+      final sector = fundProvider.myFunds[targetCode]?.sector ?? '';
       _singleOptResult = BatchOptResult(
-        code: _selectedCode!,
+        code: targetCode,
         name: fundName,
         sector: sector,
         status: res.totalTrades > 0 ? '成功' : '未发现交易',
@@ -2540,8 +2582,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
   // 2. 遗传算法参数寻优 (运行于后台 isolate)
   Future<void> _runGeneticOptimization() async {
     if (_selectedCode == null) return;
+    final String targetCode = _selectedCode!;
     final appConfig = Provider.of<AppConfig>(context, listen: false);
-    final proxyCode = AppConfig.indexProxyMap[_selectedCode!] ?? _selectedCode!;
+    final proxyCode = AppConfig.indexProxyMap[targetCode] ?? targetCode;
     var history = await FundHistoryDB().getHistory(proxyCode);
     if (history == null || history['navs'] == null) {
       final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
@@ -2567,8 +2610,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         List<String>.from(history['dates'] ?? []).reversed.toList();
 
     try {
-      final optStrategy =
-          await FundHistoryDB().getOptimalStrategy(_selectedCode!);
+      final optStrategy = await FundHistoryDB().getOptimalStrategy(targetCode);
       int? sX;
       double? sPct;
       if (optStrategy != null && optStrategy['sell_x'] != null) {
@@ -2597,11 +2639,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         'useMacdFilter': _useMacdFilter,
       });
 
-      if (!mounted) return;
-
-      setState(() {
-        _isOptimizing = false;
-      });
+      // 异步完成后校验：若组件已销毁或基金已切换，丢弃本次结果防止写入错误基金
+      if (!mounted || _selectedCode != targetCode) return;
 
       if (optResult != null) {
         final opt = optResult['opt'];
@@ -2617,9 +2656,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
         // 保存至本地 SQLite 数据库
         final fundProvider = Provider.of<FundProvider>(context, listen: false);
-        final fundName = fundProvider.myFunds[_selectedCode!]?.name ?? '';
+        final fundName = fundProvider.myFunds[targetCode]?.name ?? '';
         await FundHistoryDB().saveOptimalStrategy(
-          fundCode: _selectedCode!,
+          fundCode: targetCode,
           fundName: fundName,
           buyDays: opt['buy_days'],
           buyDrop: opt['buy_drop'],
@@ -2646,7 +2685,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         fundProvider.loadMyFunds();
 
         // 顺便展示回测结果，此方法会自动更新 _singleOptResult 状态为成功并填入指标
-        _runSingleBacktest();
+        await _runSingleBacktest();
 
         if (!mounted) return;
         fluent.displayInfoBar(
@@ -2661,7 +2700,6 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           },
         );
       } else {
-        if (!mounted) return;
         setState(() {
           _singleOptResult?.status = '无有效策略';
         });
@@ -2680,9 +2718,15 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _isOptimizing = false;
         _singleOptResult?.status = '计算出错';
       });
+    } finally {
+      // 无论成功、失败还是中途返回，都确保解除 UI 锁定
+      if (mounted) {
+        setState(() {
+          _isOptimizing = false;
+        });
+      }
     }
   }
 
@@ -2813,6 +2857,36 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       ),
     );
   }
+}
+
+// 供 compute 调用的独立顶层函数 (必须是顶层函数以在 Isolate 里解耦运行)
+// 单次回测与卖出信号寻优的后台计算，避免阻塞 UI 线程
+Map<String, dynamic> _runSingleBacktestInIsolate(Map<String, dynamic> params) {
+  final List<double> navs =
+      (params['navs'] as List<dynamic>?)?.cast<double>() ?? [];
+  final List<String> dates =
+      (params['dates'] as List<dynamic>?)?.cast<String>() ?? [];
+
+  final result = BacktestEngine.runBacktest(
+    allNavs: navs,
+    allDates: dates,
+    buyDays: params['buyDays'] as int,
+    buyDropPct: params['buyDrop'] as double,
+    targetProfitPct: params['targetProfit'] as double,
+    holdMax: params['holdMax'] as int? ?? 90,
+    useMaFilter: true,
+    maPeriod: params['maPeriod'] as int? ?? 0,
+    maEnvelopePct: params['maEnvelopePct'] as double? ?? 0.0,
+    trailingDropPct: 2.0,
+    sellX: params['sellX'] as int?,
+    sellPct: params['sellPct'] as double?,
+    rsiFilterLimit: params['rsiFilterLimit'] as double? ?? 0.0,
+    useMacdFilter: params['useMacdFilter'] as bool? ?? false,
+    slippagePct: params['slippagePct'] as double? ?? 0.0,
+    gridSpacingPct: params['gridSpacingPct'] as double? ?? 0.0,
+  );
+  final sellOpt = SellSignalOptimizer.optimize(allNavs: navs, allDates: dates);
+  return {'result': result, 'sellOpt': sellOpt};
 }
 
 // 供 compute 调用的独立顶层函数 (必须是顶层函数以在 Isolate 里解耦运行)

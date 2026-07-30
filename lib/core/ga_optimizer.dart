@@ -95,10 +95,12 @@ class Individual {
   double avgProfit = 0.0;
   int totalTrades = 0;
 
-  Individual(this.buyDays, this.buyDrop, this.targetProfit, {this.maPeriod = 0, this.maEnvelopePct = 0.0});
+  Individual(this.buyDays, this.buyDrop, this.targetProfit,
+      {this.maPeriod = 0, this.maEnvelopePct = 0.0});
 
   Individual clone() {
-    return Individual(buyDays, buyDrop, targetProfit, maPeriod: maPeriod, maEnvelopePct: maEnvelopePct)
+    return Individual(buyDays, buyDrop, targetProfit,
+        maPeriod: maPeriod, maEnvelopePct: maEnvelopePct)
       ..fitness = fitness
       ..winRate = winRate
       ..avgProfit = avgProfit
@@ -130,13 +132,25 @@ bool _isStablePlateau(
 
   // 扩充邻域扰动：同时对 buyDays、buyDrop、targetProfit 三个维度进行敏感性验证
   final neighbors = [
-    Individual((ind.buyDays + 2).clamp(minBuyDays, maxBuyDays), ind.buyDrop, ind.targetProfit, maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual((ind.buyDays - 2).clamp(minBuyDays, maxBuyDays), ind.buyDrop, ind.targetProfit, maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual(ind.buyDays, (ind.buyDrop + 1.0).clamp(minBuyDrop, 25.0), ind.targetProfit, maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual(ind.buyDays, (ind.buyDrop - 1.0).clamp(minBuyDrop, 25.0), ind.targetProfit, maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
+    Individual((ind.buyDays + 2).clamp(minBuyDays, maxBuyDays), ind.buyDrop,
+        ind.targetProfit,
+        maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
+    Individual((ind.buyDays - 2).clamp(minBuyDays, maxBuyDays), ind.buyDrop,
+        ind.targetProfit,
+        maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
+    Individual(ind.buyDays, (ind.buyDrop + 1.0).clamp(minBuyDrop, 25.0),
+        ind.targetProfit,
+        maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
+    Individual(ind.buyDays, (ind.buyDrop - 1.0).clamp(minBuyDrop, 25.0),
+        ind.targetProfit,
+        maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
     // 修复：新增 targetProfit 维度扰动，止止利水准对 Calmar 比率同样敏感的参数被漏验
-    Individual(ind.buyDays, ind.buyDrop, (ind.targetProfit + 1.0).clamp(0.5, 25.0), maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual(ind.buyDays, ind.buyDrop, (ind.targetProfit - 1.0).clamp(0.5, 25.0), maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
+    Individual(
+        ind.buyDays, ind.buyDrop, (ind.targetProfit + 1.0).clamp(0.5, 25.0),
+        maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
+    Individual(
+        ind.buyDays, ind.buyDrop, (ind.targetProfit - 1.0).clamp(0.5, 25.0),
+        maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
   ];
 
   double neighborCalmarSum = 0.0;
@@ -166,12 +180,14 @@ bool _isStablePlateau(
       trailingDropPct: trailingDropPct,
       sellX: sellX,
       sellPct: sellPct,
-      precalculatedMa: fullMaMap != null ? fullMaMap[n.maPeriod] : precalculatedMa,
+      precalculatedMa:
+          fullMaMap != null ? fullMaMap[n.maPeriod] : precalculatedMa,
       precalculatedVol10: precalculatedVol10,
       precalculatedVol60: precalculatedVol60,
       slippagePct: slippagePct,
       rsiFilterLimit: rsiFilterLimit,
       useMacdFilter: useMacdFilter,
+      gridSpacingPct: (n.buyDrop * 0.3).clamp(1.0, 5.0),
     );
     if (res.totalTrades > 0) {
       neighborCalmarSum += res.calmarRatio;
@@ -182,7 +198,8 @@ bool _isStablePlateau(
 
     // 提前剪枝：即使剩余未测试的邻域全部取得 Perfect 得分 (baseCalmar)，也无法达到 baseCalmar * 0.5 时，立即退出
     final double maxRemainingScore = (totalNeighbors - count) * baseCalmar;
-    if ((neighborCalmarSum + maxRemainingScore) / totalNeighbors < baseCalmar * 0.5) {
+    if ((neighborCalmarSum + maxRemainingScore) / totalNeighbors <
+        baseCalmar * 0.5) {
       return false;
     }
   }
@@ -213,22 +230,28 @@ class GAOptimizer {
     if (allNavs.length < 20) return null;
 
     final dataSplit = _splitData(allNavs, allDates);
-    final int splitIdx = (allNavs.length >= 100) ? (allNavs.length * 0.7).floor() : allNavs.length;
+    final int splitIdx = (allNavs.length >= 100)
+        ? (allNavs.length * 0.7).floor()
+        : allNavs.length;
 
     // 0. 预先计算滚动波动率缓存与切片
-    final List<double> fullVol10 = BacktestEngine.precalculateVolatility(allNavs, 10);
-    final List<double> fullVol60 = BacktestEngine.precalculateVolatility(allNavs, 60);
+    final List<double> fullVol10 =
+        BacktestEngine.precalculateVolatility(allNavs, 10);
+    final List<double> fullVol60 =
+        BacktestEngine.precalculateVolatility(allNavs, 60);
 
     final List<double> inSampleVol10 = fullVol10.sublist(0, splitIdx);
     final List<double> inSampleVol60 = fullVol60.sublist(0, splitIdx);
-    final List<double> outSampleVol10 = allNavs.length >= 100 ? fullVol10.sublist(splitIdx) : [];
-    final List<double> outSampleVol60 = allNavs.length >= 100 ? fullVol60.sublist(splitIdx) : [];
+    final List<double> outSampleVol10 =
+        allNavs.length >= 100 ? fullVol10.sublist(splitIdx) : [];
+    final List<double> outSampleVol60 =
+        allNavs.length >= 100 ? fullVol60.sublist(splitIdx) : [];
 
     // 0.1 预计算多周期简单移动平均线缓存以提高效率
     final Map<int, List<double>> fullMaMap = {};
     final Map<int, List<double>> inSampleMaMap = {};
     final Map<int, List<double>> outSampleMaMap = {};
-    
+
     for (final period in [20, 60, 120, 250]) {
       final ma = _precalculateMA(allNavs, period);
       fullMaMap[period] = ma;
@@ -340,10 +363,13 @@ class GAOptimizer {
     void evaluate(Individual ind) {
       // 限制参数边界
       ind.buyDays = ind.buyDays.clamp(minBuyDays, maxBuyDays);
-      ind.buyDrop = double.parse(ind.buyDrop.clamp(minBuyDrop, 25.0).toStringAsFixed(2));
-      ind.targetProfit = double.parse(ind.targetProfit.clamp(0.5, maxTargetProfit).toStringAsFixed(2));
+      ind.buyDrop =
+          double.parse(ind.buyDrop.clamp(minBuyDrop, 25.0).toStringAsFixed(2));
+      ind.targetProfit = double.parse(
+          ind.targetProfit.clamp(0.5, maxTargetProfit).toStringAsFixed(2));
 
-      final key = '${ind.buyDays}_${ind.buyDrop}_${ind.targetProfit}_${ind.maPeriod}_${ind.maEnvelopePct.toStringAsFixed(1)}';
+      final key =
+          '${ind.buyDays}_${ind.buyDrop}_${ind.targetProfit}_${ind.maPeriod}_${ind.maEnvelopePct.toStringAsFixed(1)}';
       if (memo.containsKey(key)) {
         final cache = memo[key]!;
         ind.winRate = cache['win_rate'];
@@ -391,7 +417,8 @@ class GAOptimizer {
         double avgEff = inSampleRes.avgEfficiency;
 
         // 整合 Calmar 评分与 Sortino 比率，作为更加科学的适应度分值 (各占一半)
-        final double inScore = (inSampleRes.calmarRatio + inSampleRes.sortinoRatio) / 2.0;
+        final double inScore =
+            (inSampleRes.calmarRatio + inSampleRes.sortinoRatio) / 2.0;
 
         if (dataSplit.hasOutSample) {
           final outSampleRes = BacktestEngine.runBacktest(
@@ -417,11 +444,14 @@ class GAOptimizer {
           outTrades = outSampleRes.totalTrades;
 
           if (outSampleRes.totalTrades > 0) {
-            final double outScore = (outSampleRes.calmarRatio + outSampleRes.sortinoRatio) / 2.0;
+            final double outScore =
+                (outSampleRes.calmarRatio + outSampleRes.sortinoRatio) / 2.0;
             calmarScore = inScore * 0.7 + outScore * 0.3;
-            avgEff = inSampleRes.avgEfficiency * 0.7 + outSampleRes.avgEfficiency * 0.3;
+            avgEff = inSampleRes.avgEfficiency * 0.7 +
+                outSampleRes.avgEfficiency * 0.3;
             // 惩罚机制：如果样本外发生了亏损或样本外胜率相比样本内下降了 50% 以上
-            if (outSampleRes.annualizedReturn < 0 || outSampleRes.winRate < inSampleRes.winRate * 0.5) {
+            if (outSampleRes.annualizedReturn < 0 ||
+                outSampleRes.winRate < inSampleRes.winRate * 0.5) {
               if (calmarScore >= 0) {
                 calmarScore *= 0.2;
               } else {
@@ -477,16 +507,18 @@ class GAOptimizer {
       final days = random.nextInt(maxBuyDays - minBuyDays + 1) + minBuyDays;
       final drop = random.nextDouble() * (25.0 - minBuyDrop) + minBuyDrop;
       final profit = random.nextDouble() * (maxTargetProfit - 0.5) + 0.5;
-      
+
       int maPeriod = 0;
       double maEnvelopePct = 0.0;
       if (useMaFilter) {
-        maPeriod = maPeriodCandidates[random.nextInt(maPeriodCandidates.length)];
+        maPeriod =
+            maPeriodCandidates[random.nextInt(maPeriodCandidates.length)];
         if (maPeriod > 0) {
           maEnvelopePct = random.nextInt(11).toDouble(); // 0.0 到 10.0
         }
       }
-      return Individual(days, drop, profit, maPeriod: maPeriod, maEnvelopePct: maEnvelopePct);
+      return Individual(days, drop, profit,
+          maPeriod: maPeriod, maEnvelopePct: maEnvelopePct);
     });
 
     Individual? bestOverall;
@@ -518,7 +550,8 @@ class GAOptimizer {
         lastBestScore = currentBest.fitness!.calmarScore;
       }
 
-      if (bestOverall == null || currentBest.fitness!.compareTo(bestOverall.fitness!) > 0) {
+      if (bestOverall == null ||
+          currentBest.fitness!.compareTo(bestOverall.fitness!) > 0) {
         bestOverall = currentBest.clone();
       }
 
@@ -543,8 +576,10 @@ class GAOptimizer {
       Individual tournamentSelect() {
         final indices = List.generate(popSize, (i) => i)..shuffle(random);
         Individual best = population[indices[0]];
-        if (population[indices[1]].fitness!.compareTo(best.fitness!) > 0) best = population[indices[1]];
-        if (population[indices[2]].fitness!.compareTo(best.fitness!) > 0) best = population[indices[2]];
+        if (population[indices[1]].fitness!.compareTo(best.fitness!) > 0)
+          best = population[indices[1]];
+        if (population[indices[2]].fitness!.compareTo(best.fitness!) > 0)
+          best = population[indices[2]];
         return best;
       }
 
@@ -564,8 +599,10 @@ class GAOptimizer {
           final c2Drop = (1 - gamma1) * p1.buyDrop + gamma1 * p2.buyDrop;
 
           final gamma2 = random.nextDouble();
-          final c1Profit = gamma2 * p1.targetProfit + (1 - gamma2) * p2.targetProfit;
-          final c2Profit = (1 - gamma2) * p1.targetProfit + gamma2 * p2.targetProfit;
+          final c1Profit =
+              gamma2 * p1.targetProfit + (1 - gamma2) * p2.targetProfit;
+          final c2Profit =
+              (1 - gamma2) * p1.targetProfit + gamma2 * p2.targetProfit;
 
           int c1MaPeriod = 0;
           int c2MaPeriod = 0;
@@ -577,12 +614,22 @@ class GAOptimizer {
             c2MaPeriod = random.nextBool() ? p1.maPeriod : p2.maPeriod;
 
             final gamma3 = random.nextDouble();
-            c1MaEnvelope = c1MaPeriod > 0 ? (gamma3 * p1.maEnvelopePct + (1 - gamma3) * p2.maEnvelopePct).clamp(0.0, 10.0) : 0.0;
-            c2MaEnvelope = c2MaPeriod > 0 ? ((1 - gamma3) * p1.maEnvelopePct + gamma3 * p2.maEnvelopePct).clamp(0.0, 10.0) : 0.0;
+            c1MaEnvelope = c1MaPeriod > 0
+                ? (gamma3 * p1.maEnvelopePct + (1 - gamma3) * p2.maEnvelopePct)
+                    .clamp(0.0, 10.0)
+                : 0.0;
+            c2MaEnvelope = c2MaPeriod > 0
+                ? ((1 - gamma3) * p1.maEnvelopePct + gamma3 * p2.maEnvelopePct)
+                    .clamp(0.0, 10.0)
+                : 0.0;
           }
 
-          c1 = Individual(c1Days, c1Drop, c1Profit, maPeriod: c1MaPeriod, maEnvelopePct: double.parse(c1MaEnvelope.toStringAsFixed(1)));
-          c2 = Individual(c2Days, c2Drop, c2Profit, maPeriod: c2MaPeriod, maEnvelopePct: double.parse(c2MaEnvelope.toStringAsFixed(1)));
+          c1 = Individual(c1Days, c1Drop, c1Profit,
+              maPeriod: c1MaPeriod,
+              maEnvelopePct: double.parse(c1MaEnvelope.toStringAsFixed(1)));
+          c2 = Individual(c2Days, c2Drop, c2Profit,
+              maPeriod: c2MaPeriod,
+              maEnvelopePct: double.parse(c2MaEnvelope.toStringAsFixed(1)));
         } else {
           c1 = p1.clone();
           c2 = p2.clone();
@@ -591,27 +638,34 @@ class GAOptimizer {
         // 变异
         void mutate(Individual ind) {
           if (random.nextDouble() < mutationRate) {
-            ind.buyDays += random.nextBool() ? (random.nextInt(4) + 1) : -(random.nextInt(4) + 1);
+            ind.buyDays += random.nextBool()
+                ? (random.nextInt(4) + 1)
+                : -(random.nextInt(4) + 1);
             ind.buyDays = ind.buyDays.clamp(minBuyDays, maxBuyDays);
           }
           if (random.nextDouble() < mutationRate) {
             ind.buyDrop += (random.nextDouble() - 0.5) * 5.0; // 调大变异步长以覆盖更宽的区间
-            ind.buyDrop = double.parse(ind.buyDrop.clamp(minBuyDrop, 25.0).toStringAsFixed(2));
+            ind.buyDrop = double.parse(
+                ind.buyDrop.clamp(minBuyDrop, 25.0).toStringAsFixed(2));
           }
           if (random.nextDouble() < mutationRate) {
             ind.targetProfit += (random.nextDouble() - 0.5) * 5.0;
-            ind.targetProfit = double.parse(ind.targetProfit.clamp(0.5, maxTargetProfit).toStringAsFixed(2));
+            ind.targetProfit = double.parse(ind.targetProfit
+                .clamp(0.5, maxTargetProfit)
+                .toStringAsFixed(2));
           }
           if (useMaFilter) {
             if (random.nextDouble() < mutationRate) {
-              ind.maPeriod = maPeriodCandidates[random.nextInt(maPeriodCandidates.length)];
+              ind.maPeriod =
+                  maPeriodCandidates[random.nextInt(maPeriodCandidates.length)];
               if (ind.maPeriod == 0) {
                 ind.maEnvelopePct = 0.0;
               }
             }
             if (ind.maPeriod > 0 && random.nextDouble() < mutationRate) {
               ind.maEnvelopePct += (random.nextDouble() - 0.5) * 4.0;
-              ind.maEnvelopePct = double.parse(ind.maEnvelopePct.clamp(0.0, 10.0).toStringAsFixed(1));
+              ind.maEnvelopePct = double.parse(
+                  ind.maEnvelopePct.clamp(0.0, 10.0).toStringAsFixed(1));
             }
           }
         }
@@ -651,6 +705,7 @@ class GAOptimizer {
           slippagePct: slippagePct,
           rsiFilterLimit: rsiFilterLimit,
           useMacdFilter: useMacdFilter,
+          gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
         );
         if (_isStablePlateau(
           cand,
@@ -697,6 +752,7 @@ class GAOptimizer {
       slippagePct: slippagePct,
       rsiFilterLimit: rsiFilterLimit,
       useMacdFilter: useMacdFilter,
+      gridSpacingPct: (finalBest.buyDrop * 0.3).clamp(1.0, 5.0),
     );
 
     if (finalRes.totalTrades > 0) {
@@ -734,7 +790,8 @@ class GAOptimizer {
   }
 }
 
-Map<String, dynamic> _calcSellStats(List<double> navs, List<String> dates, int sellX, double sellPct) {
+Map<String, dynamic> _calcSellStats(
+    List<double> navs, List<String> dates, int sellX, double sellPct) {
   int totalSignals = 0;
   int successSignals = 0;
   for (int i = sellX; i < navs.length - 15; i++) {
@@ -764,7 +821,8 @@ Map<String, dynamic> _calcSellStats(List<double> navs, List<String> dates, int s
       i += 14; // 去重（因循环头自带 i++，此处增加 14 使得下一轮迭代 i 实际递增 15）
     }
   }
-  final double winRate = totalSignals > 0 ? (successSignals / totalSignals) * 100.0 : 0.0;
+  final double winRate =
+      totalSignals > 0 ? (successSignals / totalSignals) * 100.0 : 0.0;
   return {'winRate': winRate, 'trades': totalSignals};
 }
 
@@ -786,7 +844,8 @@ class SellSignalOptimizer {
     // 穷举 sellX 从 3 到 20 天，sellPct 从 2.0 到 15.0%，步长 1.0%
     for (int sellX = 3; sellX <= 20; sellX++) {
       for (double sellPct = 2.0; sellPct <= 15.0; sellPct += 1.0) {
-        final inStats = _calcSellStats(dataSplit.inSampleNavs, dataSplit.inSampleDates, sellX, sellPct);
+        final inStats = _calcSellStats(
+            dataSplit.inSampleNavs, dataSplit.inSampleDates, sellX, sellPct);
         final int inTrades = inStats['trades'] as int;
         final double inWinRate = inStats['winRate'] as double;
 
@@ -796,7 +855,8 @@ class SellSignalOptimizer {
         int outTrades = 0;
 
         if (dataSplit.hasOutSample) {
-          final outStats = _calcSellStats(dataSplit.outSampleNavs, dataSplit.outSampleDates, sellX, sellPct);
+          final outStats = _calcSellStats(dataSplit.outSampleNavs,
+              dataSplit.outSampleDates, sellX, sellPct);
           final double outWinRate = outStats['winRate'] as double;
           outTrades = outStats['trades'] as int;
 
@@ -814,7 +874,9 @@ class SellSignalOptimizer {
         // 优选胜率/得分更高的；如果相同，选交易次数更多的；如果还相同，选天数更小（更灵敏）的
         if (score > bestScore ||
             (score == bestScore && totalTrades > bestTrades) ||
-            (score == bestScore && totalTrades == bestTrades && sellX < bestX)) {
+            (score == bestScore &&
+                totalTrades == bestTrades &&
+                sellX < bestX)) {
           bestScore = score;
           bestTrades = totalTrades;
           bestX = sellX;

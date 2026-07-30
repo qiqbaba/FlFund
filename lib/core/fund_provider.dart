@@ -291,7 +291,7 @@ class FundUIModel {
     if (gridSpacingPct > 0.0) {
       final navList = fullNavs;
       int? prevBuyIdx;
-      // 往更早的历史搜索最近一次触发“基础买入”的索引，最长回溯60个交易日
+      // 往更早的历史搜索最近一次触发"基础买入"的索引，最长回溯60个交易日
       final int searchLimit = math.min(index + 60, navList.length);
       for (int k = index + 1; k < searchLimit; k++) {
         if (isBuySignalAt(k)) {
@@ -305,11 +305,14 @@ class FundUIModel {
         bool hasSold = false;
         if (optimalStrategy!['sell_x'] != null) {
           final int encodedVal = optimalStrategy!['sell_x'];
-          int sellX = encodedVal;
-          double sellPct = encodedVal.toDouble();
+          int sellX;
+          double sellPct;
           if (encodedVal >= 100) {
             sellX = encodedVal ~/ 1000;
             sellPct = (encodedVal % 1000).toDouble();
+          } else {
+            sellX = encodedVal;
+            sellPct = 5.0;
           }
 
           // 检查从 index 到 prevBuyIdx 之间（不含 prevBuyIdx 本身）是否有某天触发了卖出条件
@@ -414,11 +417,15 @@ class FundUIModel {
   bool isSellSignalAt(int index) {
     if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
       final int encodedVal = optimalStrategy!['sell_x'];
-      int sellX = encodedVal;
-      double sellPct = encodedVal.toDouble();
+      int sellX;
+      double sellPct;
       if (encodedVal >= 100) {
         sellX = encodedVal ~/ 1000;
         sellPct = (encodedVal % 1000).toDouble();
+      } else {
+        // 兼容旧格式：encodedVal 直接表示天数，涨幅阈值默认 5.0%
+        sellX = encodedVal;
+        sellPct = 5.0;
       }
 
       // 寻找在该 index 之后的最近一个买点（即从该天往更早的历史搜索最近一次触发买入的索引，最长回溯 60 个交易日）
@@ -458,9 +465,11 @@ class FundUIModel {
   double get currentRise {
     if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
       final int encodedVal = optimalStrategy!['sell_x'];
-      int sellX = encodedVal;
+      int sellX;
       if (encodedVal >= 100) {
         sellX = encodedVal ~/ 1000;
+      } else {
+        sellX = encodedVal;
       }
       return getRiseOrDrop(sellX);
     }
