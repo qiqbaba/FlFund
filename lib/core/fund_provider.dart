@@ -797,13 +797,15 @@ class FundProvider extends ChangeNotifier {
           final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
           final List<String> dates =
               List<String>.from(onlineHis['dates'] ?? []);
+          final List<double> ljjzs =
+              List<double>.from(onlineHis['ljjzs'] ?? []);
           double? ma120Val;
           if (navs.length >= 120) {
             final maResult = await safeCompute(_calculateMaInIsolate, navs);
             ma120Val = maResult.closedMa120;
           }
-          await db.saveHistory(
-              model.code, onlineHis['jzrq'], navs, dates, ma120Val);
+          await db.saveHistory(model.code, onlineHis['jzrq'], navs, dates,
+              ma120Val, ljjzs.length == navs.length ? ljjzs : null);
 
           // 自动代偿逻辑：若属于联接/新基金，则同时拉取并缓存对应的标的 ETF 历史净值
           final proxyCode = AppConfig.indexProxyMap[model.code];
@@ -842,17 +844,20 @@ class FundProvider extends ChangeNotifier {
           model.dwjz = rawNavs.first.toStringAsFixed(4);
           model.jzrq = history['jzrq'] ?? '';
 
-          // 加载并计算 MA120/sumOf119 缓存
-          double? dbMa120 = history['ma120'] as double?;
-          if (dbMa120 == null && rawNavs.length >= 120) {
-            // 本地尚无缓存，使用 Isolate 计算后回写数据库
-            final maResult = await safeCompute(_calculateMaInIsolate, rawNavs);
-            model.closedMa120 = maResult.closedMa120;
-            model.sumOf119 = maResult.sumOf119;
-            await db.updateMa120(model.code, maResult.closedMa120);
-          } else if (dbMa120 != null && rawNavs.length >= 120) {
-            model.closedMa120 = dbMa120;
-            model.sumOf119 = dbMa120 * 120.0 - rawNavs[119];
+          // 加载并计算 MA120/sumOf119 缓存（基于复权净值序列，与回测口径一致）
+          if (rawNavs.length >= 120) {
+            double sum120 = 0.0;
+            for (int i = 0; i < 120; i++) {
+              sum120 += rawNavs[i];
+            }
+            model.closedMa120 = sum120 / 120.0;
+            model.sumOf119 = sum120 - rawNavs[119];
+            // 回写与复权序列一致的 MA120 缓存（仅当与旧值不一致时）
+            final double? dbMa120 = history['ma120'] as double?;
+            if (dbMa120 == null ||
+                (dbMa120 - model.closedMa120!).abs() > 1e-9) {
+              await db.updateMa120(model.code, model.closedMa120!);
+            }
           } else {
             model.closedMa120 = null;
             model.sumOf119 = null;
@@ -971,26 +976,40 @@ class FundProvider extends ChangeNotifier {
               model.trendDirection = TrendDirection.sideways;
             }
 
+            // 2. Z-score 与 3. 去趋势百分位：在对数净值(log-price)空间计算。
+            // 基金净值近似复利增长，直接用原始净值做线性回归会系统性高/低估趋势、
+            // 残差异方差；改用 log 净值可线性化指数增长，得到无偏去趋势残差与尺度不变的 Z 分数
+            bool allPositive = currentVal > 0;
+            for (int i = 0; i < fullNavs.length && allPositive; i++) {
+              if (fullNavs[i] <= 0) allPositive = false;
+            }
+            final List<double> series =
+                List<double>.filled(fullNavs.length, 0.0);
+            for (int i = 0; i < fullNavs.length; i++) {
+              series[i] = allPositive ? math.log(fullNavs[i]) : fullNavs[i];
+            }
+            final double curSeriesVal =
+                allPositive ? math.log(currentVal) : currentVal;
+
             // 2. Z-score：偏离均值多少个标准差
             double sum = 0, sumSq = 0;
-            for (int i = 0; i < fullNavs.length; i++) {
-              sum += fullNavs[i];
+            for (int i = 0; i < series.length; i++) {
+              sum += series[i];
             }
-            final double mean = sum / fullNavs.length;
-            for (int i = 0; i < fullNavs.length; i++) {
-              final double diff = fullNavs[i] - mean;
+            final double mean = sum / series.length;
+            for (int i = 0; i < series.length; i++) {
+              final double diff = series[i] - mean;
               sumSq += diff * diff;
             }
-            final double std = math.sqrt(sumSq / fullNavs.length);
-            model.zScore = std > 0 ? (currentVal - mean) / std : 0.0;
+            final double std = math.sqrt(sumSq / series.length);
+            model.zScore = std > 0 ? (curSeriesVal - mean) / std : 0.0;
 
-            // 3. 去趋势百分位：消除长期上涨偏倚
-            // 用线性回归拟合长期趋势，计算残差的百分位
-            final int n = fullNavs.length;
+            // 3. 去趋势百分位：用线性回归拟合长期趋势，计算残差的百分位
+            final int n = series.length;
             double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
             for (int i = 0; i < n; i++) {
               final double x = i.toDouble();
-              final double y = fullNavs[i];
+              final double y = series[i];
               sumX += x;
               sumY += y;
               sumXY += x * y;
@@ -1000,15 +1019,15 @@ class FundProvider extends ChangeNotifier {
                 (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
             final double intercept = (sumY - slope * sumX) / n;
 
-            // 当前值的趋势预期值
-            final double trendVal = intercept + slope * 0; // index 0 = 最新
+            // 当前值的趋势预期值 (index 0 = 最新)
+            final double trendVal = intercept + slope * 0;
             // 计算所有残差
             final List<double> residuals = [];
             for (int i = 0; i < n; i++) {
-              residuals.add(fullNavs[i] - (intercept + slope * i));
+              residuals.add(series[i] - (intercept + slope * i));
             }
             // 当前残差
-            final double currentResidual = currentVal - trendVal;
+            final double currentResidual = curSeriesVal - trendVal;
             // 残差百分位
             int resLess = 0, resEqual = 0;
             for (int i = 0; i < residuals.length; i++) {

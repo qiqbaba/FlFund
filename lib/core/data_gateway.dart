@@ -140,6 +140,7 @@ class FundDataGateway {
           if (data is Map && data['ErrCode'] == 0 && data['Datas'] != null) {
             final List datas = data['Datas'];
             final List<double> navs = [];
+            final List<double> ljjzs = [];
             final List<String> dates = [];
 
             for (final item in datas) {
@@ -148,6 +149,9 @@ class FundDataGateway {
               if (val != null && dt.isNotEmpty) {
                 navs.add(val);
                 dates.add(dt);
+                // 累计净值（LJJZ）用于重建复权净值，消除分红除息造成的净值跳空
+                final ljjz = double.tryParse(item['LJJZ']?.toString() ?? '');
+                ljjzs.add(ljjz != null && ljjz > 0 ? ljjz : val);
               }
             }
 
@@ -156,6 +160,7 @@ class FundDataGateway {
                 'source': 'EastMoneyMobile',
                 'jzrq': dates.first,
                 'navs': navs,
+                'ljjzs': ljjzs,
                 'dates': dates,
                 'latest_item': datas.first,
               };

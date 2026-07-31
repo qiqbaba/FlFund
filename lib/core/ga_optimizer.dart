@@ -40,10 +40,119 @@ DataSplit _splitData(List<double> navs, List<String> dates) {
   }
 }
 
+// 走动前推（walk-forward）验证的数据切分：训练集 + 若干顺序样本外前推窗口
+class WalkForwardSplit {
+  final int trainEnd; // 训练集结束索引（不含），仅此区间参与 GA 适应度
+  final List<int> foldStarts; // 各前推窗口的 OOS 交易起点（全样本绝对索引）
+  final List<int> foldEnds; // 各前推窗口的结束（不含）
+  final bool hasOutSample;
+
+  WalkForwardSplit({
+    required this.trainEnd,
+    required this.foldStarts,
+    required this.foldEnds,
+    required this.hasOutSample,
+  });
+}
+
+// 构建 walk-forward 切分：训练集取前 60%，其余按顺序切成最多 3 个前推窗口
+WalkForwardSplit _buildWalkForward(List<double> navs, List<String> dates) {
+  final int n = navs.length;
+  // 数据不足以稳健切分训练+前推窗口时，全部作为训练集（无样本外验收）
+  if (n < 120) {
+    return WalkForwardSplit(
+        trainEnd: n, foldStarts: [], foldEnds: [], hasOutSample: false);
+  }
+  final int trainEnd = (n * 0.6).floor();
+  final int oosLen = n - trainEnd;
+  int folds = 3;
+  // 保证每个前推窗口的样本外段至少约 30 天
+  while (folds > 1 && oosLen / folds < 30) {
+    folds--;
+  }
+  final int seg = (oosLen / folds).floor();
+  final List<int> starts = [];
+  final List<int> ends = [];
+  for (int f = 0; f < folds; f++) {
+    final int s = trainEnd + f * seg;
+    final int e = (f == folds - 1) ? n : trainEnd + (f + 1) * seg;
+    starts.add(s);
+    ends.add(e);
+  }
+  return WalkForwardSplit(
+      trainEnd: trainEnd,
+      foldStarts: starts,
+      foldEnds: ends,
+      hasOutSample: true);
+}
+
+// 样本外前推验收：对候选参数在每个前推窗口上滚动回测（含预热），
+// 仅用于最终筛选与验收，绝不反馈进 GA 适应度，避免样本外信息泄漏。
+Map<String, dynamic> _walkForwardEval(
+  Individual cand,
+  List<double> allNavs,
+  List<String> allDates,
+  WalkForwardSplit wf,
+  int holdMax,
+  double? trailingDropPct,
+  int? sellX,
+  double? sellPct,
+  double slippagePct,
+  double rsiFilterLimit,
+  bool useMacdFilter,
+) {
+  if (!wf.hasOutSample) {
+    return {'trades': 0, 'validFolds': 0, 'positiveFolds': 0, 'avgCalmar': 0.0};
+  }
+  // 预热窗口取自训练区间尾部，使交易恰好从样本外起点开始，避免泄漏进训练区
+  final int startIdx = max(cand.buyDays, cand.maPeriod);
+  int totalTrades = 0;
+  int positiveFolds = 0;
+  int validFolds = 0;
+  double calmarSum = 0.0;
+  for (int f = 0; f < wf.foldStarts.length; f++) {
+    final int oosStart = wf.foldStarts[f];
+    final int oosEnd = wf.foldEnds[f];
+    final int sliceStart = max(0, oosStart - startIdx);
+    if (oosEnd - sliceStart < startIdx + 2) continue;
+    final List<double> navs = allNavs.sublist(sliceStart, oosEnd);
+    final List<String> dates = allDates.sublist(sliceStart, oosEnd);
+    final res = BacktestEngine.runBacktest(
+      allNavs: navs,
+      allDates: dates,
+      buyDays: cand.buyDays,
+      buyDropPct: cand.buyDrop,
+      targetProfitPct: cand.targetProfit,
+      holdMax: holdMax,
+      maPeriod: cand.maPeriod,
+      maEnvelopePct: cand.maEnvelopePct,
+      trailingDropPct: trailingDropPct,
+      sellX: sellX,
+      sellPct: sellPct,
+      slippagePct: slippagePct,
+      rsiFilterLimit: rsiFilterLimit,
+      useMacdFilter: useMacdFilter,
+      gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
+    );
+    if (res.totalTrades > 0) {
+      totalTrades += res.totalTrades;
+      validFolds++;
+      calmarSum += (res.calmarRatio + res.sortinoRatio) / 2.0;
+      if (res.annualizedReturn > 0) positiveFolds++;
+    }
+  }
+  return {
+    'trades': totalTrades,
+    'validFolds': validFolds,
+    'positiveFolds': positiveFolds,
+    'avgCalmar': validFolds > 0 ? calmarSum / validFolds : 0.0,
+  };
+}
+
 // 用于表示遗传算法的适应度（支持多维度优先比较）
 class GAFitness implements Comparable<GAFitness> {
   final int isRobust; // 1: 足够稳健(交易数>=5且分布均匀), 0: 交易数<5且>0, -2: 交易数为0
-  final double calmarScore; // 综合卡玛比率得分 (样本内 * 0.7 + 样本外 * 0.3)
+  final double calmarScore; // 综合风险调整得分 (仅训练集/样本内，样本外不参与)
   final double winRate; // 样本内胜率作为备用比对
   final int totalTrades;
   final double buyDrop;
@@ -229,36 +338,29 @@ class GAOptimizer {
   }) {
     if (allNavs.length < 20) return null;
 
-    final dataSplit = _splitData(allNavs, allDates);
-    final int splitIdx = (allNavs.length >= 100)
-        ? (allNavs.length * 0.7).floor()
-        : allNavs.length;
+    // 走动前推（walk-forward）验证：训练集用于 GA 适应度，样本外前推窗口仅作事后验收
+    final WalkForwardSplit wf = _buildWalkForward(allNavs, allDates);
+    final int trainEnd = wf.trainEnd;
+    final List<double> trainNavs = allNavs.sublist(0, trainEnd);
+    final List<String> trainDates = allDates.sublist(0, trainEnd);
 
-    // 0. 预先计算滚动波动率缓存与切片
+    // 0. 预先计算滚动波动率缓存与切片（训练集用于适应度，全样本用于验收）
     final List<double> fullVol10 =
         BacktestEngine.precalculateVolatility(allNavs, 10);
     final List<double> fullVol60 =
         BacktestEngine.precalculateVolatility(allNavs, 60);
 
-    final List<double> inSampleVol10 = fullVol10.sublist(0, splitIdx);
-    final List<double> inSampleVol60 = fullVol60.sublist(0, splitIdx);
-    final List<double> outSampleVol10 =
-        allNavs.length >= 100 ? fullVol10.sublist(splitIdx) : [];
-    final List<double> outSampleVol60 =
-        allNavs.length >= 100 ? fullVol60.sublist(splitIdx) : [];
+    final List<double> inSampleVol10 = fullVol10.sublist(0, trainEnd);
+    final List<double> inSampleVol60 = fullVol60.sublist(0, trainEnd);
 
     // 0.1 预计算多周期简单移动平均线缓存以提高效率
     final Map<int, List<double>> fullMaMap = {};
     final Map<int, List<double>> inSampleMaMap = {};
-    final Map<int, List<double>> outSampleMaMap = {};
 
     for (final period in [20, 60, 120, 250]) {
       final ma = _precalculateMA(allNavs, period);
       fullMaMap[period] = ma;
-      inSampleMaMap[period] = ma.sublist(0, splitIdx);
-      if (allNavs.length >= 100) {
-        outSampleMaMap[period] = ma.sublist(splitIdx);
-      }
+      inSampleMaMap[period] = ma.sublist(0, trainEnd);
     }
 
     // 1. 计算历史最大回撤、最高净值与最低净值
@@ -380,8 +482,8 @@ class GAOptimizer {
       }
 
       final inSampleRes = BacktestEngine.runBacktest(
-        allNavs: dataSplit.inSampleNavs,
-        allDates: dataSplit.inSampleDates,
+        allNavs: trainNavs,
+        allDates: trainDates,
         buyDays: ind.buyDays,
         buyDropPct: ind.buyDrop,
         targetProfitPct: ind.targetProfit,
@@ -412,86 +514,31 @@ class GAOptimizer {
         ind.avgProfit = 0.0;
         ind.totalTrades = 0;
       } else {
-        double calmarScore = 0.0;
-        int outTrades = 0;
-        double avgEff = inSampleRes.avgEfficiency;
-
-        // 整合 Calmar 评分与 Sortino 比率，作为更加科学的适应度分值 (各占一半)
+        // 适应度仅由训练集（样本内）决定；样本外前推窗口不参与进化，避免样本外信息泄漏。
+        // 整合 Calmar 与 Sortino 比率作为更科学的风险调整适应度分值
         final double inScore =
             (inSampleRes.calmarRatio + inSampleRes.sortinoRatio) / 2.0;
-
-        if (dataSplit.hasOutSample) {
-          final outSampleRes = BacktestEngine.runBacktest(
-            allNavs: dataSplit.outSampleNavs,
-            allDates: dataSplit.outSampleDates,
-            buyDays: ind.buyDays,
-            buyDropPct: ind.buyDrop,
-            targetProfitPct: ind.targetProfit,
-            holdMax: holdMax,
-            maPeriod: ind.maPeriod,
-            maEnvelopePct: ind.maEnvelopePct,
-            trailingDropPct: trailingDropPct,
-            sellX: sellX,
-            sellPct: sellPct,
-            precalculatedMa: outSampleMaMap[ind.maPeriod],
-            precalculatedVol10: outSampleVol10,
-            precalculatedVol60: outSampleVol60,
-            slippagePct: slippagePct,
-            rsiFilterLimit: rsiFilterLimit,
-            useMacdFilter: useMacdFilter,
-            gridSpacingPct: (ind.buyDrop * 0.3).clamp(1.0, 5.0),
-          );
-          outTrades = outSampleRes.totalTrades;
-
-          if (outSampleRes.totalTrades > 0) {
-            final double outScore =
-                (outSampleRes.calmarRatio + outSampleRes.sortinoRatio) / 2.0;
-            calmarScore = inScore * 0.7 + outScore * 0.3;
-            avgEff = inSampleRes.avgEfficiency * 0.7 +
-                outSampleRes.avgEfficiency * 0.3;
-            // 惩罚机制：如果样本外发生了亏损或样本外胜率相比样本内下降了 50% 以上
-            if (outSampleRes.annualizedReturn < 0 ||
-                outSampleRes.winRate < inSampleRes.winRate * 0.5) {
-              if (calmarScore >= 0) {
-                calmarScore *= 0.2;
-              } else {
-                calmarScore /= 0.2;
-              }
-            }
-          } else {
-            // 样本外无交易降权
-            if (inScore >= 0) {
-              calmarScore = inScore * 0.5;
-            } else {
-              calmarScore = inScore / 0.5;
-            }
-          }
-        } else {
-          calmarScore = inScore;
-        }
+        double calmarScore = inScore;
 
         // 将综合收益捕获效率乘入 calmarScore 中作为调节系数
-        final double effMultiplier = 0.4 + 0.6 * (avgEff / 100.0);
-        // 修复：统一改为乘法，保证正负分的惩罚力度对称一致
+        final double effMultiplier =
+            0.4 + 0.6 * (inSampleRes.avgEfficiency / 100.0);
         calmarScore *= effMultiplier;
 
-        // 鲁棒性判定：总交易数 >= 5。如果存在样本外，希望样本内外均有交易
-        bool isRobust = (inSampleRes.totalTrades + outTrades) >= 5;
-        if (dataSplit.hasOutSample && outTrades == 0) {
-          isRobust = false;
-        }
+        // 鲁棒性判定：训练集总交易数 >= 5
+        final bool isRobust = inSampleRes.totalTrades >= 5;
 
         ind.fitness = GAFitness(
           isRobust: isRobust ? 1 : 0,
           calmarScore: calmarScore,
           winRate: inSampleRes.winRate,
-          totalTrades: inSampleRes.totalTrades + outTrades,
+          totalTrades: inSampleRes.totalTrades,
           buyDrop: ind.buyDrop,
         );
 
         ind.winRate = inSampleRes.winRate;
         ind.avgProfit = inSampleRes.avgProfit;
-        ind.totalTrades = inSampleRes.totalTrades + outTrades;
+        ind.totalTrades = inSampleRes.totalTrades;
       }
 
       memo[key] = {
@@ -682,55 +729,80 @@ class GAOptimizer {
       population = nextGen;
     }
 
-    // 5. 参数敏感性高原校验
-    Individual finalBest = bestOverall ?? population.first;
+    // 5. 参数敏感性高原校验（训练集上）+ 走动前推样本外验收
+    final Individual defaultBest = bestOverall ?? population.first;
+    Individual finalBest = defaultBest;
+    Individual? stableFallback; // 训练集稳定但未通过样本外验收时的兜底
     for (int i = 0; i < min(5, population.length); i++) {
       final cand = population[i];
-      if (cand.fitness != null && cand.fitness!.isValid) {
-        final fullRes = BacktestEngine.runBacktest(
-          allNavs: allNavs,
-          allDates: allDates,
-          buyDays: cand.buyDays,
-          buyDropPct: cand.buyDrop,
-          targetProfitPct: cand.targetProfit,
-          holdMax: holdMax,
-          maPeriod: cand.maPeriod,
-          maEnvelopePct: cand.maEnvelopePct,
-          trailingDropPct: trailingDropPct,
-          sellX: sellX,
-          sellPct: sellPct,
-          precalculatedMa: fullMaMap[cand.maPeriod],
-          precalculatedVol10: fullVol10,
-          precalculatedVol60: fullVol60,
-          slippagePct: slippagePct,
-          rsiFilterLimit: rsiFilterLimit,
-          useMacdFilter: useMacdFilter,
-          gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
-        );
-        if (_isStablePlateau(
-          cand,
-          allNavs,
-          allDates,
-          holdMax,
-          fullRes.calmarRatio,
-          minBuyDrop,
-          trailingDropPct,
-          sellX,
-          sellPct,
-          fullMaMap[cand.maPeriod],
-          minBuyDays,
-          maxBuyDays,
-          slippagePct,
-          rsiFilterLimit,
-          useMacdFilter,
-          fullMaMap: fullMaMap,
-          precalculatedVol10: fullVol10,
-          precalculatedVol60: fullVol60,
-        )) {
-          finalBest = cand;
-          break;
-        }
+      if (cand.fitness == null || !cand.fitness!.isValid) continue;
+
+      // 5.1 训练集上的高原稳定性（仅用训练集，避免全样本泄漏）
+      final trainRes = BacktestEngine.runBacktest(
+        allNavs: trainNavs,
+        allDates: trainDates,
+        buyDays: cand.buyDays,
+        buyDropPct: cand.buyDrop,
+        targetProfitPct: cand.targetProfit,
+        holdMax: holdMax,
+        maPeriod: cand.maPeriod,
+        maEnvelopePct: cand.maEnvelopePct,
+        trailingDropPct: trailingDropPct,
+        sellX: sellX,
+        sellPct: sellPct,
+        precalculatedMa: inSampleMaMap[cand.maPeriod],
+        precalculatedVol10: inSampleVol10,
+        precalculatedVol60: inSampleVol60,
+        slippagePct: slippagePct,
+        rsiFilterLimit: rsiFilterLimit,
+        useMacdFilter: useMacdFilter,
+        gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
+      );
+      final bool stable = _isStablePlateau(
+        cand,
+        trainNavs,
+        trainDates,
+        holdMax,
+        trainRes.calmarRatio,
+        minBuyDrop,
+        trailingDropPct,
+        sellX,
+        sellPct,
+        inSampleMaMap[cand.maPeriod],
+        minBuyDays,
+        maxBuyDays,
+        slippagePct,
+        rsiFilterLimit,
+        useMacdFilter,
+        fullMaMap: inSampleMaMap,
+        precalculatedVol10: inSampleVol10,
+        precalculatedVol60: inSampleVol60,
+      );
+      if (!stable) continue;
+      stableFallback ??= cand; // 记录首个训练集稳定候选作为兜底
+
+      // 数据太短无样本外时，训练集稳定即可接受
+      if (!wf.hasOutSample) {
+        finalBest = cand;
+        break;
       }
+
+      // 5.2 样本外前推验收（不影响适应度，仅作最终筛选）：
+      // 至少一半有效前推窗口盈利，且平均风险调整收益为正，方视为泛化良好
+      final wfRes = _walkForwardEval(cand, allNavs, allDates, wf, holdMax,
+          trailingDropPct, sellX, sellPct, slippagePct, rsiFilterLimit,
+          useMacdFilter);
+      final int validFolds = wfRes['validFolds'] as int;
+      final int positiveFolds = wfRes['positiveFolds'] as int;
+      final double avgCalmar = wfRes['avgCalmar'] as double;
+      if (validFolds > 0 && positiveFolds * 2 >= validFolds && avgCalmar > 0) {
+        finalBest = cand;
+        break;
+      }
+    }
+    // 若无候选通过样本外验收，退回首个训练集稳定候选
+    if (identical(finalBest, defaultBest) && stableFallback != null) {
+      finalBest = stableFallback;
     }
 
     // 全样本回测得出最终评估用于回传
@@ -851,7 +923,8 @@ class SellSignalOptimizer {
 
         if (inTrades < 3) continue; // 样本内必须至少有 3 次触发以保证统计显著
 
-        double score = 0.0;
+        // 适应度仅由样本内（训练集）决定；样本外前推窗口仅作验收，不进入评分
+        double score = inWinRate;
         int outTrades = 0;
 
         if (dataSplit.hasOutSample) {
@@ -860,13 +933,10 @@ class SellSignalOptimizer {
           final double outWinRate = outStats['winRate'] as double;
           outTrades = outStats['trades'] as int;
 
-          // 样本内外加权胜率。如果样本外完全没有交易，进行适当扣分
-          score = inWinRate * 0.7 + outWinRate * 0.3;
-          if (outTrades == 0) {
-            score *= 0.5; // 惩罚样本外零交易的过拟合参数
+          // 样本外前推验收：若样本外有触发但胜率相比样本内塌陷（不足一半），视为过拟合并剔除
+          if (outTrades > 0 && outWinRate < inWinRate * 0.5) {
+            continue;
           }
-        } else {
-          score = inWinRate;
         }
 
         final int totalTrades = inTrades + outTrades;

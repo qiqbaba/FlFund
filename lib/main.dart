@@ -9,6 +9,7 @@ import 'core/config.dart';
 import 'core/fund_provider.dart';
 import 'core/simulation_provider.dart';
 import 'core/db_manager.dart';
+import 'core/utils/win_clipboard_paste_fix.dart';
 import 'ui/widgets/splash_screen.dart';
 import 'ui/main_window.dart';
 
@@ -45,6 +46,11 @@ class _DirectConnectHttpOverrides extends HttpOverrides {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 修复 Windows 11 剪贴板历史（Win+V）点击条目无法粘贴到输入框的问题
+  if (!kIsWeb && Platform.isWindows) {
+    WinClipboardPasteFix.instance.install();
+  }
 
   // 全局强制国内 AI 域名直连，防止系统残留代理干扰
   if (!kIsWeb) {

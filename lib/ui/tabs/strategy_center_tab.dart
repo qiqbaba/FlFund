@@ -83,11 +83,6 @@ enum OptMode {
   batch,
 }
 
-enum BatchDimension {
-  tabSource,
-  fundSector,
-}
-
 class BatchOptResult {
   final String code;
   final String name;
@@ -151,8 +146,6 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
   // 批量寻优相关状态
   OptMode _optMode = OptMode.single;
-  BatchDimension _batchDimension = BatchDimension.tabSource;
-  final Set<String> _selectedSectors = {};
   final Set<String> _selectedTabs = {};
   bool _isBatchOptimizing = false;
   String _batchProgress = '';
@@ -689,14 +682,6 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       });
     }
 
-    // 批量寻优的板块提取
-    final allSectors = fundProvider.myFunds.values
-        .map((f) => f.sector)
-        .where((s) => s.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isSmallScreen = screenWidth < 640;
 
@@ -988,258 +973,155 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                   ],
                 ),
               ] else ...[
-                const Text('📂 批量筛选维度',
+                const Text('📂 选择寻优 Tab 来源',
                     style: TextStyle(
                         fontWeight: fluent.FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 10),
-                RadioGroup<BatchDimension>(
-                  groupValue: _batchDimension,
-                  onChanged: (v) {
-                    if (v != null && !_isBatchOptimizing) {
-                      setState(() => _batchDimension = v);
-                    }
-                  },
-                  child: Row(
-                    children: [
-                      fluent.RadioButton<BatchDimension>(
-                        value: BatchDimension.tabSource,
-                        content: const Text('自选 Tab 来源',
-                            style: TextStyle(fontSize: 12)),
-                        enabled: !_isBatchOptimizing,
-                      ),
-                      const SizedBox(width: 16),
-                      fluent.RadioButton<BatchDimension>(
-                        value: BatchDimension.fundSector,
-                        content: const Text('基金分类板块',
-                            style: TextStyle(fontSize: 12)),
-                        enabled: !_isBatchOptimizing,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const fluent.Divider(),
-                const SizedBox(height: 12),
-
-                if (_batchDimension == BatchDimension.tabSource) ...[
-                  const Text('📂 选择寻优 Tab 来源',
-                      style: TextStyle(
-                          fontWeight: fluent.FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      fluent.HyperlinkButton(
-                        onPressed: _isBatchOptimizing
-                            ? null
-                            : () {
-                                setState(() {
-                                  _selectedTabs.addAll(const [
-                                    'holding',
-                                    'my_funds',
-                                    'special',
-                                    'valuation',
-                                    'top_ranking',
-                                    'bot_ranking'
-                                  ]);
-                                });
-                              },
-                        child: const Text('全选', style: TextStyle(fontSize: 12)),
-                      ),
-                      const SizedBox(width: 8),
-                      fluent.HyperlinkButton(
-                        onPressed: _isBatchOptimizing
-                            ? null
-                            : () {
-                                setState(() {
-                                  _selectedTabs.clear();
-                                });
-                              },
-                        child: const Text('清空', style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 200),
-                    child: SingleChildScrollView(
-                      child: Wrap(
-                        spacing: 12.0,
-                        runSpacing: 8.0,
-                        children: [
-                          ScaledCheckbox(
-                            checked: _selectedTabs.contains('holding'),
-                            onChanged: _isBatchOptimizing
-                                ? null
-                                : (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedTabs.add('holding');
-                                      } else {
-                                        _selectedTabs.remove('holding');
-                                      }
-                                    });
-                                  },
-                            content: const Text('持有基金',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                          ScaledCheckbox(
-                            checked: _selectedTabs.contains('my_funds'),
-                            onChanged: _isBatchOptimizing
-                                ? null
-                                : (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedTabs.add('my_funds');
-                                      } else {
-                                        _selectedTabs.remove('my_funds');
-                                      }
-                                    });
-                                  },
-                            content: const Text('我的自选基金',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                          ScaledCheckbox(
-                            checked: _selectedTabs.contains('special'),
-                            onChanged: _isBatchOptimizing
-                                ? null
-                                : (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedTabs.add('special');
-                                      } else {
-                                        _selectedTabs.remove('special');
-                                      }
-                                    });
-                                  },
-                            content: const Text('特别关注基金',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                          ScaledCheckbox(
-                            checked: _selectedTabs.contains('valuation'),
-                            onChanged: _isBatchOptimizing
-                                ? null
-                                : (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedTabs.add('valuation');
-                                      } else {
-                                        _selectedTabs.remove('valuation');
-                                      }
-                                    });
-                                  },
-                            content: const Text('估值雷达关联',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                          ScaledCheckbox(
-                            checked: _selectedTabs.contains('top_ranking'),
-                            onChanged: _isBatchOptimizing
-                                ? null
-                                : (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedTabs.add('top_ranking');
-                                      } else {
-                                        _selectedTabs.remove('top_ranking');
-                                      }
-                                    });
-                                  },
-                            content: const Text('今日领涨板块',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                          ScaledCheckbox(
-                            checked: _selectedTabs.contains('bot_ranking'),
-                            onChanged: _isBatchOptimizing
-                                ? null
-                                : (checked) {
-                                    setState(() {
-                                      if (checked == true) {
-                                        _selectedTabs.add('bot_ranking');
-                                      } else {
-                                        _selectedTabs.remove('bot_ranking');
-                                      }
-                                    });
-                                  },
-                            content: const Text('今日领跌板块',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                        ],
-                      ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    fluent.HyperlinkButton(
+                      onPressed: _isBatchOptimizing
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedTabs.addAll(const [
+                                  'holding',
+                                  'my_funds',
+                                  'special',
+                                  'valuation',
+                                  'top_ranking',
+                                  'bot_ranking'
+                                ]);
+                              });
+                            },
+                      child: const Text('全选', style: TextStyle(fontSize: 12)),
                     ),
-                  ),
-                ] else ...[
-                  const Text('📂 选择寻优行业板块',
-                      style: TextStyle(
-                          fontWeight: fluent.FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 8),
-                  if (allSectors.isEmpty)
-                    const Text('暂无有效自选基金板块数据，请先配置板块分类',
-                        style: TextStyle(color: Colors.grey, fontSize: 12))
-                  else ...[
-                    Row(
+                    const SizedBox(width: 8),
+                    fluent.HyperlinkButton(
+                      onPressed: _isBatchOptimizing
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedTabs.clear();
+                              });
+                            },
+                      child: const Text('清空', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 12.0,
+                      runSpacing: 8.0,
                       children: [
-                        fluent.HyperlinkButton(
-                          onPressed: _isBatchOptimizing
+                        ScaledCheckbox(
+                          checked: _selectedTabs.contains('holding'),
+                          onChanged: _isBatchOptimizing
                               ? null
-                              : () {
+                              : (checked) {
                                   setState(() {
-                                    _selectedSectors.addAll(allSectors);
+                                    if (checked == true) {
+                                      _selectedTabs.add('holding');
+                                    } else {
+                                      _selectedTabs.remove('holding');
+                                    }
                                   });
                                 },
-                          child:
-                              const Text('全选', style: TextStyle(fontSize: 12)),
+                          content: const Text('持有基金',
+                              style: TextStyle(fontSize: 12)),
                         ),
-                        const SizedBox(width: 8),
-                        fluent.HyperlinkButton(
-                          onPressed: _isBatchOptimizing
+                        ScaledCheckbox(
+                          checked: _selectedTabs.contains('my_funds'),
+                          onChanged: _isBatchOptimizing
                               ? null
-                              : () {
+                              : (checked) {
                                   setState(() {
-                                    _selectedSectors.clear();
+                                    if (checked == true) {
+                                      _selectedTabs.add('my_funds');
+                                    } else {
+                                      _selectedTabs.remove('my_funds');
+                                    }
                                   });
                                 },
-                          child:
-                              const Text('清空', style: TextStyle(fontSize: 12)),
+                          content: const Text('我的自选基金',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        ScaledCheckbox(
+                          checked: _selectedTabs.contains('special'),
+                          onChanged: _isBatchOptimizing
+                              ? null
+                              : (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      _selectedTabs.add('special');
+                                    } else {
+                                      _selectedTabs.remove('special');
+                                    }
+                                  });
+                                },
+                          content: const Text('特别关注基金',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        ScaledCheckbox(
+                          checked: _selectedTabs.contains('valuation'),
+                          onChanged: _isBatchOptimizing
+                              ? null
+                              : (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      _selectedTabs.add('valuation');
+                                    } else {
+                                      _selectedTabs.remove('valuation');
+                                    }
+                                  });
+                                },
+                          content: const Text('估值雷达关联',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        ScaledCheckbox(
+                          checked: _selectedTabs.contains('top_ranking'),
+                          onChanged: _isBatchOptimizing
+                              ? null
+                              : (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      _selectedTabs.add('top_ranking');
+                                    } else {
+                                      _selectedTabs.remove('top_ranking');
+                                    }
+                                  });
+                                },
+                          content: const Text('今日领涨板块',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        ScaledCheckbox(
+                          checked: _selectedTabs.contains('bot_ranking'),
+                          onChanged: _isBatchOptimizing
+                              ? null
+                              : (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      _selectedTabs.add('bot_ranking');
+                                    } else {
+                                      _selectedTabs.remove('bot_ranking');
+                                    }
+                                  });
+                                },
+                          content: const Text('今日领跌板块',
+                              style: TextStyle(fontSize: 12)),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      constraints: const BoxConstraints(maxHeight: 200),
-                      child: SingleChildScrollView(
-                        child: Wrap(
-                          spacing: 12.0,
-                          runSpacing: 8.0,
-                          children: allSectors.map((sector) {
-                            return ScaledCheckbox(
-                              checked: _selectedSectors.contains(sector),
-                              onChanged: _isBatchOptimizing
-                                  ? null
-                                  : (checked) {
-                                      setState(() {
-                                        if (checked == true) {
-                                          _selectedSectors.add(sector);
-                                        } else {
-                                          _selectedSectors.remove(sector);
-                                        }
-                                      });
-                                    },
-                              content: Text(sector,
-                                  style: const TextStyle(fontSize: 12)),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                  ),
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: fluent.FilledButton(
-                    onPressed: _isBatchOptimizing ||
-                            (_batchDimension == BatchDimension.tabSource
-                                ? _selectedTabs.isEmpty
-                                : _selectedSectors.isEmpty)
+                    onPressed: _isBatchOptimizing || _selectedTabs.isEmpty
                         ? null
                         : () => _runBatchGeneticOptimization(),
                     child: _isBatchOptimizing
@@ -1956,49 +1838,43 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     final appConfig = Provider.of<AppConfig>(context, listen: false);
 
     final List<FundUIModel> targets;
-    if (_batchDimension == BatchDimension.tabSource) {
-      final Map<String, FundUIModel> uniqueTargets = {};
+    final Map<String, FundUIModel> uniqueTargets = {};
 
-      if (_selectedTabs.contains('holding')) {
-        for (final f in fundProvider.myFunds.values.where((f) => f.isHeld)) {
-          uniqueTargets[f.code] = f;
-        }
+    if (_selectedTabs.contains('holding')) {
+      for (final f in fundProvider.myFunds.values.where((f) => f.isHeld)) {
+        uniqueTargets[f.code] = f;
       }
-      if (_selectedTabs.contains('my_funds')) {
-        for (final f in fundProvider.myFunds.values) {
-          uniqueTargets[f.code] = f;
-        }
-      }
-      if (_selectedTabs.contains('special')) {
-        for (final f in fundProvider.myFunds.values.where((f) => f.isSpecial)) {
-          uniqueTargets[f.code] = f;
-        }
-      }
-      if (_selectedTabs.contains('valuation')) {
-        final valFunds = fundProvider.valuationList
-            .map((item) => item['assocFund'] as FundUIModel?)
-            .whereType<FundUIModel>();
-        for (final f in valFunds) {
-          uniqueTargets[f.code] = f;
-        }
-      }
-      if (_selectedTabs.contains('top_ranking')) {
-        for (final f in fundProvider.topFunds) {
-          uniqueTargets[f.code] = f;
-        }
-      }
-      if (_selectedTabs.contains('bot_ranking')) {
-        for (final f in fundProvider.botFunds) {
-          uniqueTargets[f.code] = f;
-        }
-      }
-
-      targets = uniqueTargets.values.toList();
-    } else {
-      targets = fundProvider.myFunds.values
-          .where((fund) => _selectedSectors.contains(fund.sector))
-          .toList();
     }
+    if (_selectedTabs.contains('my_funds')) {
+      for (final f in fundProvider.myFunds.values) {
+        uniqueTargets[f.code] = f;
+      }
+    }
+    if (_selectedTabs.contains('special')) {
+      for (final f in fundProvider.myFunds.values.where((f) => f.isSpecial)) {
+        uniqueTargets[f.code] = f;
+      }
+    }
+    if (_selectedTabs.contains('valuation')) {
+      final valFunds = fundProvider.valuationList
+          .map((item) => item['assocFund'] as FundUIModel?)
+          .whereType<FundUIModel>();
+      for (final f in valFunds) {
+        uniqueTargets[f.code] = f;
+      }
+    }
+    if (_selectedTabs.contains('top_ranking')) {
+      for (final f in fundProvider.topFunds) {
+        uniqueTargets[f.code] = f;
+      }
+    }
+    if (_selectedTabs.contains('bot_ranking')) {
+      for (final f in fundProvider.botFunds) {
+        uniqueTargets[f.code] = f;
+      }
+    }
+
+    targets = uniqueTargets.values.toList();
 
     if (targets.isEmpty) {
       fluent.displayInfoBar(
@@ -2006,9 +1882,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         builder: (context, close) {
           return fluent.InfoBar(
             title: const Text('无可寻优基金'),
-            content: Text(_batchDimension == BatchDimension.tabSource
-                ? '当前选择的 Tab 来源下没有任何有效的基金产品。'
-                : '当前选择的板块下没有任何自选基金。请先在“自选看板”中添加并归类板块。'),
+            content: const Text('当前选择的 Tab 来源下没有任何有效的基金产品。'),
             severity: fluent.InfoBarSeverity.warning,
             onClose: close,
           );

@@ -25,6 +25,7 @@ class FundHistoryDB {
       fund_code TEXT,
       jzrq TEXT,
       dwjz REAL,
+      ljjz REAL,
       PRIMARY KEY (fund_code, jzrq)
     );
   ''';
@@ -145,6 +146,13 @@ class FundHistoryDB {
       if (!histColumns.contains('ma120')) {
         _winDb!.execute('ALTER TABLE fund_history ADD COLUMN ma120 REAL;');
       }
+
+      // fund_nav_detail 增补累计净值列（用于复权重建）
+      final navRows = _winDb!.select('PRAGMA table_info(fund_nav_detail)');
+      final navColumns = navRows.map((row) => row['name'] as String).toSet();
+      if (!navColumns.contains('ljjz')) {
+        _winDb!.execute('ALTER TABLE fund_nav_detail ADD COLUMN ljjz REAL;');
+      }
     } catch (e) {
       debugPrint('Windows 升级数据库结构失败: $e');
     }
@@ -166,6 +174,13 @@ class FundHistoryDB {
       final histColumns = histColumnsList.map((col) => col['name'] as String).toSet();
       if (!histColumns.contains('ma120')) {
         await _androidDb!.execute('ALTER TABLE fund_history ADD COLUMN ma120 REAL;');
+      }
+
+      // fund_nav_detail 增补累计净值列（用于复权重建）
+      final navColumnsList = await _androidDb!.rawQuery('PRAGMA table_info(fund_nav_detail)');
+      final navColumns = navColumnsList.map((col) => col['name'] as String).toSet();
+      if (!navColumns.contains('ljjz')) {
+        await _androidDb!.execute('ALTER TABLE fund_nav_detail ADD COLUMN ljjz REAL;');
       }
     } catch (e) {
       debugPrint('Android 升级数据库结构失败: $e');
@@ -263,24 +278,31 @@ class FundHistoryDB {
 
   // ---------------- 历史净值操作 ----------------
 
-  // 获取单只基金历史净值
+  // 获取单只基金历史净值（返回复权净值序列，消除分红除息跳空）
   Future<Map<String, dynamic>?> getHistory(String fundCode) async {
     if (_executor == null) return null;
     final List<String> dates = [];
-    final List<double> navs = [];
+    final List<double> dwjzs = [];
+    final List<double> ljjzs = [];
 
     final rows = await _executor!.queryRows('''
-      SELECT jzrq, dwjz FROM fund_nav_detail 
+      SELECT jzrq, dwjz, ljjz FROM fund_nav_detail 
       WHERE fund_code = ? 
       ORDER BY jzrq DESC
     ''', [fundCode]);
 
     for (final row in rows) {
+      final double dwjz = (row[1] as num).toDouble();
       dates.add(row[0] as String);
-      navs.add((row[1] as num).toDouble());
+      dwjzs.add(dwjz);
+      // 旧数据或缺失累计净值时回退为单位净值（等价于不做复权调整）
+      final ljjz = row[2] as num?;
+      ljjzs.add(ljjz != null && ljjz.toDouble() > 0 ? ljjz.toDouble() : dwjz);
     }
 
     if (dates.isEmpty) return null;
+
+    final List<double> navs = _buildAdjustedNavs(dwjzs, ljjzs);
 
     final histRows = await _executor!.query(
       'SELECT update_time, ma120 FROM fund_history WHERE fund_code = ?',
@@ -302,28 +324,62 @@ class FundHistoryDB {
     };
   }
 
+  // 由单位净值 + 累计净值重建前复权净值序列（列表均为从新到旧排列）。
+  // 复权收益率 R = (LJJZ[t] - LJJZ[t-1]) / DWJZ[t-1]，等价于官方日增长率，
+  // 以最新单位净值为锚点向历史回推，使最新值与实际单位净值一致（显示不受影响），
+  // 而历史值消除分红除息的向下跳空。
+  static List<double> _buildAdjustedNavs(
+      List<double> dwjzs, List<double> ljjzs) {
+    final int n = dwjzs.length;
+    if (n == 0) return dwjzs;
+    // 若累计净值与单位净值处处相等（无分红），无需复权，直接返回
+    bool hasDividend = false;
+    for (int i = 0; i < n; i++) {
+      if ((ljjzs[i] - dwjzs[i]).abs() > 1e-9) {
+        hasDividend = true;
+        break;
+      }
+    }
+    if (!hasDividend) return dwjzs;
+
+    final adj = List<double>.filled(n, 0.0);
+    adj[0] = dwjzs[0]; // 锚点：最新单位净值
+    for (int i = 1; i < n; i++) {
+      // i 更旧、i-1 更新：从旧到新的复权收益率
+      final double prevDwjz = dwjzs[i];
+      double factor = 1.0;
+      if (prevDwjz > 0) {
+        final double r = (ljjzs[i - 1] - ljjzs[i]) / prevDwjz;
+        factor = 1.0 + r;
+      }
+      adj[i] = factor.abs() > 1e-9 ? adj[i - 1] / factor : adj[i - 1];
+    }
+    return adj;
+  }
+
   // 保存基金历史数据
-  Future<void> saveHistory(String fundCode, String jzrq, List<double> navs, [List<String>? dates, double? ma120]) async {
+  Future<void> saveHistory(String fundCode, String jzrq, List<double> navs, [List<String>? dates, double? ma120, List<double>? ljjzs]) async {
     if (_executor == null) return;
     
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     String actualJzrq = jzrq;
+    final bool hasLjjz = ljjzs != null && ljjzs.length == navs.length;
 
     await _executor!.transaction((txn) async {
       if (dates != null && dates.length == navs.length) {
         for (int i = 0; i < dates.length; i++) {
           if (dates[i].compareTo(todayStr) > 0) continue;
           await txn.execute(
-            'INSERT OR REPLACE INTO fund_nav_detail (fund_code, jzrq, dwjz) VALUES (?, ?, ?)',
-            [fundCode, dates[i], navs[i]]
+            'INSERT OR REPLACE INTO fund_nav_detail (fund_code, jzrq, dwjz, ljjz) VALUES (?, ?, ?, ?)',
+            [fundCode, dates[i], navs[i], hasLjjz ? ljjzs[i] : navs[i]]
           );
         }
         actualJzrq = dates.first;
       } else if (navs.isNotEmpty) {
         if (jzrq.compareTo(todayStr) <= 0) {
           await txn.execute(
-            'INSERT OR REPLACE INTO fund_nav_detail (fund_code, jzrq, dwjz) VALUES (?, ?, ?)',
-            [fundCode, jzrq, navs.first]
+            'INSERT OR REPLACE INTO fund_nav_detail (fund_code, jzrq, dwjz, ljjz) VALUES (?, ?, ?, ?)',
+            [fundCode, jzrq, navs.first, hasLjjz ? ljjzs.first : navs.first]
           );
         }
       }

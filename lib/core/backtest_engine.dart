@@ -154,6 +154,7 @@ class BacktestEngine {
     double ema12 = prices[0];
     double ema26 = prices[0];
     double dea = 0.0;
+    double prevHist = 0.0;
 
     for (int i = 0; i < n; i++) {
       final double price = prices[i];
@@ -167,7 +168,11 @@ class BacktestEngine {
       } else {
         dea = dea * (8.0 / 10.0) + dif * (2.0 / 10.0);
       }
-      result[i] = dif >= dea;
+      final double hist = dif - dea;
+      // 放宽：DIF>=DEA(多头) 或 MACD 柱状线较前值抬升(动量改善)，
+      // 缓解 RSI 超卖与 MACD 多头过滤的互斥（超卖区常伴随 DIF<DEA）
+      result[i] = (dif >= dea) || (i > 0 && hist > prevHist);
+      prevHist = hist;
     }
     return result;
   }
@@ -185,6 +190,7 @@ class BacktestEngine {
     double ema12 = navList[firstIdx];
     double ema26 = navList[firstIdx];
     double dea = 0.0;
+    double prevHist = 0.0;
 
     for (int i = 0; i < len; i++) {
       final int idx = startIndex + len - 1 - i; // 从旧到新的索引
@@ -199,7 +205,11 @@ class BacktestEngine {
       } else {
         dea = dea * (8.0 / 10.0) + dif * (2.0 / 10.0);
       }
-      result[i] = dif >= dea;
+      final double hist = dif - dea;
+      // 放宽：DIF>=DEA(多头) 或 MACD 柱状线较前值抬升(动量改善)，
+      // 与回测保持一致，缓解 RSI 超卖与 MACD 多头过滤的互斥
+      result[i] = (dif >= dea) || (i > 0 && hist > prevHist);
+      prevHist = hist;
     }
     return result;
   }
@@ -222,13 +232,14 @@ class BacktestEngine {
         sum += r;
       }
     }
-    if (returns.isEmpty) return 0.01;
+    if (returns.length < 2) return 0.01;
     final double mean = sum / returns.length;
     double variance = 0.0;
     for (final r in returns) {
       variance += (r - mean) * (r - mean);
     }
-    return math.sqrt(variance / returns.length);
+    // 使用样本标准差 (n-1)，对波动率做无偏估计
+    return math.sqrt(variance / (returns.length - 1));
   }
 
   // 滚动预计算历史所有位置的波动率以提高效率
@@ -265,6 +276,23 @@ class BacktestEngine {
     double rsiFilterLimit = 0.0,
     bool useMacdFilter = false,
     double gridSpacingPct = 0.0,
+    // T+n 赎回资金到账周期（0=当日可用，保持旧行为）
+    int settlementDays = 0,
+    // 单笔硬止损百分比（0=关闭）
+    double stopLossPct = 0.0,
+    // 组合级回撤熔断：权益回撤超过该阀值时暂停开新仓（0=关闭）
+    double portfolioMaxDrawdownStop = 0.0,
+    // 趋势 regime 过滤：>0 时在长期均线下行（确认下降趋势）时不接飞刀（0=关闭）
+    int regimeMaPeriod = 0,
+    // 估值百分位过滤序列与上限（历史序列不可得时为 null，保持 no-op）
+    List<double>? pePercentileSeries,
+    double pePercentileLimit = 0.0,
+    List<double>? pbPercentileSeries,
+    double pbPercentileLimit = 0.0,
+    // 费率参数化：短持惩罚天数与惩罚费率（默认对齐 C 类 <7 天 1.5%），以及申购费
+    int shortHoldDays = 7,
+    double shortHoldPenaltyPct = 1.5,
+    double purchaseFeePct = 0.0,
   }) {
     final int n = allNavs.length;
     if (n <= buyDays) {
@@ -316,6 +344,27 @@ class BacktestEngine {
       ma = [];
     }
 
+    // 0.2 趋势 regime 长期均线（用于判断长期上/下行，避免在单边下跌中持续接飞刀）
+    final List<double> regimeMa;
+    if (regimeMaPeriod > 0) {
+      regimeMa = List<double>.filled(n, 0.0);
+      double rsum = 0.0;
+      for (int i = 0; i < n; i++) {
+        rsum += allNavs[i];
+        if (i >= regimeMaPeriod) {
+          rsum -= allNavs[i - regimeMaPeriod];
+          regimeMa[i] = rsum / regimeMaPeriod;
+        } else {
+          regimeMa[i] = rsum / (i + 1);
+        }
+      }
+    } else {
+      regimeMa = [];
+    }
+    // regime 斜率回看窗口
+    final int regimeSlopeLookback =
+        regimeMaPeriod > 0 ? math.min(20, regimeMaPeriod) : 0;
+
     // 1. 使用单调递减双端队列 O(n) 计算滑动窗口最大值
     // rollingMax[i] = i 及其之前 buyDays 个交易日内的最高单位净值
     final List<double> rollingMax = List<double>.filled(n, 0.0);
@@ -351,6 +400,25 @@ class BacktestEngine {
       if (useMacdFilter && macdOk.length > i && !macdOk[i]) {
         continue;
       }
+      // 过滤：趋势 regime 判定，长期均线下行（确认下降趋势）时不接飞刀
+      if (regimeMaPeriod > 0 &&
+          i >= regimeSlopeLookback &&
+          regimeMa[i] < regimeMa[i - regimeSlopeLookback]) {
+        continue;
+      }
+      // 过滤：估值百分位上限（历史序列可得时才生效，否则 no-op）
+      if (pePercentileLimit > 0.0 &&
+          pePercentileSeries != null &&
+          pePercentileSeries.length > i &&
+          pePercentileSeries[i] > pePercentileLimit) {
+        continue;
+      }
+      if (pbPercentileLimit > 0.0 &&
+          pbPercentileSeries != null &&
+          pbPercentileSeries.length > i &&
+          pbPercentileSeries[i] > pbPercentileLimit) {
+        continue;
+      }
 
       final double peak = rollingMax[i - 1]; // 过去 N 天的最高净值（不含当天）
       if (peak > 0.0) {
@@ -379,9 +447,15 @@ class BacktestEngine {
             }
 
             // 计算第 i 天的自适应均线值（往前数 adaptiveMaPeriod 天，包含第 i 天）
+            // 暖机期修正：自适应周期超过可用历史时，回退到已完整可用的基准周期，
+            // 避免用不足窗口的偏差均线导致过滤失真
+            int usableMaPeriod = adaptiveMaPeriod;
+            if (i + 1 < adaptiveMaPeriod) {
+              usableMaPeriod = effectiveMaPeriod;
+            }
             double sum = 0.0;
             int count = 0;
-            for (int k = i - adaptiveMaPeriod + 1; k <= i; k++) {
+            for (int k = i - usableMaPeriod + 1; k <= i; k++) {
               if (k >= 0) {
                 sum += allNavs[k];
                 count++;
@@ -417,8 +491,21 @@ class BacktestEngine {
     );
     double cash = 1.0;
     double? lastBuyPrice;
+    // T+n 在途赎回资金队列：到账日 -> 金额（settlementDays=0 时始终为空，保持旧行为）
+    final Map<int, double> pendingCashByDay = {};
+    // 组合级回撤熔断用的权益峰值
+    double runningEquityPeak = 1.0;
 
     for (int i = 0; i < n; i++) {
+      // 释放到期的在途赎回资金
+      if (settlementDays > 0 && pendingCashByDay.isNotEmpty) {
+        final List<int> matured =
+            pendingCashByDay.keys.where((d) => d <= i).toList();
+        for (final d in matured) {
+          cash += pendingCashByDay.remove(d)!;
+        }
+      }
+
       // A. 处理平仓判断
       for (final slot in slots) {
         if (slot.isHolding) {
@@ -459,31 +546,46 @@ class BacktestEngine {
             }
           }
 
-          // III. 固定目标止盈平仓判断 (持有期少于 7 天包含惩罚费率)
-          final double requiredProfit =
-              (holdDays < 7) ? (targetProfit + 0.015) : targetProfit;
+          // III. 固定目标止盈平仓判断 (持有期少于 shortHoldDays 天包含惩罚费率)
+          final double shortHoldPenalty = shortHoldPenaltyPct / 100.0;
+          final double requiredProfit = (holdDays < shortHoldDays)
+              ? (targetProfit + shortHoldPenalty)
+              : targetProfit;
           final bool isTargetProfitTriggered = profit >= requiredProfit;
 
           // IV. 到期平仓判断
           final bool isExpired = holdDays >= holdMax;
 
+          // V. 单笔硬止损平仓判断（stopLossPct>0 时生效，默认关闭）
+          final bool isStopLossTriggered =
+              stopLossPct > 0.0 && profit <= -stopLossPct / 100.0;
+
           // 平仓决策
           final bool shouldSell = isTargetProfitTriggered ||
               isTrailingStopTriggered ||
               isSellSignalTriggered ||
+              isStopLossTriggered ||
               isExpired ||
               (i == n - 1); // 最后一天强平
 
           if (shouldSell) {
             final double sellNav = currentNav;
             double finalProfit = (sellNav - slot.buyNav) / slot.buyNav;
-            if (holdDays < 7) {
-              finalProfit -= 0.015;
+            if (holdDays < shortHoldDays) {
+              finalProfit -= shortHoldPenalty;
             }
             finalProfit -= slippagePct / 100.0;
+            finalProfit -= purchaseFeePct / 100.0;
 
             final double returnCash = slot.buyBalance * (1.0 + finalProfit);
-            cash += returnCash;
+            if (settlementDays > 0) {
+              // T+n 赎回：资金进入在途队列，到账日后方可再投资
+              final int availDay = i + settlementDays;
+              pendingCashByDay[availDay] =
+                  (pendingCashByDay[availDay] ?? 0.0) + returnCash;
+            } else {
+              cash += returnCash;
+            }
             slot.balance = 0.0;
             slot.isHolding = false;
 
@@ -526,7 +628,26 @@ class BacktestEngine {
         lastBuyPrice = null;
       }
 
-      if (triggerMask[i] && i < n - 1) {
+      // 组合级回撤熔断：当前权益自峰值回撤超过阈值时暂停开新仓（默认关闭）
+      bool circuitBreakerActive = false;
+      if (portfolioMaxDrawdownStop > 0.0 && runningEquityPeak > 0.0) {
+        double provEquity = cash;
+        for (final v in pendingCashByDay.values) {
+          provEquity += v;
+        }
+        for (final s in slots) {
+          if (s.isHolding) {
+            provEquity += s.buyBalance * (allNavs[i] / s.buyNav);
+          }
+        }
+        final double curDd =
+            (runningEquityPeak - provEquity) / runningEquityPeak;
+        if (curDd >= portfolioMaxDrawdownStop / 100.0) {
+          circuitBreakerActive = true;
+        }
+      }
+
+      if (triggerMask[i] && i < n - 1 && !circuitBreakerActive) {
         if (gridSpacingPct > 0.0 && lastBuyPrice != null) {
           final double dropFromLast =
               (allNavs[i] - lastBuyPrice) / lastBuyPrice;
@@ -577,6 +698,9 @@ class BacktestEngine {
 
       // C. 动态更新当前所有槽位市值和累计总资产
       double dailyTotalEquity = cash;
+      for (final v in pendingCashByDay.values) {
+        dailyTotalEquity += v; // 在途赎回资金仍计入组合权益
+      }
       for (final slot in slots) {
         if (slot.isHolding) {
           slot.balance = slot.buyBalance * (allNavs[i] / slot.buyNav);
@@ -586,6 +710,9 @@ class BacktestEngine {
         }
       }
       equityCurve[i] = dailyTotalEquity;
+      if (dailyTotalEquity > runningEquityPeak) {
+        runningEquityPeak = dailyTotalEquity;
+      }
     }
 
     final int totalTrades = trades.length;

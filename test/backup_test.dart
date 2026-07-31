@@ -90,35 +90,32 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  test('LLM Independent API Key and Migration test', () async {
+  test('LLM Independent API Key and Persistence test', () async {
     final appConfig = AppConfig();
     final tempDir = Directory.systemTemp.createTempSync();
-    appConfig.customConfigPath = '${tempDir.path}/my_funds_test_migration.json';
+    appConfig.customConfigPath = '${tempDir.path}/my_funds_test_ocr.json';
 
-    // 预置旧配置数据到文件（模拟以前保存的文件，只包含旧的 deepseek_api_key/url/model）
+    // 预置配置文件（密钥已脱敏，不含任何 API Key 字段）
     final file = File(appConfig.customConfigPath!);
-    const oldJsonContent = '''
+    const jsonContent = '''
     {
       "theme": "Dark",
-      "deepseek_api_key": "old-zhipu-key-123",
-      "deepseek_api_url": "https://open.bigmodel.cn/api/paas/v4",
-      "deepseek_model": "glm-ocr"
+      "default_ocr_provider": "zhipu"
     }
     ''';
-    await file.writeAsString(oldJsonContent);
+    await file.writeAsString(jsonContent);
 
     // 清空当前 config 的内存属性
     appConfig.zhipuApiKey = '';
     appConfig.mimoApiKey = '';
     appConfig.customApis = [];
 
-    // 加载配置，触发自动迁移
+    // 加载配置：密钥存于 SharedPreferences（此处为空 mock），JSON 文件已脱敏
     await appConfig.loadConfig(force: true);
 
-    // 验证旧配置成功自动迁移到了 zhipu 的专属字段上
-    expect(appConfig.zhipuApiKey, 'old-zhipu-key-123');
-    expect(appConfig.zhipuApiUrl, 'https://open.bigmodel.cn/api/paas/v4');
-    expect(appConfig.zhipuModel, 'glm-ocr');
+    // 验证脱敏设计：JSON 文件与 SharedPreferences 均无密钥时应保持为空
+    expect(appConfig.zhipuApiKey, '');
+    expect(appConfig.mimoApiKey, '');
     expect(appConfig.defaultOcrProvider, 'zhipu');
 
     // 接下来测试使用 updateOcrConfig 批量更新和保存配置
