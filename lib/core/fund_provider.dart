@@ -1191,6 +1191,12 @@ class FundProvider extends ChangeNotifier {
               srcName = '腾讯财经';
             } else if (srcName == 'SinaGz') {
               srcName = '新浪财经';
+            } else if (srcName == 'DanjuanGz') {
+              srcName = '蛋卷基金';
+            } else if (srcName == 'HowbuyGz') {
+              srcName = '好买基金';
+            } else if (srcName == '10JqkaGz') {
+              srcName = '同花顺';
             } else if (srcName == 'ShadowETF') {
               srcName = '场内影子估值';
             }

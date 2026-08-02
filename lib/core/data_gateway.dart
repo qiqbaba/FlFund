@@ -300,7 +300,7 @@ class FundDataGateway {
     '015693': '160625', // 鹏华中证800证券保险C -> 映射为A类(160625)抓取估值
   };
 
-  int get valuationSourceCount => 4;
+  int get valuationSourceCount => 7;
 
   Future<Map<String, dynamic>?> fetchValuation(String code,
       {int? preferredSourceIndex, bool preferTencent = false}) async {
@@ -437,6 +437,9 @@ class FundDataGateway {
       () => _tryEastMoneyMobileGz(code),
       () => _tryTencentGz(code),
       () => _trySinaGz(code),
+      () => _tryDanjuanGz(code),
+      () => _tryHowbuyGz(code),
+      () => _try10JqkaGz(code),
     ];
 
     final total = sources.length;
@@ -448,7 +451,8 @@ class FundDataGateway {
       if (val != null) return val;
     }
 
-    final msg = '抓取基金估值失败 ($code): 所有估值数据源 (天天网页/天天手机/腾讯/新浪) 均无响应';
+    final msg =
+        '抓取基金估值失败 ($code): 所有 7 大估值数据源 (天天网页/天天手机/腾讯/新浪/蛋卷/好买/同花顺) 均无响应';
     debugPrint(msg);
     errors.add(msg);
     return null;
@@ -687,6 +691,198 @@ class FundDataGateway {
       }
     }
     return null;
+  }
+
+  Future<Map<String, dynamic>?> _tryDanjuanGz(String code) async {
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final url = 'https://danjuanapp.com/djapi/fund/estimate/$code';
+        final response = await _dio.get(
+          url,
+          options: Options(
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              'Referer': 'https://danjuanfunds.com/',
+            },
+          ),
+        );
+        if (response.statusCode == 200) {
+          final data = response.data;
+          if (data is Map) {
+            final resCode = data['result_code'];
+            final d = data['data'];
+            if ((resCode == 0 || resCode == null) && d is Map) {
+              final gsz = d['estimate_value']?.toString() ?? d['gsz']?.toString();
+              final gszzl = d['estimate_growth_rate']?.toString() ?? d['gszzl']?.toString();
+              final dwjz = d['last_nav']?.toString() ?? d['dwjz']?.toString();
+              final gztime = d['estimate_time']?.toString() ?? d['gztime']?.toString();
+              final name = d['name']?.toString() ?? d['fund_name']?.toString();
+
+              if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
+                return {
+                  'source': 'DanjuanGz',
+                  'name': name ?? '',
+                  'jzrq': gztime?.contains(' ') == true ? gztime!.split(' ').first : '',
+                  'dwjz': dwjz ?? '',
+                  'gsz': gsz,
+                  'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
+                  'gztime': gztime ?? '',
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _tryHowbuyGz(String code) async {
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final url = 'https://m.howbuy.com/fund/ajax/guzhi/getguzhi.htm?fundcode=$code';
+        final response = await _dio.get(
+          url,
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              'Referer': 'https://m.howbuy.com/',
+            },
+          ),
+        );
+        if (response.statusCode == 200) {
+          final text = response.data.toString();
+          if (text.trim().startsWith('{')) {
+            final data = json.decode(text);
+            if (data is Map) {
+              final gsz = data['gssz']?.toString() ?? data['gsz']?.toString();
+              final gszzl = data['gszzl']?.toString();
+              final dwjz = data['dwjz']?.toString();
+              final gztime = data['gztime']?.toString();
+
+              if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
+                return {
+                  'source': 'HowbuyGz',
+                  'name': data['jjmc']?.toString() ?? '',
+                  'jzrq': gztime?.contains(' ') == true ? gztime!.split(' ').first : '',
+                  'dwjz': dwjz ?? '',
+                  'gsz': gsz,
+                  'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
+                  'gztime': gztime ?? '',
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _try10JqkaGz(String code) async {
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final url = 'http://fund.10jqka.com.cn/$code/json/jsjz.json';
+        final response = await _dio.get(
+          url,
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              'Referer': 'http://fund.10jqka.com.cn/',
+            },
+          ),
+        );
+        if (response.statusCode == 200) {
+          final text = response.data.toString();
+          if (text.trim().isNotEmpty) {
+            final decoded = json.decode(text);
+            Map? latest;
+            if (decoded is List && decoded.isNotEmpty) {
+              latest = decoded.first is Map ? decoded.first : null;
+            } else if (decoded is Map) {
+              latest = decoded;
+            }
+            if (latest != null) {
+              final gsz = latest['gsz']?.toString() ?? latest['dwjz']?.toString();
+              final gszzl = latest['gszzl']?.toString() ?? latest['zdf']?.toString();
+              final dwjz = latest['dwjz']?.toString();
+              final gztime = latest['gztime']?.toString() ?? latest['date']?.toString();
+
+              if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
+                return {
+                  'source': '10JqkaGz',
+                  'name': latest['name']?.toString() ?? '',
+                  'jzrq': gztime?.contains(' ') == true ? gztime!.split(' ').first : '',
+                  'dwjz': dwjz ?? '',
+                  'gsz': gsz,
+                  'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
+                  'gztime': gztime ?? '',
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> testApiConnectivity(
+      String apiName, String testUrl,
+      {Map<String, String>? headers}) async {
+    final sw = Stopwatch()..start();
+    try {
+      final response = await _dio.get(
+        testUrl,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: headers,
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
+      );
+      sw.stop();
+      if (response.statusCode == 200) {
+        return {
+          'name': apiName,
+          'status': '正常',
+          'latencyMs': sw.elapsedMilliseconds,
+          'error': null,
+        };
+      } else {
+        return {
+          'name': apiName,
+          'status': '异常 (${response.statusCode})',
+          'latencyMs': sw.elapsedMilliseconds,
+          'error': 'HTTP Status ${response.statusCode}',
+        };
+      }
+    } catch (e) {
+      sw.stop();
+      return {
+        'name': apiName,
+        'status': '网络失败',
+        'latencyMs': sw.elapsedMilliseconds,
+        'error': e.toString(),
+      };
+    }
   }
 
   String _cleanHtmlTags(String html) {

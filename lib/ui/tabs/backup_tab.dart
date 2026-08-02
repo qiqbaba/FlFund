@@ -3,7 +3,8 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
-    show Colors, Icons, Material, MaterialType, AdaptiveTextSelectionToolbar;
+    show Colors, Icons, Material, MaterialType, AdaptiveTextSelectionToolbar, SelectableText;
+import '../../core/data_gateway.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -1775,11 +1776,15 @@ class _BackupTabState extends State<BackupTab> {
                                       ),
                                     ],
                                   ),
-                          ],
-                        ],
-                      ),
-                    ),
+                    ],
                   ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 数据查询 API 接入与管理卡片
+              _ApiManagementCard(isDark: isDark),
+            ],
                 ),
               ),
             ),
@@ -2312,6 +2317,462 @@ class _ThemeSelectCardState extends State<_ThemeSelectCard> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ApiManagementCard extends StatefulWidget {
+  final bool isDark;
+
+  const _ApiManagementCard({required this.isDark});
+
+  @override
+  State<_ApiManagementCard> createState() => _ApiManagementCardState();
+}
+
+class _ApiManagementCardState extends State<_ApiManagementCard> {
+  bool _isTesting = false;
+  Map<String, Map<String, dynamic>> _testResults = {};
+
+  final List<Map<String, dynamic>> _apiCategories = [
+    {
+      'title': '盘中实时估值 (7 大源均分负载均衡调度)',
+      'icon': Icons.bolt_rounded,
+      'color': Colors.amber,
+      'description':
+          '批量刷新自选与看板估值时，Worker 线程池按 (i % 7) 均匀打散并发调至 7 大独立源，单源失败自动顺延降级。',
+      'apis': [
+        {
+          'id': 'EM_WEB',
+          'name': '天天基金 (网页 JS)',
+          'url': 'https://fundgz.1234567.com.cn/js/000001.js',
+          'headers': {'Referer': 'https://fund.eastmoney.com/'},
+          'badge': '均分源 1',
+        },
+        {
+          'id': 'EM_MOB',
+          'name': '天天基金 (手机 WAP)',
+          'url':
+              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationDetail?FCODE=000001&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0',
+          'badge': '均分源 2',
+        },
+        {
+          'id': 'TX_GZ',
+          'name': '腾讯财经 (jj行情)',
+          'url': 'https://qt.gtimg.cn/q=jj000001',
+          'badge': '均分源 3',
+        },
+        {
+          'id': 'SINA_GZ',
+          'name': '新浪财经 (fu行情)',
+          'url': 'https://hq.sinajs.cn/list=fu_000001',
+          'headers': {'Referer': 'https://finance.sina.com.cn'},
+          'badge': '均分源 4',
+        },
+        {
+          'id': 'DJ_GZ',
+          'name': '蛋卷基金 (雪球估值)',
+          'url': 'https://danjuanapp.com/djapi/fund/estimate/000001',
+          'headers': {'Referer': 'https://danjuanfunds.com/'},
+          'badge': '均分源 5',
+        },
+        {
+          'id': 'HOWBUY_GZ',
+          'name': '好买基金 (盘中估值)',
+          'url':
+              'https://m.howbuy.com/fund/ajax/guzhi/getguzhi.htm?fundcode=000001',
+          'headers': {'Referer': 'https://m.howbuy.com/'},
+          'badge': '均分源 6',
+        },
+        {
+          'id': 'JQKA_GZ',
+          'name': '同花顺 (爱基金)',
+          'url': 'http://fund.10jqka.com.cn/000001/json/jsjz.json',
+          'headers': {'Referer': 'http://fund.10jqka.com.cn/'},
+          'badge': '均分源 7',
+        },
+      ]
+    },
+    {
+      'title': '场内 ETF & 股票盘中实时行情',
+      'icon': Icons.candlestick_chart_rounded,
+      'color': Colors.blueAccent,
+      'description': '提供影子 ETF 盘中估值计算、QDII 与联接基金代理估值及行情刷新。',
+      'apis': [
+        {
+          'id': 'TX_STOCK',
+          'name': '腾讯行情 (qt.gtimg)',
+          'url': 'https://qt.gtimg.cn/q=sh510300',
+          'badge': 'ETF 首选',
+        },
+        {
+          'id': 'EM_PUSH',
+          'name': '东方财富 Push 行情',
+          'url':
+              'https://push2.eastmoney.com/api/qt/stock/get?secid=1.510300&fields=f58,f170',
+          'badge': 'ETF 备用',
+        },
+        {
+          'id': 'SINA_STOCK',
+          'name': '新浪 HQ 股票行情',
+          'url': 'https://hq.sinajs.cn/list=sh510300',
+          'headers': {'Referer': 'https://finance.sina.com.cn'},
+          'badge': '批量行情',
+        },
+        {
+          'id': 'BD_STOCK',
+          'name': '百度股市通 API',
+          'url':
+              'https://finance.pae.baidu.com/selfselect/getstockquotation?all=1&code=510300',
+          'badge': '扩展行情',
+        },
+      ]
+    },
+    {
+      'title': '历史净值 & K线数据板块',
+      'icon': Icons.history_rounded,
+      'color': Colors.purpleAccent,
+      'description': '支持回测引擎、加仓/减仓高胜率寻优算法与折线图趋势分析。',
+      'apis': [
+        {
+          'id': 'EM_KLINE',
+          'name': '东方财富 Push K线',
+          'url':
+              'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.510300&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120',
+          'badge': 'K线首选',
+        },
+        {
+          'id': 'EM_HIS_MOB',
+          'name': '东财 Mobile 历史净值',
+          'url':
+              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?FCODE=000001&pageIndex=1&pageSize=30&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0',
+          'badge': '净值首选',
+        },
+        {
+          'id': 'EM_F10',
+          'name': '东财 F10 历史净值表格',
+          'url':
+              'https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=000001&page=1&per=20',
+          'badge': '网页降级',
+        },
+        {
+          'id': 'SINA_NAV',
+          'name': '新浪 OpenNav 历史净值',
+          'url':
+              'http://stock.finance.sina.com.cn/fund_info/api/openapi.php/FundPageApi.getNav?p=1&num=20&code=000001',
+          'badge': 'JSON 降级',
+        },
+      ]
+    },
+    {
+      'title': '全市场排行榜 / 搜索 / 概况',
+      'icon': Icons.equalizer_rounded,
+      'color': Colors.green,
+      'description': '全市场全量基金排行榜对比、实时搜索联想与基金概况业绩基准解析。',
+      'apis': [
+        {
+          'id': 'EM_RANK',
+          'name': '东财全市场排行榜',
+          'url':
+              'https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=rzdf&st=desc&pi=1&pn=50&dx=1',
+          'headers': {'Referer': 'https://fund.eastmoney.com/data/fundranking.html'},
+          'badge': '排行榜',
+        },
+        {
+          'id': 'EM_VAL_RANK',
+          'name': '东财 WAP 估值榜',
+          'url':
+              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationList?pageIndex=1&pageSize=30&sortColumn=GSZZL&sort=desc&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0',
+          'badge': '估值榜',
+        },
+        {
+          'id': 'EM_SUGGEST',
+          'name': '天天基金搜索联想',
+          'url':
+              'https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=000001',
+          'badge': '搜索联想',
+        },
+        {
+          'id': 'EM_F10_NATIVE',
+          'name': '东财 F10 原生概况 API',
+          'url':
+              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNF10DataApi?FCODE=000001&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0',
+          'badge': '持仓明细',
+        },
+      ]
+    },
+    {
+      'title': '指数估值与多模态 OCR / 云同步',
+      'icon': Icons.auto_graph_rounded,
+      'color': Colors.deepOrangeAccent,
+      'description': '低估/高估指数罗盘、智谱 AI 截图识图与 Supabase 云端无缝数据同步。',
+      'apis': [
+        {
+          'id': 'DJ_INDEX',
+          'name': '蛋卷基金指数估值',
+          'url': 'https://danjuanapp.com/djapi/index_eva/dj',
+          'badge': '指数估值',
+        },
+        {
+          'id': 'EM_INDEX',
+          'name': '东财指数估值榜',
+          'url':
+              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNIndexValuationList?pageIndex=1&pageSize=200&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0',
+          'badge': '指数全量',
+        },
+        {
+          'id': 'CSI_PERF',
+          'name': '中证指数 (CSI) 官网',
+          'url': 'https://www.csindex.com.cn/csindex-home/perf/index-perf',
+          'badge': '官方权威',
+        },
+        {
+          'id': 'ZHIPU_AI',
+          'name': '智谱 AI (GLM-4.6V-Flash)',
+          'url': 'https://open.bigmodel.cn/api/paas/v4',
+          'badge': '截图 OCR',
+        },
+        {
+          'id': 'SUPABASE_CLOUD',
+          'name': 'Supabase 云端同步',
+          'url': 'https://zaslmgurbafajgoafpat.supabase.co',
+          'badge': '云数据',
+        },
+      ]
+    },
+  ];
+
+  Future<void> _runConnectivityTest() async {
+    setState(() {
+      _isTesting = true;
+      _testResults.clear();
+    });
+
+    final gateway = FundDataGateway();
+    final results = <String, Map<String, dynamic>>{};
+
+    for (final cat in _apiCategories) {
+      final List apis = cat['apis'] as List;
+      for (final api in apis) {
+        final id = api['id'] as String;
+        final name = api['name'] as String;
+        final url = api['url'] as String;
+        final Map<String, String>? headers =
+            api['headers'] != null ? Map<String, String>.from(api['headers']) : null;
+
+        final res = await gateway.testApiConnectivity(name, url, headers: headers);
+        results[id] = res;
+        if (mounted) {
+          setState(() {
+            _testResults = Map.from(results);
+          });
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isTesting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+
+    return fluent.Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.api_rounded, color: Colors.indigoAccent, size: 22),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  '全网金融数据查询 API 接入与均分管理',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+              if (_isTesting)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: fluent.ProgressRing(strokeWidth: 2),
+                )
+              else
+                fluent.Button(
+                  onPressed: _runConnectivityTest,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.network_check_rounded, size: 14),
+                      SizedBox(width: 4),
+                      Text('一键全源连通性测试', style: TextStyle(fontSize: 11)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '系统全量金融数据源接入明细：包含 7 大实时估值均分负载均衡数据源、场内行情、历史 K 线、排行榜及 AI 多模态识别接口。点击测试可查看当前网络延迟。',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          ..._apiCategories.map((cat) {
+            final title = cat['title'] as String;
+            final icon = cat['icon'] as IconData;
+            final color = cat['color'] as Color;
+            final description = cat['description'] as String;
+            final List apis = cat['apis'] as List;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.03)
+                    : Colors.black.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.black.withValues(alpha: 0.05),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, size: 18, color: color),
+                      const SizedBox(width: 8),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: apis.map((api) {
+                      final id = api['id'] as String;
+                      final name = api['name'] as String;
+                      final url = api['url'] as String;
+                      final badge = api['badge'] as String;
+                      final res = _testResults[id];
+
+                      Color statusColor = Colors.grey;
+                      String statusText = '未测试';
+                      if (res != null) {
+                        if (res['status'] == '正常') {
+                          statusColor = const Color(0xFF00E676);
+                          statusText = '${res['latencyMs']}ms';
+                        } else {
+                          statusColor = Colors.redAccent;
+                          statusText = res['status'] ?? '失败';
+                        }
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    badge,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    statusText,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            SelectableText(
+                              url,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontFamily: 'monospace',
+                                color: isDark ? Colors.white38 : Colors.black45,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
