@@ -1261,10 +1261,10 @@ class FundProvider extends ChangeNotifier {
           }
           if (combined.isNotEmpty) return combined;
         } catch (e) {
-          debugPrint('天天基金排行榜主接口异常 ($sort)，将启用新浪降级备用源: $e');
+          debugPrint('天天基金排行榜主接口异常 ($sort)，将启用东方财富降级备用源: $e');
         }
-        // 降级备用源：尝试新浪全市场基金排行榜接口
-        return _fetchRankingsFallbackSina(sort);
+        // 降级备用源：尝试东方财富全市场基金排行榜接口
+        return _fetchRankingsFallbackEastMoney(sort);
       }
 
       final rawTop = await fetchPagedValuations('desc');
@@ -1290,49 +1290,63 @@ class FundProvider extends ChangeNotifier {
     }
   }
 
-  /// 降级备用源：新浪财经全市场基金实时排行榜
-  Future<List<Map<String, dynamic>>> _fetchRankingsFallbackSina(
+  /// 降级备用源：东方财富全市场基金实时排行榜（rankhandler.aspx）
+  /// 天天基金主接口 FundMNValuationList 异常时启用，
+  /// 返回按净值日涨跌幅排序的候选池作为兜底（无盘中实时估值，以单位净值与日涨跌幅替代）
+  Future<List<Map<String, dynamic>>> _fetchRankingsFallbackEastMoney(
       String sort) async {
     final List<Map<String, dynamic>> result = [];
     try {
       final dio = FundDataGateway().dio;
-      final asc = (sort == 'asc') ? 1 : 0;
+      final st = (sort == 'asc') ? 'asc' : 'desc';
+      // sc=rzdf 按日涨跌幅排序；pn=200 取足够候选以应对后续板块去重
       final url =
-          'http://vip.stock.finance.sina.com.cn/fund_fundv2/api/openapi.php/FundPagev2Service.getFundRank?page=1&num=60&sort=gz&asc=$asc';
+          'https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=rzdf&st=$st&pi=1&pn=200&dx=1';
       final response = await dio.get(
         url,
-        options: Options(headers: {'Referer': 'https://finance.sina.com.cn'}),
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://fund.eastmoney.com/data/fundranking.html',
+          },
+        ),
       );
-      if (response.statusCode == 200 && response.data is Map) {
-        final list = response.data['result']?['data']?['data'] ?? [];
+      if (response.statusCode == 200) {
+        final text = response.data.toString();
         final todayStr = FundUIModel._cachedToday;
-        for (final item in list) {
-          if (item is! Map) continue;
-          final code =
-              item['symbol']?.toString() ?? item['code']?.toString() ?? '';
-          if (code.isEmpty) continue;
-          final name = item['name']?.toString() ?? '';
-          final gsz =
-              item['gz']?.toString() ?? item['dwjz']?.toString() ?? '0.00';
-          final gszzl =
-              item['gz_rate']?.toString() ?? item['zdf']?.toString() ?? '0.00';
-          final dwjz = item['dwjz']?.toString() ?? gsz;
-          final jzrq =
-              item['jzrq']?.toString() ?? item['date']?.toString() ?? todayStr;
-
-          result.add({
-            'bzdm': code,
-            'jjjc': name,
-            'jzrq': jzrq,
-            'dwjz': dwjz,
-            'gsz': gsz,
-            'gszzl': gszzl,
-            'gxrq': '$todayStr [新浪降级]',
-          });
+        // 返回格式：var rankData = {datas:["code,name,py,date,dwjz,ljjz,rzdf,...",...],...};
+        final dataMatch = RegExp(r'datas:\[([^\]]*)\]').firstMatch(text);
+        if (dataMatch != null) {
+          final arrStr = dataMatch.group(1)!;
+          // 每条记录为双引号包裹的逗号分隔字符串
+          final recMatches = RegExp(r'"([^"]*)"').allMatches(arrStr);
+          for (final m in recMatches) {
+            final line = m.group(1);
+            if (line == null || line.isEmpty) continue;
+            final parts = line.split(',');
+            if (parts.length < 7) continue;
+            final code = parts[0].trim();
+            if (code.isEmpty || code.length != 6) continue;
+            final name = parts[1].trim();
+            final jzrq = parts[3].trim();
+            final dwjz = parts[4].trim();
+            final gszzl = parts[6].trim(); // 日涨跌幅 rzdf
+            result.add({
+              'bzdm': code,
+              'jjjc': name,
+              'jzrq': jzrq.isNotEmpty ? jzrq : todayStr,
+              'dwjz': dwjz.isNotEmpty ? dwjz : '0.00',
+              'gsz': dwjz, // 降级源无实时估值，以单位净值兜底
+              'gszzl': gszzl.isNotEmpty ? gszzl : '0.00',
+              'gxrq': '$todayStr [东财降级]',
+            });
+          }
         }
       }
     } catch (e) {
-      debugPrint('新浪排行榜降级源请求失败: $e');
+      debugPrint('东方财富排行榜降级源请求失败: $e');
     }
     return result;
   }
