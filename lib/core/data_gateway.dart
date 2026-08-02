@@ -9,6 +9,9 @@ class FundDataGateway {
   static final FundDataGateway _instance = FundDataGateway._internal();
   factory FundDataGateway() => _instance;
   FundDataGateway._internal() {
+    try {
+      SecurityContext.defaultContext.allowLegacyUnsafeRenegotiation = true;
+    } catch (_) {}
     _dio.options.headers = {
       'User-Agent':
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15'
@@ -21,21 +24,29 @@ class FundDataGateway {
     // 原因：部分机器由于 SSL 证书链验证失败（如 514 拦截或企业代理）导致无法访问基金 API
     // 注意：仅白名单范围内的 host 及其子域名才跳过，避免全局中间人攻击风险
     const trustedHosts = {
+      '1234567.com.cn',
+      'eastmoney.com',
       'fundgz.1234567.com.cn',
       'fundmobapi.eastmoney.com',
       'fundf10.eastmoney.com',
       'api.fund.eastmoney.com',
+      'push2his.eastmoney.com',
+      'push2.eastmoney.com',
+      'fund.eastmoney.com',
       'danjuanapp.com',
       'qt.gtimg.cn',
       'unitmob.1234567.com.cn',
+      'sinajs.cn',
+      'sina.com.cn',
     };
     _dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
+        client.idleTimeout = const Duration(seconds: 3);
         client.badCertificateCallback =
             (X509Certificate cert, String host, int port) {
           return trustedHosts
-              .any((trusted) => host == trusted || host.endsWith('.$trusted'));
+              .any((domain) => host == domain || host.endsWith('.$domain'));
         };
         return client;
       },
@@ -58,74 +69,9 @@ class FundDataGateway {
     var res = await _tryEastMoneyMobile(code, pageSize);
     if (res != null) return res;
 
-    // 2. 降级一：尝试新浪财经历史净值 API
-    res = await _trySinaHistory(code, pageSize);
-    if (res != null) return res;
-
-    // 3. 降级二：尝试天天基金网页端 F10 接口 (HTML 正则解析)
+    // 2. 降级：尝试天天基金网页端 F10 接口 (HTML 正则解析)
     res = await _tryEastMoneyWeb(code, pageSize);
     return res;
-  }
-
-  Future<Map<String, dynamic>?> _trySinaHistory(
-      String code, int pageSize) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url =
-            'http://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundInfoService.getNav?symbol=$code&num=$pageSize';
-        final response = await _dio.get(
-          url,
-          options: Options(
-            headers: {
-              'Referer': 'https://finance.sina.com.cn',
-            },
-          ),
-        );
-        if (response.statusCode == 200) {
-          final data = response.data;
-          if (data is Map &&
-              data['result'] != null &&
-              data['result']['data'] != null) {
-            final List list = data['result']['data']['data'] ?? [];
-            final List<double> navs = [];
-            final List<String> dates = [];
-
-            for (final item in list) {
-              final val = double.tryParse(item['jjjz']?.toString() ?? '');
-              var dt = item['fbrq']?.toString() ?? '';
-              if (dt.length >= 10) {
-                dt = dt.substring(0, 10);
-              }
-              if (val != null && dt.isNotEmpty) {
-                navs.add(val);
-                dates.add(dt);
-              }
-            }
-
-            if (navs.isNotEmpty) {
-              return {
-                'source': 'SinaHistory',
-                'jzrq': dates.first,
-                'navs': navs,
-                'dates': dates,
-                'latest_item': {
-                  'DWJZ': navs.first.toString(),
-                  'FSRQ': dates.first,
-                  'JZZZL': '0.00'
-                }
-              };
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 2) {
-          final msg = 'SinaHistory 抓取失败 ($code): $e';
-          debugPrint(msg);
-          errors.add(msg);
-        }
-      }
-    }
-    return null;
   }
 
   Future<Map<String, dynamic>?> _tryEastMoneyMobile(
@@ -168,8 +114,13 @@ class FundDataGateway {
           }
         }
       } catch (e) {
-        if (attempt == 2) {
-          final msg = 'EastMoneyMobile 抓取失败 ($code): $e';
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        } else {
+          final errStr = e is DioException
+              ? (e.error?.toString() ?? e.message ?? e.toString())
+              : e.toString();
+          final msg = 'EastMoneyMobile 抓取失败 ($code): $errStr';
           debugPrint(msg);
           errors.add(msg);
         }
@@ -191,8 +142,13 @@ class FundDataGateway {
           if (parsed != null) return parsed;
         }
       } catch (e) {
-        if (attempt == 2) {
-          final msg = 'EastMoneyWeb 抓取失败 ($code): $e';
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        } else {
+          final errStr = e is DioException
+              ? (e.error?.toString() ?? e.message ?? e.toString())
+              : e.toString();
+          final msg = 'EastMoneyWeb 抓取失败 ($code): $errStr';
           debugPrint(msg);
           errors.add(msg);
         }
@@ -300,8 +256,13 @@ class FundDataGateway {
           }
         }
       } catch (e) {
-        if (attempt == 2) {
-          final msg = 'EtfKline 历史抓取失败 ($etfCode): $e';
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        } else {
+          final errStr = e is DioException
+              ? (e.error?.toString() ?? e.message ?? e.toString())
+              : e.toString();
+          final msg = 'EtfKline 历史抓取失败 ($etfCode): $errStr';
           debugPrint(msg);
           errors.add(msg);
         }
@@ -312,102 +273,6 @@ class FundDataGateway {
 
   // ---------------- 抓取实时估值 ----------------
 
-  Future<Map<String, Map<String, dynamic>>> fetchValuationsSinaBatch(
-      List<String> codes) async {
-    if (codes.isEmpty) return {};
-    try {
-      final List<String> queryList = [];
-      final Map<String, String> etfToFundCode = {}; // 记录影子 ETF 代码到原基金代码的映射
-
-      for (final c in codes) {
-        if (_shadowEtfMap.containsKey(c)) {
-          final etfCode = _shadowEtfMap[c]!;
-          queryList.add(etfCode);
-          etfToFundCode[etfCode] = c;
-        } else {
-          queryList.add('fu_$c');
-        }
-      }
-
-      final listStr = queryList.join(',');
-      final url = 'http://hq.sinajs.cn/list=$listStr';
-      final response = await _dio.get(
-        url,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {
-            'Referer': 'https://finance.sina.com.cn',
-          },
-        ),
-      );
-      if (response.statusCode == 200) {
-        final text = response.data.toString();
-        // 匹配 fu_ 格式的基金，或 sh/sz 格式的影子 ETF
-        final reg = RegExp(r'var hq_str_(fu_\d{6}|sh\d{6}|sz\d{6})="([^"]*)"');
-        final matches = reg.allMatches(text);
-        final Map<String, Map<String, dynamic>> results = {};
-        final todayStr = DateTime.now().toIso8601String().substring(0, 10);
-
-        for (final m in matches) {
-          final key = m.group(1)!;
-          final dataStr = m.group(2);
-          if (dataStr != null && dataStr.isNotEmpty) {
-            final parts = dataStr.split(',');
-
-            if (key.startsWith('fu_')) {
-              final code = key.substring(3);
-              if (parts.length >= 8) {
-                final gsz = parts[2];
-                final gszzl = parts[6];
-                final jzrq = parts[7];
-                final timeStr = parts[1];
-
-                if (jzrq == todayStr) {
-                  results[code] = {
-                    'source': 'SinaBatch',
-                    'jzrq': jzrq,
-                    'dwjz': parts[3],
-                    'gsz': gsz,
-                    'gszzl': gszzl,
-                    'gztime': '$jzrq $timeStr'
-                  };
-                }
-              }
-            } else {
-              // 影子 ETF (sh/sz)
-              final code = etfToFundCode[key];
-              if (code != null && parts.length >= 32) {
-                final name = parts[0];
-                final yesterdayClose = double.tryParse(parts[2]) ?? 0.0;
-                final currentPrice = double.tryParse(parts[3]) ?? 0.0;
-                final dateStr = parts[30];
-                final timeStr = parts[31];
-
-                if (yesterdayClose > 0 && currentPrice > 0) {
-                  final changePct =
-                      ((currentPrice - yesterdayClose) / yesterdayClose * 100);
-                  results[code] = {
-                    'source': 'ShadowETF',
-                    'name': name,
-                    'jzrq': dateStr,
-                    'dwjz': yesterdayClose.toStringAsFixed(4),
-                    'gsz': currentPrice.toStringAsFixed(4),
-                    'gszzl': changePct.toStringAsFixed(2),
-                    'gztime': '$dateStr $timeStr',
-                    'is_shadow': true
-                  };
-                }
-              }
-            }
-          }
-        }
-        return results;
-      }
-    } catch (e) {
-      debugPrint('SinaBatch 批量估值抓取失败: $e');
-    }
-    return {};
-  }
 
   // 场外到场内影子 ETF/股票 的映射表（用于防估值漂移和 QDII 纠偏）
   static const Map<String, String> _shadowEtfMap = {
@@ -435,70 +300,16 @@ class FundDataGateway {
     '015693': '160625', // 鹏华中证800证券保险C -> 映射为A类(160625)抓取估值
   };
 
-  Future<Map<String, dynamic>?> _trySinaStockGz(String etfCode) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url = 'http://hq.sinajs.cn/list=$etfCode';
-        final response = await _dio.get(
-          url,
-          options: Options(
-            responseType: ResponseType.plain,
-            headers: {
-              'Referer': 'https://finance.sina.com.cn',
-            },
-          ),
-        );
-        if (response.statusCode == 200) {
-          final text = response.data.toString();
-          final reg = RegExp('var hq_str_$etfCode="([^"]*)"');
-          final match = reg.firstMatch(text);
-          if (match != null) {
-            final dataStr = match.group(1);
-            if (dataStr != null && dataStr.isNotEmpty) {
-              final parts = dataStr.split(',');
-              if (parts.length >= 32) {
-                final name = parts[0];
-                final yesterdayClose = double.tryParse(parts[2]) ?? 0.0;
-                final currentPrice = double.tryParse(parts[3]) ?? 0.0;
-                final dateStr = parts[30];
-                final timeStr = parts[31];
-
-                if (yesterdayClose > 0 && currentPrice > 0) {
-                  final changePct =
-                      ((currentPrice - yesterdayClose) / yesterdayClose * 100);
-                  return {
-                    'source': 'ShadowETF',
-                    'name': name,
-                    'jzrq': dateStr,
-                    'dwjz': yesterdayClose.toStringAsFixed(4),
-                    'gsz': currentPrice.toStringAsFixed(4),
-                    'gszzl': changePct.toStringAsFixed(2),
-                    'gztime': '$dateStr $timeStr',
-                    'is_shadow': true
-                  };
-                }
-              }
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 2) {
-          debugPrint('ShadowETF ($etfCode) 估值抓取失败: $e');
-        }
-      }
-    }
-    return null;
-  }
+  int get valuationSourceCount => 4;
 
   Future<Map<String, dynamic>?> fetchValuation(String code,
-      {bool preferSina = false, bool preferTencent = false}) async {
-    // 1. 优先检查场外到场内影子 ETF 的代理映射
+      {int? preferredSourceIndex, bool preferTencent = false}) async {
+    final int sourceIdx = preferredSourceIndex ?? (preferTencent ? 2 : 0);
+
+    // 0. 优先检查场外联接 -> 场内影子 ETF 映射表 (解决 QDII 与指数联接基金无估值 JS 的问题)
     if (_shadowEtfMap.containsKey(code)) {
-      final etfCode = _shadowEtfMap[code]!;
-      final shadowVal = await _trySinaStockGz(etfCode);
-      if (shadowVal != null) {
-        return shadowVal;
-      }
+      final shadowVal = await _tryShadowEtfGz(code, _shadowEtfMap[code]!);
+      if (shadowVal != null) return shadowVal;
     }
 
     if (_valuationProxyMap.containsKey(code)) {
@@ -506,8 +317,7 @@ class FundDataGateway {
       try {
         final results = await Future.wait([
           _tryEastMoneyWeb(code, 1),
-          _fetchValuationDirect(proxyCode,
-              preferSina: preferSina, preferTencent: preferTencent)
+          _fetchValuationDirect(proxyCode, preferredSourceIndex: sourceIdx)
         ]);
         final childWeb = results[0];
         final proxyVal = results[1];
@@ -539,43 +349,109 @@ class FundDataGateway {
       }
     }
 
-    return _fetchValuationDirect(code,
-        preferSina: preferSina, preferTencent: preferTencent);
+    return _fetchValuationDirect(code, preferredSourceIndex: sourceIdx);
+  }
+
+  Future<Map<String, dynamic>?> _tryShadowEtfGz(
+      String code, String etfSecId) async {
+    try {
+      // 1. 尝试通过 fetchHistory (Mobile 接口优先 + Web 接口兜底) 获取最新单位净值
+      final historyData = await fetchHistory(code, pageSize: 1);
+      final childDwjzStr = historyData?['latest_item']?['DWJZ']?.toString() ??
+          (historyData?['navs'] as List?)?.firstOrNull?.toString();
+      double? childDwjz = double.tryParse(childDwjzStr ?? '');
+
+      // 2. 拉取场内影子 ETF 的实时盘中行情 (优先腾讯 qt.gtimg.cn，次选东财 Push)
+      double? etfChangePct;
+      String? etfName;
+
+      // 尝试腾讯行情
+      try {
+        final url = 'https://qt.gtimg.cn/q=$etfSecId';
+        final response = await _dio.get(url);
+        if (response.statusCode == 200) {
+          final text = response.data.toString();
+          final match = RegExp(r'v_[^=]+="([^"]+)"').firstMatch(text);
+          if (match != null) {
+            final parts = match.group(1)!.split('~');
+            if (parts.length >= 33) {
+              etfName = parts[1];
+              etfChangePct = double.tryParse(parts[32]); // 涨跌幅 %
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 若腾讯失败，降级尝试东财 Push 接口
+      if (etfChangePct == null) {
+        try {
+          final isSh = etfSecId.startsWith('sh');
+          final secIdParam =
+              '${isSh ? '1' : '0'}.${etfSecId.replaceAll(RegExp(r'[^\d]'), '')}';
+          final url =
+              'https://push2.eastmoney.com/api/qt/stock/get?secid=$secIdParam&fields=f58,f170';
+          final response = await _dio.get(url);
+          if (response.statusCode == 200 && response.data is Map) {
+            final data = response.data['data'];
+            if (data != null) {
+              etfName ??= data['f58']?.toString();
+              final rawZzl = (data['f170'] as num?)?.toDouble();
+              if (rawZzl != null) {
+                etfChangePct = rawZzl / 100.0;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (etfChangePct == null) return null;
+
+      childDwjz ??= 1.0;
+      final gsz = childDwjz * (1 + etfChangePct / 100.0);
+      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      final timeStr = DateTime.now().toString().substring(11, 16);
+      final jzrqStr = historyData?['jzrq'] ?? todayStr;
+
+      return {
+        'source': 'ShadowETF',
+        'name': etfName ?? '',
+        'jzrq': jzrqStr,
+        'dwjz': childDwjz.toString(),
+        'gsz': gsz.toStringAsFixed(4),
+        'gszzl': etfChangePct.toStringAsFixed(2),
+        'gztime': '$todayStr $timeStr [场内影子估值]',
+        'is_shadow': true,
+      };
+    } catch (e) {
+      debugPrint('影子 ETF 估值抓取失败 ($code -> $etfSecId): $e');
+    }
+    return null;
   }
 
   Future<Map<String, dynamic>?> _fetchValuationDirect(String code,
-      {bool preferSina = false, bool preferTencent = false}) async {
+      {int preferredSourceIndex = 0}) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    if (preferTencent) {
-      // 1. 优先尝试腾讯估值
-      var val = await _tryTencentGz(code);
-      if (val != null) return val;
+    final sources = <Future<Map<String, dynamic>?> Function()>[
+      () => _tryEastMoneyGz(code, timestamp),
+      () => _tryEastMoneyMobileGz(code),
+      () => _tryTencentGz(code),
+      () => _trySinaGz(code),
+    ];
 
-      // 2. 降级：尝试天天基金估值
-      val = await _tryEastMoneyGz(code, timestamp);
-      if (val != null) return val;
+    final total = sources.length;
+    final startIndex = (preferredSourceIndex % total + total) % total;
 
-      // 3. 降级：尝试新浪估值
-      val = await _trySinaGz(code);
-      return val;
-    } else if (preferSina) {
-      // 1. 优先尝试新浪估值
-      var val = await _trySinaGz(code);
+    for (int i = 0; i < total; i++) {
+      final sourceIdx = (startIndex + i) % total;
+      final val = await sources[sourceIdx]();
       if (val != null) return val;
-
-      // 2. 降级：尝试天天基金估值
-      val = await _tryEastMoneyGz(code, timestamp);
-      return val;
-    } else {
-      // 1. 优先尝试天天基金估值
-      var val = await _tryEastMoneyGz(code, timestamp);
-      if (val != null) return val;
-
-      // 2. 降级：尝试新浪估值
-      val = await _trySinaGz(code);
-      return val;
     }
+
+    final msg = '抓取基金估值失败 ($code): 所有估值数据源 (天天网页/天天手机/腾讯/新浪) 均无响应';
+    debugPrint(msg);
+    errors.add(msg);
+    return null;
   }
 
   Future<Map<String, dynamic>?> _tryEastMoneyGz(
@@ -614,19 +490,48 @@ class FundDataGateway {
           }
         }
       } catch (e) {
-        if (attempt == 2) {
-          if (e is DioException &&
-              (e.response?.statusCode == 404 ||
-                  e.response?.statusCode == 514)) {
-            final statusCode = e.response?.statusCode;
-            final msg = 'EastMoneyGz 暂无估值 ($code) [HTTP $statusCode]';
-            debugPrint('$msg, 详情: ${e.message}');
-            errors.add(msg);
-          } else {
-            final msg = 'EastMoneyGz 估值抓取失败 ($code): $e';
-            debugPrint(msg);
-            errors.add(msg);
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _tryEastMoneyMobileGz(String code) async {
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final url =
+            'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationDetail?FCODE=$code&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0';
+        final response = await _dio.get(url);
+        if (response.statusCode == 200) {
+          final data = response.data;
+          if (data is Map && data['ErrCode'] == 0 && data['Datas'] != null) {
+            final datas = data['Datas'];
+            final gsz = datas['GZ']?.toString();
+            final gszzl = datas['GSZZL']?.toString();
+            final gztime = datas['GZTIME']?.toString();
+            final dwjz = datas['DWJZ']?.toString();
+            final jzrq = datas['FSRQ']?.toString();
+            final name =
+                datas['SHORTNAME']?.toString() ?? datas['NAME']?.toString();
+
+            if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
+              return {
+                'source': 'EastMoneyMobileGz',
+                'name': name ?? '',
+                'jzrq': jzrq ?? '',
+                'dwjz': dwjz ?? '',
+                'gsz': gsz,
+                'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
+                'gztime': gztime ?? '',
+              };
+            }
           }
+        }
+      } catch (e) {
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
         }
       }
     }
@@ -651,7 +556,7 @@ class FundDataGateway {
               final todayStr =
                   DateTime.now().toIso8601String().substring(0, 10);
               if (jzrq != todayStr) {
-                // 如果腾讯返回的不是今天的日期，说明盘中未更新，返回 null 以便降级到天天基金抓取
+                // 如果腾讯返回的不是今天的日期，说明盘中未更新，返回 null 以便降级到其他数据源抓取
                 return null;
               }
 
@@ -667,10 +572,8 @@ class FundDataGateway {
           }
         }
       } catch (e) {
-        if (attempt == 2) {
-          final msg = 'TencentGz 估值抓取失败 ($code): $e';
-          debugPrint(msg);
-          errors.add(msg);
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
         }
       }
     }
@@ -680,54 +583,57 @@ class FundDataGateway {
   Future<Map<String, dynamic>?> _trySinaGz(String code) async {
     for (int attempt = 1; attempt <= 2; attempt++) {
       try {
-        final url = 'http://hq.sinajs.cn/list=fu_$code';
+        final url = 'https://hq.sinajs.cn/list=fu_$code';
         final response = await _dio.get(
           url,
           options: Options(
             responseType: ResponseType.plain,
             headers: {
               'Referer': 'https://finance.sina.com.cn',
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             },
           ),
         );
         if (response.statusCode == 200) {
           final text = response.data.toString();
-          final match =
-              RegExp(r'var hq_str_fu_(\d{6})="([^"]*)"').firstMatch(text);
+          final match = RegExp(r'var hq_str_fu_\d+="([^"]+)"').firstMatch(text);
           if (match != null) {
-            final dataStr = match.group(2);
-            if (dataStr != null && dataStr.isNotEmpty) {
-              final parts = dataStr.split(',');
-              if (parts.length >= 8) {
-                final gsz = parts[2];
-                final gszzl = parts[6];
-                final jzrq = parts[7];
-                final timeStr = parts[1];
+            final parts = match.group(1)!.split(',');
+            if (parts.length >= 5) {
+              final name = parts[0];
+              final dwjz = parts[1];
+              final gsz = parts[2];
+              final gszzl = parts[3];
+              final gztime = parts[4];
+              final jzrq =
+                  gztime.contains(' ') ? gztime.split(' ').first : gztime;
 
-                final todayStr =
-                    DateTime.now().toIso8601String().substring(0, 10);
-                if (jzrq == todayStr) {
-                  return {
-                    'source': 'Sina',
-                    'jzrq': jzrq,
-                    'dwjz': parts[3],
-                    'gsz': gsz,
-                    'gszzl': gszzl,
-                    'gztime': '$jzrq $timeStr'
-                  };
-                }
+              if (double.tryParse(gsz) != null &&
+                  gsz != '0.0000' &&
+                  gsz.isNotEmpty) {
+                return {
+                  'source': 'SinaGz',
+                  'name': name,
+                  'jzrq': jzrq,
+                  'dwjz': dwjz,
+                  'gsz': gsz,
+                  'gszzl': gszzl.replaceAll('%', ''),
+                  'gztime': gztime
+                };
               }
             }
           }
         }
       } catch (e) {
-        if (attempt == 2) {
-          debugPrint('SinaGz 估值抓取失败 ($code): $e');
+        if (attempt == 1) {
+          await Future.delayed(const Duration(milliseconds: 300));
         }
       }
     }
     return null;
   }
+
 
   // ---------------- 抓取基本概况以修正板块 ----------------
   Future<Map<String, String>?> fetchSectorInfo(String code) async {

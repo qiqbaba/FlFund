@@ -1117,7 +1117,13 @@ class FundProvider extends ChangeNotifier {
       }
     }
 
-    final workers = List.generate(limit, (_) => worker());
+    // 错开并发 Worker 启动时间（相隔 50ms），防止微秒级高并发冲垮 HTTPS 握手
+    final workers = List.generate(limit, (i) async {
+      if (i > 0) {
+        await Future.delayed(Duration(milliseconds: i * 50));
+      }
+      await worker();
+    });
     await Future.wait(workers);
     return results.cast<T>();
   }
@@ -1147,38 +1153,26 @@ class FundProvider extends ChangeNotifier {
     _refreshErrors.clear();
     notifyListeners();
 
-    // 1. 发起新浪批量接口抓取
-    // 包含自选基金以及周期榜单中尚未关注的基金
+    // 1. 整理自选基金以及周期榜单中尚未关注的基金列表
     final List<FundUIModel> fundList = [
       ...myFunds.values,
       ...cycleFunds.values.where((m) => !myFunds.containsKey(m.code)),
     ];
-    final List<String> codes = fundList.map((m) => m.code).toList();
-
-    Map<String, Map<String, dynamic>> batchResults = {};
-    try {
-      batchResults = await gateway.fetchValuationsSinaBatch(codes);
-    } catch (e) {
-      debugPrint('批量估值请求失败，将全量降级到单只抓取: $e');
-    }
 
     // 2. 并行限流刷新：将任务组装为闭包，由并发调度器执行以控制网络并发数
     final List<Future<List<String>> Function()> tasks = [];
 
     for (int i = 0; i < fundList.length; i++) {
       final model = fundList[i];
-      final preferSina = (i % 2 == 1);
-      final batchVal = batchResults[model.code];
+      final preferredSourceIndex = (i % gateway.valuationSourceCount);
 
       tasks.add(() async {
         final localErrors = <String>[];
         model.errorMsg = null; // 每次刷新前重置
         try {
-          Map<String, dynamic>? val = batchVal;
-
-          // A. 抓取实时估值 (如果在批量请求中已成功获取，则直接使用；否则降级单只抓取)
-          val ??=
-              await gateway.fetchValuation(model.code, preferSina: preferSina);
+          // A. 抓取实时估值 (均匀轮询所有可用估值 API)
+          final val = await gateway.fetchValuation(model.code,
+              preferredSourceIndex: preferredSourceIndex);
 
           if (val != null) {
             model.gsz = val['gsz']?.toString() ?? model.gsz;
@@ -1187,17 +1181,16 @@ class FundProvider extends ChangeNotifier {
             model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
             String srcName = val['source']?.toString() ?? '';
             if (srcName == 'EastMoneyGz') {
-              srcName = '天天基金(估值)';
-            } else if (srcName == 'EastMoneyMobile') {
+              srcName = '天天基金(网页)';
+            } else if (srcName == 'EastMoneyMobileGz' ||
+                srcName == 'EastMoneyMobile') {
               srcName = '天天基金(手机)';
             } else if (srcName == 'EastMoneyWeb') {
-              srcName = '天天基金(网页)';
+              srcName = '天天基金(历史)';
             } else if (srcName == 'TencentGz') {
               srcName = '腾讯财经';
-            } else if (srcName == 'Sina') {
+            } else if (srcName == 'SinaGz') {
               srcName = '新浪财经';
-            } else if (srcName == 'SinaBatch') {
-              srcName = '新浪批量';
             } else if (srcName == 'ShadowETF') {
               srcName = '场内影子估值';
             }
@@ -1219,8 +1212,8 @@ class FundProvider extends ChangeNotifier {
       });
     }
 
-    // 限制最大并发数为 10 并发执行所有基金的刷新任务
-    final results = await _runWithConcurrencyLimit(tasks, 10);
+    // 限制最大并发数为 5 并发执行所有基金的刷新任务，避免冲击天天基金 SSL 握手与请求速率
+    final results = await _runWithConcurrencyLimit(tasks, 5);
 
     // 合并所有局部错误列表
     _refreshErrors = results.expand((e) => e).toList();
@@ -1243,31 +1236,38 @@ class FundProvider extends ChangeNotifier {
       };
 
       // 天天基金官方全市场开放式基金盘中实时估值排行榜接口 (GSZZL 估算日涨跌幅排序)
-      // 服务器单页硬编码限制最多返回30只，通过并发拉取前5页获取真正全市场前150只基金
+      // 服务器单页硬编码限制最多返回30只，通过顺序拉取前5页（间隔100ms防并发拒绝）获取真正全市场前150只基金
       Future<List<Map<String, dynamic>>> fetchPagedValuations(
           String sort) async {
         try {
-          final List<Future<Response>> tasks = [];
+          final List<Map<String, dynamic>> combined = [];
           for (int p = 1; p <= 5; p++) {
-            tasks.add(dio.get(
+            if (p > 1) {
+              await Future.delayed(const Duration(milliseconds: 100));
+            }
+            final res = await dio.get(
               'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationList?pageIndex=$p&pageSize=30&sortColumn=GSZZL&sort=$sort&deviceid=12345678901234567890123456789012&plat=Iphone&product=EFund&version=6.5.5',
               options: Options(headers: headers),
-            ));
-          }
-          final responses = await Future.wait(tasks);
-          final List<Map<String, dynamic>> combined = [];
-          for (final res in responses) {
-            combined.addAll(_parseOfficialValuationResponse(res.data));
+            );
+            if (res.statusCode == 200) {
+              final pageItems = _parseOfficialValuationResponse(res.data);
+              combined.addAll(pageItems);
+              if (pageItems.isEmpty) break;
+            }
           }
           if (combined.isNotEmpty) return combined;
         } catch (e) {
-          debugPrint('天天基金排行榜主接口异常 ($sort)，将启用东方财富降级备用源: $e');
+          final errDetail = e is DioException
+              ? (e.error?.toString() ?? e.message ?? e.toString())
+              : e.toString();
+          debugPrint('天天基金排行榜主接口异常 ($sort)，将启用东方财富降级备用源: $errDetail');
         }
         // 降级备用源：尝试东方财富全市场基金排行榜接口
         return _fetchRankingsFallbackEastMoney(sort);
       }
 
       final rawTop = await fetchPagedValuations('desc');
+      await Future.delayed(const Duration(milliseconds: 200));
       final rawBot = await fetchPagedValuations('asc');
 
       final topMaps = _filterDistinctSectors(rawTop);
@@ -1346,7 +1346,10 @@ class FundProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('东方财富排行榜降级源请求失败: $e');
+      final errDetail = e is DioException
+          ? (e.error?.toString() ?? e.message ?? e.toString())
+          : e.toString();
+      debugPrint('东方财富排行榜降级源请求失败: $errDetail');
     }
     return result;
   }
@@ -1622,6 +1625,7 @@ class FundProvider extends ChangeNotifier {
 
       // 匹配关联基金并加载其详细数据（只针对有“低”或“高”估值标签的指数）
       final pinyinSearch = PinyinSearch();
+      final gateway = FundDataGateway();
       final List<Future<void>> valuationDetailTasks = [];
       int valTaskIndex = 0;
 
@@ -1660,13 +1664,14 @@ class FundProvider extends ChangeNotifier {
 
           final String tag = item['tag'] ?? '正常';
           if (tag.contains('低') || tag.contains('高')) {
-            final preferTencent = (valTaskIndex++ % 2 == 1);
+            final preferredSourceIndex =
+                (valTaskIndex++ % gateway.valuationSourceCount);
             valuationDetailTasks.add(() async {
               await loadHistoryAndCalculateForModel(fundModel);
               try {
                 final gateway = FundDataGateway();
                 final val = await gateway.fetchValuation(fundModel.code,
-                    preferTencent: preferTencent);
+                    preferredSourceIndex: preferredSourceIndex);
                 if (val != null) {
                   fundModel.gsz = val['gsz']?.toString() ?? fundModel.gsz;
                   fundModel.gszzl =
@@ -1675,13 +1680,16 @@ class FundProvider extends ChangeNotifier {
                   fundModel.jzrq = val['jzrq']?.toString() ?? fundModel.jzrq;
                   String srcName = val['source']?.toString() ?? '';
                   if (srcName == 'EastMoneyGz') {
-                    srcName = '天天基金(估值)';
-                  } else if (srcName == 'EastMoneyMobile') {
+                    srcName = '天天基金(网页)';
+                  } else if (srcName == 'EastMoneyMobileGz' ||
+                      srcName == 'EastMoneyMobile') {
                     srcName = '天天基金(手机)';
                   } else if (srcName == 'EastMoneyWeb') {
-                    srcName = '天天基金(网页)';
+                    srcName = '天天基金(历史)';
                   } else if (srcName == 'TencentGz') {
                     srcName = '腾讯财经';
+                  } else if (srcName == 'SinaGz') {
+                    srcName = '新浪财经';
                   }
                   if (val['is_proxy'] == true) {
                     srcName = '$srcName(代理)';
