@@ -311,73 +311,47 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                             ),
                           ],
                   ),
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 左侧彩色竖条 + 图标
-                      Container(
-                        width: 3,
-                        height: 36,
-                        margin: const EdgeInsets.only(right: 10),
-                        decoration: BoxDecoration(
-                          color: iconBgColor.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(2),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: titleColor,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: iconBgColor.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(icon, color: iconBgColor, size: 16),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                color: titleColor,
-                              ),
-                            ),
-                            const SizedBox(height: 7),
-                            ...bulletPoints.map((point) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 5.0),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        width: 5,
-                                        height: 5,
-                                        margin: const EdgeInsets.only(
-                                            top: 5, right: 7),
-                                        decoration: BoxDecoration(
-                                          color: iconBgColor.withValues(
-                                              alpha: 0.5),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Text(
-                                          point,
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: descColor,
-                                              height: 1.4),
-                                        ),
-                                      ),
-                                    ],
+                      const SizedBox(height: 7),
+                      ...bulletPoints.map((point) => Padding(
+                            padding: const EdgeInsets.only(bottom: 5.0),
+                            child: Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  margin: const EdgeInsets.only(
+                                      top: 5, right: 7),
+                                  decoration: BoxDecoration(
+                                    color: iconBgColor.withValues(
+                                        alpha: 0.5),
+                                    shape: BoxShape.circle,
                                   ),
-                                )),
-                          ],
-                        ),
-                      ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    point,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: descColor,
+                                        height: 1.4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
                     ],
                   ),
                 );
