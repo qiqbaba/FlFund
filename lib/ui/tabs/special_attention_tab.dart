@@ -471,7 +471,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     // 定义每列的配置宽度与标题 (和自选保持一致)
     final List<ColConfig> columns = [
       if (_isMultiSelectMode) ColConfig(title: '选', width: 25),
-      ColConfig(title: '#', width: 25),
+      ColConfig(title: '', width: 25),
       ColConfig(title: '基金名称', width: 160, alignLeft: true, sortKey: 'name'),
       ColConfig(title: '代码', width: 60, sortKey: 'code'),
       ColConfig(title: '板块分类', width: 70, alignLeft: true, sortKey: 'sector'),
@@ -736,24 +736,29 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                         (f) => _selectedCodes.contains(f.code));
                                     return SizedBox(
                                       width: col.width,
-                                      child: Center(
-                                        child: ScaledCheckbox(
-                                          checked: allSelected
-                                              ? true
-                                              : (anySelected ? null : false),
-                                          onChanged: (val) {
-                                            setState(() {
-                                              if (allSelected) {
-                                                for (var f in displayList) {
-                                                  _selectedCodes.remove(f.code);
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 2.0),
+                                        child: Align(
+                                          alignment: Alignment.center,
+                                          child: ScaledCheckbox(
+                                            checked: allSelected
+                                                ? true
+                                                : (anySelected ? null : false),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                if (allSelected) {
+                                                  for (var f in displayList) {
+                                                    _selectedCodes.remove(f.code);
+                                                  }
+                                                } else {
+                                                  for (var f in displayList) {
+                                                    _selectedCodes.add(f.code);
+                                                  }
                                                 }
-                                              } else {
-                                                for (var f in displayList) {
-                                                  _selectedCodes.add(f.code);
-                                                }
-                                              }
-                                            });
-                                          },
+                                              });
+                                            },
+                                          ),
                                         ),
                                       ),
                                     );
@@ -844,12 +849,14 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                       .where((col) =>
                                           col.title == '选' ||
                                           col.title == '#' ||
+                                          col.title == '' ||
                                           col.title == '基金名称')
                                       .toList();
                                   final List<ColConfig> rightColumns = columns
                                       .where((col) =>
                                           col.title != '选' &&
                                           col.title != '#' &&
+                                          col.title != '' &&
                                           col.title != '基金名称')
                                       .toList();
                                   final double leftTableWidth =
@@ -872,7 +879,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                       Stack(
                                         children: [
                                           SizedBox(
-                                            width: leftTableWidth + 6,
+                                            width: leftTableWidth + 1,
                                             child: Column(
                                               children: [
                                                 Container(
@@ -890,10 +897,6 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                           color: isDark
                                                               ? Colors.white10
                                                               : Colors.black12),
-                                                      left: const BorderSide(
-                                                          color: Colors
-                                                              .transparent,
-                                                          width: 5),
                                                       right: BorderSide(
                                                           color: isDark
                                                               ? Colors.white24
@@ -1070,7 +1073,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                       controller: _horizontalScrollController,
                                       scrollDirection: Axis.horizontal,
                                       child: SizedBox(
-                                        width: totalTableWidth + 5,
+                                        width: totalTableWidth,
                                         child: Column(
                                           children: [
                                             Container(
@@ -1081,10 +1084,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                         .withValues(alpha: 0.06)
                                                     : Colors.black.withValues(
                                                         alpha: 0.04),
-                                                border: const Border(
-                                                  left: BorderSide(
-                                                      color: Colors.transparent,
-                                                      width: 5),
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                      color: isDark
+                                                          ? Colors.white10
+                                                          : Colors.black12),
                                                 ),
                                               ),
                                               padding: EdgeInsets.zero,
@@ -1250,6 +1254,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                 );
                 break;
               case '#':
+              case '':
                 cellContent = Text(
                   model.isPinned ? '📌' : orderIndex.toString(),
                   textAlign: TextAlign.center,

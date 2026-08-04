@@ -700,7 +700,7 @@ class _HoldingTabState extends State<HoldingTab> {
     // 定义每列的配置宽度与标题 (包含持有本金和盈亏)
     final List<ColConfig> columns = [
       if (_isMultiSelectMode) ColConfig(title: '选', width: 25),
-      ColConfig(title: '#', width: 25),
+      ColConfig(title: '', width: 25),
       ColConfig(
           title: '基金名称',
           width: fundNameColWidth,
@@ -1050,24 +1050,29 @@ class _HoldingTabState extends State<HoldingTab> {
                                         (f) => _selectedCodes.contains(f.code));
                                     return SizedBox(
                                       width: col.width,
-                                      child: Center(
-                                        child: ScaledCheckbox(
-                                          checked: allSelected
-                                              ? true
-                                              : (anySelected ? null : false),
-                                          onChanged: (val) {
-                                            setState(() {
-                                              if (allSelected) {
-                                                for (var f in displayList) {
-                                                  _selectedCodes.remove(f.code);
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 2.0),
+                                        child: Align(
+                                          alignment: Alignment.center,
+                                          child: ScaledCheckbox(
+                                            checked: allSelected
+                                                ? true
+                                                : (anySelected ? null : false),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                if (allSelected) {
+                                                  for (var f in displayList) {
+                                                    _selectedCodes.remove(f.code);
+                                                  }
+                                                } else {
+                                                  for (var f in displayList) {
+                                                    _selectedCodes.add(f.code);
+                                                  }
                                                 }
-                                              } else {
-                                                for (var f in displayList) {
-                                                  _selectedCodes.add(f.code);
-                                                }
-                                              }
-                                            });
-                                          },
+                                              });
+                                            },
+                                          ),
                                         ),
                                       ),
                                     );
@@ -1158,6 +1163,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                   final Set<String> frozenTitles = {
                                     '选',
                                     '#',
+                                    '',
                                     '基金名称'
                                   };
                                   final List<ColConfig> leftColumns = columns
@@ -1190,7 +1196,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                       Stack(
                                         children: [
                                           SizedBox(
-                                            width: leftTableWidth + 6,
+                                            width: leftTableWidth + 1,
                                             child: Column(
                                               children: [
                                                 Container(
@@ -1208,10 +1214,6 @@ class _HoldingTabState extends State<HoldingTab> {
                                                           color: isDark
                                                               ? Colors.white10
                                                               : Colors.black12),
-                                                      left: const BorderSide(
-                                                          color: Colors
-                                                              .transparent,
-                                                          width: 5),
                                                       right: BorderSide(
                                                           color: isDark
                                                               ? Colors.white24
@@ -1388,7 +1390,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                       controller: _horizontalScrollController,
                                       scrollDirection: Axis.horizontal,
                                       child: SizedBox(
-                                        width: totalTableWidth + 5,
+                                        width: totalTableWidth,
                                         child: Column(
                                           children: [
                                             Container(
@@ -1399,10 +1401,11 @@ class _HoldingTabState extends State<HoldingTab> {
                                                         .withValues(alpha: 0.06)
                                                     : Colors.black.withValues(
                                                         alpha: 0.04),
-                                                border: const Border(
-                                                  left: BorderSide(
-                                                      color: Colors.transparent,
-                                                      width: 5),
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                      color: isDark
+                                                          ? Colors.white10
+                                                          : Colors.black12),
                                                 ),
                                               ),
                                               padding: EdgeInsets.zero,
@@ -1567,6 +1570,7 @@ class _HoldingTabState extends State<HoldingTab> {
                 );
                 break;
               case '#':
+              case '':
                 cellContent = Text(
                   model.isPinned ? '📌' : orderIndex.toString(),
                   textAlign: TextAlign.center,

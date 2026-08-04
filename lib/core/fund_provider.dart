@@ -554,14 +554,14 @@ class FundProvider extends ChangeNotifier {
     '013275', // 煤炭能源
     '016708', // 有色稀金属
     '161725', // 白酒大消费
-    '017057', // 基础建设水泥
+    '005224', // 基础建设水泥
     '161027', // 证券大金融（富国中证全指证券公司指数，8年数据）
     '014605', // 新能源光伏
     '163208', // 石油石化
-    '160724', // 航运海运
+    '019405', // 航运海运
     '160218', // 房地产
     '161726', // 医药生物
-    '007592', // 面板LCD
+    '012551', // 面板LCD
   ];
 
   bool isRefreshing = false;
@@ -792,7 +792,8 @@ class FundProvider extends ChangeNotifier {
 
       if ((needApiUpdate || isForce) && !onlyLocal) {
         // 从 API 抓取历史数据并写入数据库
-        final onlineHis = await gateway.fetchHistory(model.code);
+        final onlineHis =
+            await gateway.fetchHistory(model.code, name: model.name);
         if (onlineHis != null) {
           final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
           final List<String> dates =
@@ -1182,6 +1183,8 @@ class FundProvider extends ChangeNotifier {
         try {
           // A. 抓取实时估值 (均匀轮询所有可用估值 API)
           final val = await gateway.fetchValuation(model.code,
+              name: model.name,
+              sector: model.sector,
               preferredSourceIndex: preferredSourceIndex);
 
           if (val != null) {
@@ -1687,6 +1690,8 @@ class FundProvider extends ChangeNotifier {
               try {
                 final gateway = FundDataGateway();
                 final val = await gateway.fetchValuation(fundModel.code,
+                    name: fundModel.name,
+                    sector: fundModel.sector,
                     preferredSourceIndex: preferredSourceIndex);
                 if (val != null) {
                   fundModel.gsz = val['gsz']?.toString() ?? fundModel.gsz;
@@ -1713,7 +1718,8 @@ class FundProvider extends ChangeNotifier {
                   fundModel.gztime = '${val['gztime']} [$srcName]';
                 }
               } catch (e) {
-                debugPrint('获取关联估值失败 (${fundModel.code}): $e');
+                final fundName = fundModel.name.isNotEmpty ? '${fundModel.name} ' : '';
+                debugPrint('获取关联估值失败 ${fundName}(${fundModel.code}): $e');
               }
             }());
           }

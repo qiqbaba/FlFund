@@ -33,5 +33,16 @@ void main() {
         print('  $s');
       }
     });
+    test('isNoLiveValuationFund correctly identifies money and wealth funds', () {
+      expect(FundDataGateway.isNoLiveValuationFund('000009', name: '易方达天天理财货币A'), isTrue);
+      expect(FundDataGateway.isNoLiveValuationFund('000739', name: '广发天天红货币A'), isTrue);
+      expect(FundDataGateway.isNoLiveValuationFund('015645', name: '惠升中证同业存单AAA指数'), isTrue);
+      expect(FundDataGateway.isNoLiveValuationFund('000001', name: '华夏成长混合'), isFalse);
+    });
+
+    test('fetchValuation skips polling for money market funds', () async {
+      final val = await gateway.fetchValuation('000009', name: '易方达天天理财货币A');
+      expect(val, isNull);
+    });
   });
 }

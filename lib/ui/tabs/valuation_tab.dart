@@ -491,7 +491,7 @@ class _ValuationTabState extends State<ValuationTab> {
         (isSmallScreen && appConfig.freezeColumns) ? 95.0 : 120.0;
 
     final List<_ColConfig> columns = [
-      _ColConfig(title: '#', width: 30),
+      _ColConfig(title: '', width: 30),
       _ColConfig(title: '指数代码', width: 70, sortKey: 'code'),
       _ColConfig(
           title: '指数名称',
@@ -699,6 +699,7 @@ class _ValuationTabState extends State<ValuationTab> {
 
               switch (cleanTitle) {
                 case '#':
+                case '':
                   cellContent = Text(
                     isPinned ? '📌' : '$orderIndex',
                     textAlign: TextAlign.center,
@@ -1395,10 +1396,10 @@ class _ValuationTabState extends State<ValuationTab> {
 
     if (appConfig.freezeColumns) {
       final List<_ColConfig> leftColumns = columns
-          .where((col) => col.title == '#' || col.title == '指数名称')
+          .where((col) => col.title == '#' || col.title == '' || col.title == '指数名称')
           .toList();
       final List<_ColConfig> rightColumns = columns
-          .where((col) => col.title != '#' && col.title != '指数名称')
+          .where((col) => col.title != '#' && col.title != '' && col.title != '指数名称')
           .toList();
       final double leftTableWidth = leftColumns.isEmpty
           ? 0.0
@@ -1429,7 +1430,7 @@ class _ValuationTabState extends State<ValuationTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                width: leftTableWidth + 6,
+                width: leftTableWidth + 1,
                 child: Column(
                   children: [
                     Container(
@@ -1441,8 +1442,6 @@ class _ValuationTabState extends State<ValuationTab> {
                         border: Border(
                           bottom: BorderSide(
                               color: isDark ? Colors.white10 : Colors.black12),
-                          left: const BorderSide(
-                              color: Colors.transparent, width: 5),
                           right: BorderSide(
                               color: isDark ? Colors.white24 : Colors.black26,
                               width: 1),
@@ -1563,7 +1562,7 @@ class _ValuationTabState extends State<ValuationTab> {
               controller: horizontalController,
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: totalWidth + 5,
+                width: totalWidth,
                 child: Column(
                   children: [
                     Container(
@@ -1572,8 +1571,9 @@ class _ValuationTabState extends State<ValuationTab> {
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
                             : Colors.black.withValues(alpha: 0.04),
-                        border: const Border(
-                          left: BorderSide(color: Colors.transparent, width: 5),
+                        border: Border(
+                          bottom: BorderSide(
+                              color: isDark ? Colors.white10 : Colors.black12),
                         ),
                       ),
                       padding: EdgeInsets.zero,

@@ -14,7 +14,7 @@ void main() {
       expect(FundProvider.cycleFundCodes.contains('013275'), true);
       expect(FundProvider.cycleFundCodes.contains('016708'), true);
       expect(FundProvider.cycleFundCodes.contains('161725'), true);
-      expect(FundProvider.cycleFundCodes.contains('017057'), true);
+      expect(FundProvider.cycleFundCodes.contains('005224'), true);
       expect(FundProvider.cycleFundCodes.contains('161027'), true);
       expect(FundProvider.cycleFundCodes.contains('014605'), true);
     });

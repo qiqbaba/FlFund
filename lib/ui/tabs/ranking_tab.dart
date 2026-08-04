@@ -350,7 +350,7 @@ class _RankingTabState extends State<RankingTab> {
     }
 
     final List<ColConfig> columns = [
-      ColConfig(title: '#', width: 30),
+      ColConfig(title: '', width: 30),
       ColConfig(title: '基金名称', width: 160, alignLeft: true, sortKey: 'name'),
       ColConfig(title: '代码', width: 70, sortKey: 'code'),
       ColConfig(title: '板块分类', width: 70, alignLeft: true, sortKey: 'sector'),
@@ -530,6 +530,7 @@ class _RankingTabState extends State<RankingTab> {
 
               switch (cleanTitle) {
                 case '#':
+                case '':
                   cellContent = Text(
                     currentModel.isPinned ? '📌' : '$orderIndex',
                     textAlign: TextAlign.center,
@@ -1061,10 +1062,10 @@ class _RankingTabState extends State<RankingTab> {
 
     if (appConfig.freezeColumns) {
       final List<ColConfig> leftColumns = columns
-          .where((col) => col.title == '#' || col.title == '基金名称')
+          .where((col) => col.title == '#' || col.title == '' || col.title == '基金名称')
           .toList();
       final List<ColConfig> rightColumns = columns
-          .where((col) => col.title != '#' && col.title != '基金名称')
+          .where((col) => col.title != '#' && col.title != '' && col.title != '基金名称')
           .toList();
       final double leftTableWidth = leftColumns.isEmpty
           ? 0.0
@@ -1095,7 +1096,7 @@ class _RankingTabState extends State<RankingTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                width: leftTableWidth + 6,
+                width: leftTableWidth + 1,
                 child: Column(
                   children: [
                     Container(
@@ -1107,8 +1108,6 @@ class _RankingTabState extends State<RankingTab> {
                         border: Border(
                           bottom: BorderSide(
                               color: isDark ? Colors.white10 : Colors.black12),
-                          left: const BorderSide(
-                              color: Colors.transparent, width: 5),
                           right: BorderSide(
                               color: isDark ? Colors.white24 : Colors.black26,
                               width: 1),
@@ -1230,7 +1229,7 @@ class _RankingTabState extends State<RankingTab> {
               controller: horizontalController,
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: totalWidth + 5,
+                width: totalWidth,
                 child: Column(
                   children: [
                     Container(
@@ -1239,8 +1238,9 @@ class _RankingTabState extends State<RankingTab> {
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
                             : Colors.black.withValues(alpha: 0.04),
-                        border: const Border(
-                          left: BorderSide(color: Colors.transparent, width: 5),
+                        border: Border(
+                          bottom: BorderSide(
+                              color: isDark ? Colors.white10 : Colors.black12),
                         ),
                       ),
                       padding: EdgeInsets.zero,

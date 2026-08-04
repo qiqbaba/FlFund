@@ -3,7 +3,22 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
+import 'utils/pinyin_search.dart';
 import 'utils/safe_compute.dart';
+
+String _formatFundLabel(String code, [String? name]) {
+  String? fundName = name;
+  if (fundName == null || fundName.trim().isEmpty || fundName == code) {
+    final searchName = PinyinSearch().getNameByCode(code);
+    if (searchName != code) {
+      fundName = searchName;
+    }
+  }
+  if (fundName != null && fundName.trim().isNotEmpty && fundName != code) {
+    return '${fundName.trim()} ($code)';
+  }
+  return '($code)';
+}
 
 class FundDataGateway {
   static final FundDataGateway _instance = FundDataGateway._internal();
@@ -64,18 +79,18 @@ class FundDataGateway {
   // ---------------- 抓取历史净值 ----------------
 
   Future<Map<String, dynamic>?> fetchHistory(String code,
-      {int pageSize = 2000}) async {
+      {String? name, int pageSize = 2000}) async {
     // 1. 尝试天天基金移动端 API
-    var res = await _tryEastMoneyMobile(code, pageSize);
+    var res = await _tryEastMoneyMobile(code, pageSize, name: name);
     if (res != null) return res;
 
     // 2. 降级：尝试天天基金网页端 F10 接口 (HTML 正则解析)
-    res = await _tryEastMoneyWeb(code, pageSize);
+    res = await _tryEastMoneyWeb(code, pageSize, name: name);
     return res;
   }
 
   Future<Map<String, dynamic>?> _tryEastMoneyMobile(
-      String code, int pageSize) async {
+      String code, int pageSize, {String? name}) async {
     for (int attempt = 1; attempt <= 2; attempt++) {
       try {
         final url =
@@ -120,7 +135,8 @@ class FundDataGateway {
           final errStr = e is DioException
               ? (e.error?.toString() ?? e.message ?? e.toString())
               : e.toString();
-          final msg = 'EastMoneyMobile 抓取失败 ($code): $errStr';
+          final label = _formatFundLabel(code, name);
+          final msg = 'EastMoneyMobile 抓取失败 $label: $errStr';
           debugPrint(msg);
           errors.add(msg);
         }
@@ -130,7 +146,7 @@ class FundDataGateway {
   }
 
   Future<Map<String, dynamic>?> _tryEastMoneyWeb(
-      String code, int pageSize) async {
+      String code, int pageSize, {String? name}) async {
     for (int attempt = 1; attempt <= 2; attempt++) {
       try {
         final url =
@@ -148,7 +164,8 @@ class FundDataGateway {
           final errStr = e is DioException
               ? (e.error?.toString() ?? e.message ?? e.toString())
               : e.toString();
-          final msg = 'EastMoneyWeb 抓取失败 ($code): $errStr';
+          final label = _formatFundLabel(code, name);
+          final msg = 'EastMoneyWeb 抓取失败 $label: $errStr';
           debugPrint(msg);
           errors.add(msg);
         }
@@ -203,7 +220,7 @@ class FundDataGateway {
 
   /// 获取场内 ETF 的日 K 线历史数据（前复权收盘价作为净值代偿）
   Future<Map<String, dynamic>?> fetchEtfHistory(String etfCode,
-      {int limit = 2000}) async {
+      {String? name, int limit = 2000}) async {
     for (int attempt = 1; attempt <= 2; attempt++) {
       try {
         final secId = _etfSecId(etfCode);
@@ -262,7 +279,8 @@ class FundDataGateway {
           final errStr = e is DioException
               ? (e.error?.toString() ?? e.message ?? e.toString())
               : e.toString();
-          final msg = 'EtfKline 历史抓取失败 ($etfCode): $errStr';
+          final label = _formatFundLabel(etfCode, name);
+          final msg = 'EtfKline 历史抓取失败 $label: $errStr';
           debugPrint(msg);
           errors.add(msg);
         }
@@ -302,13 +320,47 @@ class FundDataGateway {
 
   int get valuationSourceCount => 7;
 
+  /// 判断基金是否属于已知无盘中实时估值的品种（如货币基金、理财基金、现金管理、同业存单等）
+  static bool isNoLiveValuationFund(String code, {String? name, String? sector}) {
+    String fundName = name ?? '';
+    if (fundName.isEmpty || fundName == code) {
+      final searchName = PinyinSearch().getNameByCode(code);
+      if (searchName != code) {
+        fundName = searchName;
+      }
+    }
+    final s = sector ?? '';
+
+    return fundName.contains('货币') ||
+        fundName.contains('理财') ||
+        fundName.contains('现金') ||
+        fundName.contains('存单') ||
+        fundName.contains('日聚宝') ||
+        fundName.contains('日盈') ||
+        fundName.contains('日提') ||
+        s.contains('货币') ||
+        s.contains('理财') ||
+        s.contains('现金管理');
+  }
+
   Future<Map<String, dynamic>?> fetchValuation(String code,
-      {int? preferredSourceIndex, bool preferTencent = false}) async {
+      {String? name,
+      String? sector,
+      int? preferredSourceIndex,
+      bool preferTencent = false}) async {
     final int sourceIdx = preferredSourceIndex ?? (preferTencent ? 2 : 0);
 
-    // 0. 优先检查场外联接 -> 场内影子 ETF 映射表 (解决 QDII 与指数联接基金无估值 JS 的问题)
+    // 0. 自动过滤无盘中实时估值的基金品种（货币、理财、存单、现金管理等）
+    if (isNoLiveValuationFund(code, name: name, sector: sector)) {
+      final label = _formatFundLabel(code, name);
+      debugPrint('跳过实时估值轮询 $label: 属于货币/理财/存单类无盘中估值品种');
+      return null;
+    }
+
+    // 0.1 优先检查场外联接 -> 场内影子 ETF 映射表 (解决 QDII 与指数联接基金无估值 JS 的问题)
     if (_shadowEtfMap.containsKey(code)) {
-      final shadowVal = await _tryShadowEtfGz(code, _shadowEtfMap[code]!);
+      final shadowVal =
+          await _tryShadowEtfGz(code, _shadowEtfMap[code]!, name: name);
       if (shadowVal != null) return shadowVal;
     }
 
@@ -316,8 +368,8 @@ class FundDataGateway {
       final proxyCode = _valuationProxyMap[code]!;
       try {
         final results = await Future.wait([
-          _tryEastMoneyWeb(code, 1),
-          _fetchValuationDirect(proxyCode, preferredSourceIndex: sourceIdx)
+          _tryEastMoneyWeb(code, 1, name: name),
+          _fetchValuationDirect(proxyCode, name: name, preferredSourceIndex: sourceIdx)
         ]);
         final childWeb = results[0];
         final proxyVal = results[1];
@@ -345,18 +397,19 @@ class FundDataGateway {
           }
         }
       } catch (e) {
-        debugPrint('影子基金估值代理抓取异常 ($code -> $proxyCode): $e');
+        final label = _formatFundLabel(code, name);
+        debugPrint('影子基金估值代理抓取异常 $label -> $proxyCode: $e');
       }
     }
 
-    return _fetchValuationDirect(code, preferredSourceIndex: sourceIdx);
+    return _fetchValuationDirect(code, name: name, preferredSourceIndex: sourceIdx);
   }
 
   Future<Map<String, dynamic>?> _tryShadowEtfGz(
-      String code, String etfSecId) async {
+      String code, String etfSecId, {String? name}) async {
     try {
       // 1. 尝试通过 fetchHistory (Mobile 接口优先 + Web 接口兜底) 获取最新单位净值
-      final historyData = await fetchHistory(code, pageSize: 1);
+      final historyData = await fetchHistory(code, name: name, pageSize: 1);
       final childDwjzStr = historyData?['latest_item']?['DWJZ']?.toString() ??
           (historyData?['navs'] as List?)?.firstOrNull?.toString();
       double? childDwjz = double.tryParse(childDwjzStr ?? '');
@@ -423,13 +476,14 @@ class FundDataGateway {
         'is_shadow': true,
       };
     } catch (e) {
-      debugPrint('影子 ETF 估值抓取失败 ($code -> $etfSecId): $e');
+      final label = _formatFundLabel(code, name);
+      debugPrint('影子 ETF 估值抓取失败 $label -> $etfSecId: $e');
     }
     return null;
   }
 
   Future<Map<String, dynamic>?> _fetchValuationDirect(String code,
-      {int preferredSourceIndex = 0}) async {
+      {String? name, int preferredSourceIndex = 0}) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     final sources = <Future<Map<String, dynamic>?> Function()>[
@@ -451,8 +505,9 @@ class FundDataGateway {
       if (val != null) return val;
     }
 
+    final label = _formatFundLabel(code, name);
     final msg =
-        '抓取基金估值失败 ($code): 所有 7 大估值数据源 (天天网页/天天手机/腾讯/新浪/蛋卷/好买/同花顺) 均无响应';
+        '抓取基金估值失败 $label: 所有 7 大估值数据源 (天天网页/天天手机/腾讯/新浪/蛋卷/好买/同花顺) 均无响应';
     debugPrint(msg);
     errors.add(msg);
     return null;
@@ -646,7 +701,7 @@ class FundDataGateway {
 
 
   // ---------------- 抓取基本概况以修正板块 ----------------
-  Future<Map<String, String>?> fetchSectorInfo(String code) async {
+  Future<Map<String, String>?> fetchSectorInfo(String code, {String? name}) async {
     for (int attempt = 1; attempt <= 2; attempt++) {
       try {
         final url = 'https://fundf10.eastmoney.com/jbgk_$code.html';
@@ -692,7 +747,8 @@ class FundDataGateway {
         }
       } catch (e) {
         if (attempt == 2) {
-          debugPrint('抓取 jbgk 基本概况失败 ($code): $e');
+          final label = _formatFundLabel(code, name);
+          debugPrint('抓取 jbgk 基本概况失败 $label: $e');
         }
       }
     }

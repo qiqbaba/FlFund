@@ -292,48 +292,48 @@ class _MainWindowState extends State<MainWindow> {
         icon: const Icon(Icons.account_balance_wallet_rounded,
             color: Color(0xFFFFB300)),
         title: const Text('持有基金'),
-        body: wrapSafeArea(_tabs[0]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const Icon(Icons.favorite_rounded, color: Colors.redAccent),
         title: const Text('特别关注'),
-        body: wrapSafeArea(_tabs[1]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const fluent.Icon(fluent.FluentIcons.view_dashboard),
         title: const Text('自选看板'),
-        body: wrapSafeArea(_tabs[2]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const Icon(Icons.trending_up_rounded, color: Color(0xFF00E676)),
         title: const Text('ETF涨跌榜'),
-        body: wrapSafeArea(_tabs[3]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const Icon(Icons.explore_outlined, color: Colors.blueAccent),
         title: const Text('估值雷达'),
-        body: wrapSafeArea(_tabs[4]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const fluent.Icon(fluent.FluentIcons.calendar),
         title: const Text('周期榜单'),
-        body: wrapSafeArea(_tabs[5]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const Icon(Icons.psychology_rounded, color: Colors.purpleAccent),
         title: const Text('策略中心'),
-        body: wrapSafeArea(_tabs[6]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const Icon(Icons.analytics_rounded, color: Colors.orangeAccent),
         title: const Text('模拟盘'),
-        body: wrapSafeArea(_tabs[7]),
+        body: const SizedBox.shrink(),
       ),
       fluent.PaneItem(
         icon: const Icon(Icons.settings_backup_restore_rounded,
             color: Colors.blueGrey),
         title: const Text('数据管理'),
-        body: wrapSafeArea(_tabs[8]),
+        body: const SizedBox.shrink(),
       ),
     ];
 
@@ -458,6 +458,13 @@ class _MainWindowState extends State<MainWindow> {
       },
       child: fluent.NavigationView(
         key: _navigationViewKey,
+        paneBodyBuilder: (item, body) {
+          return _LazyIndexedStack(
+            key: const ValueKey('main_lazy_indexed_stack'),
+            index: currentTabIndex,
+            children: _tabs.map((tab) => wrapSafeArea(tab)).toList(),
+          );
+        },
         titleBar: isSmallScreen
             ? null
             : SizedBox(
@@ -506,3 +513,59 @@ class _MainWindowState extends State<MainWindow> {
     );
   }
 }
+
+/// 懒加载 IndexedStack：只有当 Tab 被首次切入访问时才进行实例化与挂载，
+/// 挂载后常驻内存，切换 Tab 时保持页面状态（如搜索词、筛选勾选、排序、滚动位置等）不丢失。
+class _LazyIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const _LazyIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+  });
+
+  @override
+  State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
+}
+
+class _LazyIndexedStackState extends State<_LazyIndexedStack> {
+  late List<bool> _activated;
+
+  @override
+  void initState() {
+    super.initState();
+    _activated = List<bool>.filled(widget.children.length, false);
+    _activateCurrent();
+  }
+
+  @override
+  void didUpdateWidget(_LazyIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _activateCurrent();
+  }
+
+  void _activateCurrent() {
+    if (widget.index >= 0 && widget.index < _activated.length) {
+      if (!_activated[widget.index]) {
+        _activated[widget.index] = true;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexedStack(
+      index: widget.index,
+      children: List.generate(widget.children.length, (i) {
+        if (_activated[i]) {
+          return widget.children[i];
+        } else {
+          return const SizedBox.shrink();
+        }
+      }),
+    );
+  }
+}
+

@@ -46,7 +46,7 @@ class CycleBoardTab extends StatelessWidget {
         description: '高端商务消费与节假日催化明显，高 ROE 周期性现金牛资产。'),
     CycleItem(
         name: '🏗️ 基础建设水泥周期',
-        code: '017057',
+        code: '005224',
         description: '受国内财政刺激和地方城建发债周期直接拉动。'),
     CycleItem(
         name: '📈 证券大金融周期',
@@ -62,7 +62,7 @@ class CycleBoardTab extends StatelessWidget {
         description: '全球原油供需主导，OPEC+ 减产/增产周期，通常 7-10 年大周期。'),
     CycleItem(
         name: '🚢 航运海运周期',
-        code: '160724',
+        code: '019405',
         description: 'BDI 干散货运价指数驱动，全球贸易景气度的"温度计"，3-5 年一轮。'),
     CycleItem(
         name: '🏠 房地产周期',
@@ -74,7 +74,7 @@ class CycleBoardTab extends StatelessWidget {
         description: '集采政策周期 2-3 年 + 创新药研发管线周期，防御与成长双重属性。'),
     CycleItem(
         name: '📺 面板 LCD 周期',
-        code: '007592',
+        code: '012551',
         description: '液晶面板产能投放-过剩-涨价的经典循环，与半导体同属科技硬件周期。'),
   ];
 
