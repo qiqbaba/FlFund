@@ -863,8 +863,18 @@ class FundProvider extends ChangeNotifier {
             model.sumOf119 = null;
           }
 
-          if (model.gsz == '0.00' || model.gsz == '0') {
-            model.gsz = model.dwjz;
+          final double dwjzVal = double.tryParse(model.dwjz) ?? 0.0;
+          final double gszVal = double.tryParse(model.gsz) ?? 0.0;
+          final double gszzlVal = double.tryParse(model.gszzl) ?? 0.0;
+
+          if (dwjzVal > 0) {
+            if ((gszVal <= 0 || (gszVal - dwjzVal).abs() < 1e-5) && gszzlVal != 0.0) {
+              model.gsz = (dwjzVal * (1.0 + gszzlVal / 100.0)).toStringAsFixed(4);
+            } else if (gszVal > 0 && (gszVal - dwjzVal).abs() >= 1e-5 && gszzlVal == 0.0) {
+              model.gszzl = ((gszVal - dwjzVal) / dwjzVal * 100.0).toStringAsFixed(2);
+            } else if (model.gsz == '0.00' || model.gsz == '0') {
+              model.gsz = model.dwjz;
+            }
           }
           if ((model.gztime == '暂无数据' || model.gztime.isEmpty) &&
               model.jzrq.isNotEmpty) {

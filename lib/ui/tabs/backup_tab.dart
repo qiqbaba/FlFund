@@ -2456,13 +2456,6 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
               'https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=000001&page=1&per=20',
           'badge': '网页降级',
         },
-        {
-          'id': 'SINA_NAV',
-          'name': '新浪 OpenNav 历史净值',
-          'url':
-              'http://stock.finance.sina.com.cn/fund_info/api/openapi.php/FundPageApi.getNav?p=1&num=20&code=000001',
-          'badge': 'JSON 降级',
-        },
       ]
     },
     {

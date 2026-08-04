@@ -87,14 +87,17 @@ class _FundChartDialogState extends State<FundChartDialog> {
     _updatePeriodLimit();
   }
 
+  double? _effectiveEstimatePct;
+
   void _checkAndAddEstimatePoint() {
     _hasEstimatePoint = false;
-    if (widget.todayEstimateNav == null || widget.todayEstimateNav! <= 0) {
-      return;
-    }
+    _effectiveEstimatePct = widget.todayEstimatePct;
+
     if (widget.todayEstimateTime == null ||
         widget.todayEstimateTime!.isEmpty ||
-        widget.todayEstimateTime == '暂无数据') return;
+        widget.todayEstimateTime == '暂无数据') {
+      return;
+    }
 
     String estTime = widget.todayEstimateTime!;
     String estDate = '';
@@ -119,7 +122,32 @@ class _FundChartDialogState extends State<FundChartDialog> {
     if (_allDates.isNotEmpty) {
       final String lastDate = _allDates.last;
       if (lastDate != estDate) {
-        _allNavs.add(widget.todayEstimateNav!);
+        final double lastNav = _allNavs.last;
+        double? estNav = widget.todayEstimateNav;
+        double? estPct = widget.todayEstimatePct;
+
+        // 1. 如果有估算涨跌幅 estPct，但估算净值 estNav 为空、<=0 或与上一日净值相等(未调调整)，
+        // 则按上一日净值 * (1 + estPct / 100) 重新计算估算净值！
+        if (estPct != null && estPct != 0.0) {
+          if (estNav == null ||
+              estNav <= 0 ||
+              (estNav - lastNav).abs() < 1e-5) {
+            estNav = lastNav * (1.0 + estPct / 100.0);
+          }
+        }
+        // 2. 如果有估算净值 estNav (且与上一日净值不同)，但估算涨跌幅 estPct 为空或 0，
+        // 则反推估算涨跌幅 estPct！
+        else if (estNav != null &&
+            estNav > 0 &&
+            (estNav - lastNav).abs() >= 1e-5) {
+          estPct = (estNav - lastNav) / lastNav * 100.0;
+        }
+
+        // 若校正后估算净值仍无效，不追加估算点
+        if (estNav == null || estNav <= 0) return;
+
+        _effectiveEstimatePct = estPct;
+        _allNavs.add(estNav);
         _allDates.add(estDate);
         _hasEstimatePoint = true;
       }
@@ -464,18 +492,31 @@ class _FundChartDialogState extends State<FundChartDialog> {
       final distHigh = (nav - dMax) / dMax * 100.0;
       final distLow = (nav - dMin) / dMin * 100.0;
 
-      // 以当前选定区间的第一天为基准计算涨跌幅
+      // 以当前选定区间的第一天为基准计算区间涨跌幅
       double periodChange = 0.0;
       if (slicedNavs.isNotEmpty) {
         periodChange = (nav - slicedNavs[0]) / slicedNavs[0] * 100.0;
       }
 
+      // 计算单日涨跌幅 (相对于前一交易日)
+      double? dailyChange;
+      if (highlightIdx > 0 && slicedNavs.length > highlightIdx) {
+        final double prevNav = slicedNavs[highlightIdx - 1];
+        if (prevNav > 0) {
+          dailyChange = (nav - prevNav) / prevNav * 100.0;
+        }
+      }
+
       tooltipText = '日期: $dateStr\n'
           '区间涨跌: ${periodChange.toThousand(precision: 2, showSign: true)}%\n';
 
-      if (isEstimatePoint && widget.todayEstimatePct != null) {
+      if (isEstimatePoint) {
+        final double estPct = _effectiveEstimatePct ?? (dailyChange ?? 0.0);
         tooltipText +=
-            '今日估算: ${widget.todayEstimatePct!.toThousand(precision: 2, showSign: true)}%\n';
+            '今日估算: ${estPct.toThousand(precision: 2, showSign: true)}%\n';
+      } else if (dailyChange != null) {
+        tooltipText +=
+            '日涨跌幅: ${dailyChange.toThousand(precision: 2, showSign: true)}%\n';
       }
 
       tooltipText += '距最高: ${distHigh.toThousand(precision: 2)}%\n'

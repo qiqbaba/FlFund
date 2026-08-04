@@ -26,12 +26,7 @@ Test-Api -Desc "9. FundMobApi v640" -Url "https://fundmobapi.eastmoney.com/FundM
 # 10. 试试POST?
 Test-Api -Desc "10. FundMobApi POST" -Url "https://fundmobapi.eastmoney.com/FundMobApi/GetFundGZList" -ExtraHeaders @{"Referer"="https://fundmobapi.eastmoney.com/"; "Content-Type"="application/json"}
 
-# --- 新浪财经 ---
-# 11. 新浪全市场排行
-Test-Api -Desc "11. Sina FundRank" -Url "https://vip.stock.finance.sina.com.cn/fund_center/api/jsonp.php/IO.XSRV2.MembershipList/js/?symbol=openfund&datalen=20&page=1&sort=nav&asc=0&type=all" -ExtraHeaders @{"Referer"="https://finance.sina.com.cn/fund/"}
-
-# 12. 新浪基金排行
-Test-Api -Desc "12. Sina fund rank" -Url "https://money.finance.sina.com.cn/fund/api/jsonp.php/IO.XSRV2.MembershipList/var%20data=/js/?symbol=openfund&datalen=20&page=1&sort=nav&asc=0&type=all" -ExtraHeaders @{"Referer"="https://money.finance.sina.com.cn/fund/"}
+# --- 新浪财经排行榜接口已于 2025 年失效（返回 __ERROR:3），已移除 ---
 
 # --- 腾讯财经 ---
 # 13. 腾讯基金排行

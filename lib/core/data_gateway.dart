@@ -604,18 +604,24 @@ class FundDataGateway {
           final match = RegExp(r'var hq_str_fu_\d+="([^"]+)"').firstMatch(text);
           if (match != null) {
             final parts = match.group(1)!.split(',');
-            if (parts.length >= 5) {
-              final name = parts[0];
-              final dwjz = parts[1];
-              final gsz = parts[2];
-              final gszzl = parts[3];
-              final gztime = parts[4];
-              final jzrq =
-                  gztime.contains(' ') ? gztime.split(' ').first : gztime;
+            // 实际字段格式（共10个）：
+            // [0]=基金名 [1]=估值时间 [2]=昨日净值 [3]=今日估值
+            // [4]=估值(同[3]) [5]=涨跌额 [6]=涨跌率% [7]=日期
+            if (parts.length >= 8) {
+              final name    = parts[0];
+              final gztime  = parts[1];            // 估值时间 HH:mm:ss
+              final dwjz    = parts[2];            // 昨日净值
+              final gsz     = parts[3];            // 今日估算净值
+              final gszzl   = parts[6];            // 估算涨跌率 %
+              final jzrq    = parts[7];            // 日期 yyyy-MM-dd
 
               if (double.tryParse(gsz) != null &&
                   gsz != '0.0000' &&
                   gsz.isNotEmpty) {
+                // 新浪返回的 gztime 只含时间 HH:mm:ss，无日期，需拼接日期使 isTodayValuation 能正确判断
+                final fullGztime = gztime.contains('-')
+                    ? gztime
+                    : '$jzrq $gztime';
                 return {
                   'source': 'SinaGz',
                   'name': name,
@@ -623,7 +629,7 @@ class FundDataGateway {
                   'dwjz': dwjz,
                   'gsz': gsz,
                   'gszzl': gszzl.replaceAll('%', ''),
-                  'gztime': gztime
+                  'gztime': fullGztime
                 };
               }
             }

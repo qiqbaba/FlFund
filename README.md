@@ -1,6 +1,6 @@
 # FlFund (基金分析与策略回测系统)
 
-[![Version](https://img.shields.io/badge/version-1.8.1%2B83-blue)](pubspec.yaml)
+[![Version](https://img.shields.io/badge/version-1.8.2%2B84-blue)](pubspec.yaml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-green)](#)
 
 `FlFund` 是一个基于 Flutter 开发的跨平台基金分析、持有管理与策略回测系统。项目界面采用 Fluent UI 风格设计，支持 Windows 桌面无边框体验与移动端自适应布局。同时，项目在 Windows 环境下运行时支持读取并迁移原 Python 基金软件的历史数据库，保障数据无缝衔接。
@@ -90,7 +90,7 @@
 * **腾讯财经 (Tencent)**：
   * 实时估值 API：`qt.gtimg.cn`（与天天基金交替进行奇偶分流请求，规避单 IP 并发过高被封禁的风险）
 * **新浪财经 (Sina)**：
-  * 降级数据 API：`hq.sinajs.cn` / `stock.finance.sina.com.cn` (提供批量估值及备用历史净值抓取)
+  * 降级数据 API：`hq.sinajs.cn` (提供批量实时估值)
 
 ### 3. 云端存储与数据同步 (Supabase)
 系统除了使用本地 SQLite 存储（对应 [db_manager.dart](lib/core/db_manager.dart)）外，还支持云端备份与跨端同步：
