@@ -419,7 +419,12 @@ class PinyinSearch {
         trimmedRaw.contains('灵活配置') ||
         trimmedRaw.contains('期货') ||
         trimmedRaw.contains('LOF') ||
-        trimmedRaw.contains('ETF')) {
+        trimmedRaw.contains('ETF') ||
+        trimmedRaw == '沪港深' ||
+        trimmedRaw == '港股通' ||
+        trimmedRaw == '深港通' ||
+        trimmedRaw == '沪港通' ||
+        trimmedRaw == '沪深') {
       isPolluted = true;
     }
 
@@ -660,7 +665,7 @@ class PinyinSearch {
       (['基建'], '基建'),
       (['建材', '建筑材料'], '建材'),
       (['地产', '房地产'], '地产'),
-      (['消费'], '消费'),
+      (['消费', '乐享生活', '品质生活', '美好生活', '健康生活'], '消费'),
       (['传媒'], '传媒'),
 
       // 2. 宽基指数 / 境外宽基 (放在最后匹配，防止特定行业基金因名称中包含宽基名称被错分类)
@@ -724,7 +729,21 @@ class PinyinSearch {
 
     // 兜底提取前进行前缀和数字代号的过滤，防止将“中证”、“沪深”等指数提供商或市场词当作板块
     String nameForFallback = cleanName;
-    const prefixToSkip = ['中证', '国证', '沪深', '上证', '深证', '中债', '标普', '纳斯达克'];
+    const prefixToSkip = [
+      '中证',
+      '国证',
+      '沪深',
+      '上证',
+      '深证',
+      '中债',
+      '标普',
+      '纳斯达克',
+      '沪港深',
+      '港股通',
+      '深港通',
+      '沪港通',
+      '深港'
+    ];
     for (final prefix in prefixToSkip) {
       if (nameForFallback.startsWith(prefix)) {
         nameForFallback = nameForFallback.substring(prefix.length);

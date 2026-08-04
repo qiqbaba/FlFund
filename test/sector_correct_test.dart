@@ -216,6 +216,11 @@ void main() {
       // 45. 黄金产业与大宗商品分类优化测试 (021075, 257060)
       expect(pinyinSearch.getCleanSector("华夏中证沪深港黄金产业股票ETF发起式联接C", "黄金"), equals("黄金股"));
       expect(pinyinSearch.getCleanSector("国联安上证商品ETF联接A", "上证"), equals("大宗商品"));
+
+      // 46. 沪港深及生活主题基金分类测试 (004320 前海开源沪港深乐享生活)
+      expect(pinyinSearch.getCleanSector("前海开源沪港深乐享生活", "沪港深"), equals("消费"));
+      expect(pinyinSearch.getCleanSector("前海开源沪港深乐享生活", "其它"), equals("消费"));
+      expect(pinyinSearch.getCleanSector("前海开源沪港深优势精选混合C", "其它"), equals("主动混合"));
     });
 
     test('upgrade local my_funds.json sectors', () async {

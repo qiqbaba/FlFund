@@ -148,7 +148,7 @@ class _FundAppState extends State<FundApp> {
       // 浅色主题配色
       theme: fluent.FluentThemeData(
         brightness: fluent.Brightness.light,
-        fontFamily: 'Microsoft YaHei',
+        fontFamily: 'Segoe UI',
         accentColor: fluent.AccentColor.swatch(const {
           'darkest': Color(0xFF004D40),
           'darker': Color(0xFF00796B),
@@ -159,11 +159,41 @@ class _FundAppState extends State<FundApp> {
           'lightest': Color(0xFFB2DFDB),
         }),
         scaffoldBackgroundColor: const Color(0xFFF9FBFB),
+        navigationPaneTheme: fluent.NavigationPaneThemeData(
+          unselectedTextStyle: fluent.WidgetStateProperty.all(
+            const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.normal,
+              height: 1.25,
+              letterSpacing: 0.2,
+              fontFamilyFallback: [
+                'Microsoft YaHei',
+                'PingFang SC',
+                'SimHei',
+                'sans-serif',
+              ],
+            ),
+          ),
+          selectedTextStyle: fluent.WidgetStateProperty.all(
+            const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              height: 1.25,
+              letterSpacing: 0.2,
+              fontFamilyFallback: [
+                'Microsoft YaHei',
+                'PingFang SC',
+                'SimHei',
+                'sans-serif',
+              ],
+            ),
+          ),
+        ),
       ),
       // 深色主题配色
       darkTheme: fluent.FluentThemeData(
         brightness: fluent.Brightness.dark,
-        fontFamily: 'Microsoft YaHei',
+        fontFamily: 'Segoe UI',
         accentColor: fluent.AccentColor.swatch(const {
           'darkest': Color(0xFFB2DFDB),
           'darker': Color(0xFF80CBC4),
@@ -174,6 +204,36 @@ class _FundAppState extends State<FundApp> {
           'lightest': Color(0xFF004D40),
         }),
         scaffoldBackgroundColor: const Color(0xFF1B2A32),
+        navigationPaneTheme: fluent.NavigationPaneThemeData(
+          unselectedTextStyle: fluent.WidgetStateProperty.all(
+            const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.normal,
+              height: 1.25,
+              letterSpacing: 0.2,
+              fontFamilyFallback: [
+                'Microsoft YaHei',
+                'PingFang SC',
+                'SimHei',
+                'sans-serif',
+              ],
+            ),
+          ),
+          selectedTextStyle: fluent.WidgetStateProperty.all(
+            const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              height: 1.25,
+              letterSpacing: 0.2,
+              fontFamilyFallback: [
+                'Microsoft YaHei',
+                'PingFang SC',
+                'SimHei',
+                'sans-serif',
+              ],
+            ),
+          ),
+        ),
       ),
       home: _isInitComplete
           ? const MainWindow()

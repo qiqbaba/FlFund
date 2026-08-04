@@ -1546,6 +1546,7 @@ class FundProvider extends ChangeNotifier {
 
       final List<Map<String, dynamic>> temp = [];
       final Set<String> indexBlacklist = {
+        '000028', // 180成长
         '000928', // 800能源
         '930716', // CS物流
         '399602', // 中小成长

@@ -459,10 +459,12 @@ class _MainWindowState extends State<MainWindow> {
       child: fluent.NavigationView(
         key: _navigationViewKey,
         paneBodyBuilder: (item, body) {
-          return _LazyIndexedStack(
-            key: const ValueKey('main_lazy_indexed_stack'),
-            index: currentTabIndex,
-            children: _tabs.map((tab) => wrapSafeArea(tab)).toList(),
+          return ExcludeSemantics(
+            child: _LazyIndexedStack(
+              key: const ValueKey('main_lazy_indexed_stack'),
+              index: currentTabIndex,
+              children: _tabs.map((tab) => wrapSafeArea(tab)).toList(),
+            ),
           );
         },
         titleBar: isSmallScreen

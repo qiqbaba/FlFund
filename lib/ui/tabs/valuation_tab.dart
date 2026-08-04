@@ -57,6 +57,121 @@ class _ValuationTabState extends State<ValuationTab> {
   bool _onlyShowSellSignals = false;
   bool _onlyShowRecentBuySignals = false;
 
+  void _showValuationGuideDialog(BuildContext context, bool isDark) {
+    fluent.showDialog(
+      context: context,
+      builder: (context) => fluent.ContentDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lightbulb_outline_rounded, color: Colors.blue, size: 20),
+            SizedBox(width: 8),
+            Text('PE 与 PB 指标选看指南',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '不同行业的商业模式与资产结构差异巨大，看估值时需选择匹配的指标：',
+                style: TextStyle(fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.blue.withValues(alpha: 0.1)
+                      : Colors.blue.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.blue.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('📈 主要看 PE (市盈率) 的行业：',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                            fontSize: 13)),
+                    SizedBox(height: 6),
+                    Text(
+                      '• 适用行业：消费(白酒/家电/食品)、医药医疗、科技/半导体、互联网、新能源、宽基指数(沪深300/深证100等)。\n'
+                      '• 逻辑特征：轻资产模式、企业盈利相对稳定或具备持续成长性，资产以收益能力定价。',
+                      style: TextStyle(fontSize: 12, height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.orange.withValues(alpha: 0.1)
+                      : Colors.orange.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('🏦 主要看 PB (市净率) 的行业：',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.orange : Colors.deepOrange,
+                            fontSize: 13)),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '• 适用行业：金融(银行/证券/保险)、强周期品(煤炭/钢铁/有色/化工/石油)、房地产、建筑基建、交通运输等。\n'
+                      '• 逻辑特征：重资产、高杠杆或周期性强，企业盈利随宏观周期剧烈波动，看账面净资产价值更客观安全。',
+                      style: TextStyle(fontSize: 12, height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.black.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 16, color: Colors.grey),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '💡 避坑提示：周期行业在行业低谷极度亏损时，PE会爆表失真，此时切忌以为高估，应参考 PB 百分位判断探底位置。',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          fluent.Button(
+            child: const Text('我知道了'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
   String? _lowSortKey;
   bool _lowSortAscending = false;
   String? _highSortKey;
@@ -577,6 +692,18 @@ class _ValuationTabState extends State<ValuationTab> {
         );
       } else {
         headerContent = headerText;
+      }
+
+      if (col.title == 'PE') {
+        headerContent = fluent.Tooltip(
+          message: '【看 PE (市盈率)】\n• 适用行业：消费(白酒/家电)、医药、科技/半导体、互联网及宽基指数\n• 判定逻辑：盈利相对稳定或有高成长性，以收益能力定价',
+          child: headerContent,
+        );
+      } else if (col.title == 'PB') {
+        headerContent = fluent.Tooltip(
+          message: '【看 PB (市净率)】\n• 适用行业：金融(银行/证券/保险)、强周期(煤炭/钢铁/有色/化工)及地产/基建\n• 判定逻辑：重资产或强周期性，盈利波动大，以账面净资产定价',
+          child: headerContent,
+        );
       }
 
       return SizedBox(
@@ -1906,6 +2033,14 @@ class _ValuationTabState extends State<ValuationTab> {
           text: const Text('冻结列(指数名称)', style: TextStyle(fontSize: 12)),
           onPressed: () {
             appConfig.toggleFreezeColumns(!appConfig.freezeColumns);
+          },
+        ),
+        fluent.MenuFlyoutItem(
+          leading: const Icon(Icons.lightbulb_outline_rounded,
+              size: 14, color: Colors.blue),
+          text: const Text('PE/PB看盘指南', style: TextStyle(fontSize: 12)),
+          onPressed: () {
+            _showValuationGuideDialog(context, isDark);
           },
         ),
       ],
