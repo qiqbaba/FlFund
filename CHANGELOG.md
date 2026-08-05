@@ -2,6 +2,11 @@
 
 本文件记录 FlFund 各版本的主要更新内容。发布新版本时，GitHub Actions 会自动提取对应版本的章节作为 Release 页面的说明。
 
+## 1.8.9
+
+### 优化
+- 依赖库替换与升级：将已废弃的 `open_file_plus` 替换为 `open_filex` 4.7.0，优化 Windows 及 Android 平台上更新安装包的打开与安装体验
+
 ## 1.8.8
 
 ### 修复

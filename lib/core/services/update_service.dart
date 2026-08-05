@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pub_semver/pub_semver.dart';
-import 'package:open_file_plus/open_file_plus.dart';
+import 'package:open_filex/open_filex.dart';
 
 class UpdateInfo {
   final String currentVersion;
@@ -174,20 +174,20 @@ class UpdateService {
           await Process.start(savePath, [], mode: ProcessStartMode.detached);
           exit(0);
         } else {
-          final result = await OpenFile.open(savePath);
+          final result = await OpenFilex.open(savePath);
           if (result.type != ResultType.done) {
             onError('打开更新文件失败: ${result.message}');
             return false;
           }
         }
       } else if (Platform.isAndroid) {
-        final result = await OpenFile.open(savePath);
+        final result = await OpenFilex.open(savePath);
         if (result.type != ResultType.done) {
           onError('启动 APK 安装失败: ${result.message}');
           return false;
         }
       } else {
-        await OpenFile.open(savePath);
+        await OpenFilex.open(savePath);
       }
       return true;
     } catch (e) {
