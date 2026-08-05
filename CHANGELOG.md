@@ -2,6 +2,11 @@
 
 本文件记录 FlFund 各版本的主要更新内容。发布新版本时，GitHub Actions 会自动提取对应版本的章节作为 Release 页面的说明。
 
+## 1.8.7
+
+### 优化
+- 项目开发规范：完善版本号自动递增规范，在版本发布与提交时保持 `pubspec.yaml`、`README.md`、`CHANGELOG.md` 及 `version.json` 等所有版本文件完整同步
+
 ## 1.8.6
 
 ### 新增
