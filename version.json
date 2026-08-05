@@ -1,0 +1,19 @@
+{
+  "version": "1.8.5",
+  "buildNumber": 87,
+  "minSupportedVersion": "1.8.0",
+  "releaseDate": "2026-08-05",
+  "releaseNotes": "1. 新增全自动化版本检查与更新流程支持\n2. 数据管理板块增加“关于与新版本检测”卡片\n3. 优化底层网络通信与性能体验",
+  "platforms": {
+    "windows": {
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.5/FlFund-Windows-x64.zip",
+      "sha256": "",
+      "fileSize": 0
+    },
+    "android": {
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.5/FlFund-v1.8.5.apk",
+      "sha256": "",
+      "fileSize": 0
+    }
+  }
+}

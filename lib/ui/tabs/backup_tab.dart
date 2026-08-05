@@ -20,6 +20,9 @@ import '../../core/supabase_manager.dart';
 import '../../core/simulation_provider.dart';
 import '../widgets/mobile_header.dart';
 import '../../core/utils/number_formatter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import '../../core/services/update_service.dart';
+import '../widgets/update_dialog.dart';
 
 enum PasswordStrength { weak, medium, strong }
 
@@ -1784,6 +1787,10 @@ class _BackupTabState extends State<BackupTab> {
 
               // 数据查询 API 接入与管理卡片
               _ApiManagementCard(isDark: isDark),
+              const SizedBox(height: 20),
+
+              // 关于软件与新版本检测卡片
+              _AboutCard(isDark: isDark),
             ],
                 ),
               ),
@@ -2765,6 +2772,243 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutCard extends StatefulWidget {
+  final bool isDark;
+  const _AboutCard({required this.isDark});
+
+  @override
+  State<_AboutCard> createState() => _AboutCardState();
+}
+
+class _AboutCardState extends State<_AboutCard> {
+  bool _isChecking = false;
+  String _currentVersionStr = '1.8.5';
+  int _currentBuildNumber = 87;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _currentVersionStr = info.version;
+          _currentBuildNumber = int.tryParse(info.buildNumber) ?? 87;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _currentVersionStr = '1.8.5';
+          _currentBuildNumber = 87;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleCheckUpdate(BuildContext context) async {
+    setState(() => _isChecking = true);
+    final updateInfo = await UpdateService.checkUpdate();
+    if (mounted) {
+      setState(() => _isChecking = false);
+      if (updateInfo != null) {
+        await UpdateDialog.show(
+          context,
+          updateInfo: updateInfo,
+          isManualCheck: true,
+        );
+      } else {
+        await fluent.displayInfoBar(
+          context,
+          builder: (context, close) => fluent.InfoBar(
+            title: const Text('检查更新'),
+            content: const Text('无法连接至更新服务，请检查网络连接或稍后重试。'),
+            severity: fluent.InfoBarSeverity.warning,
+            onClose: close,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appConfig = Provider.of<AppConfig>(context);
+
+    return fluent.Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: Colors.blueAccent, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '关于软件与新版本检测',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.show_chart_rounded, color: Colors.blueAccent, size: 28),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'FlFund 基金助手',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'v$_currentVersionStr (Build $_currentBuildNumber)',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blueAccent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '基于 Flutter & Fluent UI 打造的理财辅助、持仓管理与基金实时估值工具。',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: widget.isDark
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.black.withValues(alpha: 0.02),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: widget.isDark ? Colors.white10 : Colors.black12,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '启动时自动检查更新',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        appConfig.autoCheckUpdate
+                            ? '每次打开软件自动查询是否有新版本'
+                            : '已关闭启动检测，仅支持手动检查更新',
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                fluent.ToggleSwitch(
+                  checked: appConfig.autoCheckUpdate,
+                  onChanged: (val) {
+                    appConfig.toggleAutoCheckUpdate(val);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              fluent.FilledButton(
+                onPressed: _isChecking ? null : () => _handleCheckUpdate(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isChecking) ...[
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: fluent.ProgressRing(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('正在检测...'),
+                    ] else ...[
+                      const Icon(Icons.system_update_rounded, size: 14),
+                      const SizedBox(width: 6),
+                      const Text('检查更新'),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              fluent.Button(
+                onPressed: () {
+                  fluent.displayInfoBar(
+                    context,
+                    builder: (context, close) => fluent.InfoBar(
+                      title: const Text('系统与环境信息'),
+                      content: Text(
+                        '软件版本: v$_currentVersionStr+$_currentBuildNumber | 平台: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})',
+                      ),
+                      severity: fluent.InfoBarSeverity.info,
+                      onClose: close,
+                    ),
+                  );
+                },
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.computer_rounded, size: 14),
+                    SizedBox(width: 6),
+                    Text('环境信息'),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              const Text(
+                '© 2026 FlFund | MIT License',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ],
+          ),
         ],
       ),
     );

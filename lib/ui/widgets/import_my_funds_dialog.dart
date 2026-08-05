@@ -40,6 +40,8 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
   List<Map<String, dynamic>> _ocrResults = [];
   final Set<int> _selectedOcrIndices = {};
 
+  bool _autoSliceLongImage = true;
+
   late String _zhipuApiKey;
   late String _zhipuApiUrl;
   late String _zhipuModel;
@@ -52,28 +54,69 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
   late String _customApiUrl;
   late String _customModel;
 
-  void _saveCurrentToTemp(String provider) {
+  void _saveCurrentToTemp(String provider, {bool persist = true}) {
+    final appConfig = AppConfig();
+    final key = _apiKeyController.text.trim();
+    final url = _apiUrlController.text.trim();
+    final model = _modelController.text.trim();
+
     if (provider == 'zhipu') {
-      _zhipuApiKey = _apiKeyController.text.trim();
-      _zhipuApiUrl = _apiUrlController.text.trim();
-      _zhipuModel = _modelController.text.trim();
+      _zhipuApiKey = key;
+      _zhipuApiUrl = url;
+      _zhipuModel = model;
     } else if (provider == 'mimo') {
-      _mimoApiKey = _apiKeyController.text.trim();
-      _mimoApiUrl = _apiUrlController.text.trim();
-      _mimoModel = _modelController.text.trim();
+      _mimoApiKey = key;
+      _mimoApiUrl = url;
+      _mimoModel = model;
     } else if (provider == 'custom') {
-      _customApiKey = _apiKeyController.text.trim();
-      _customApiUrl = _apiUrlController.text.trim();
-      _customModel = _modelController.text.trim();
+      _customApiKey = key;
+      _customApiUrl = url;
+      _customModel = model;
     } else if (provider.startsWith('custom_')) {
-      final appConfig = AppConfig();
       final index = appConfig.customApis.indexWhere((e) => e['id'] == provider);
       if (index != -1) {
-        appConfig.customApis[index]['key'] = _apiKeyController.text.trim();
-        appConfig.customApis[index]['url'] = _apiUrlController.text.trim();
-        appConfig.customApis[index]['model'] = _modelController.text.trim();
+        appConfig.customApis[index]['key'] = key;
+        appConfig.customApis[index]['url'] = url;
+        appConfig.customApis[index]['model'] = model;
       }
     }
+
+    if (persist) {
+      appConfig.updateOcrConfig(
+        provider: provider,
+        zhipuKey: _zhipuApiKey,
+        zhipuUrl: _zhipuApiUrl,
+        zhipuModelVal: _zhipuModel,
+        mimoKey: _mimoApiKey,
+        mimoUrl: _mimoApiUrl,
+        mimoModelVal: _mimoModel,
+        customKey: provider.startsWith('custom_') ? key : _customApiKey,
+        customUrl: provider.startsWith('custom_') ? url : _customApiUrl,
+        customModelVal: provider.startsWith('custom_') ? model : _customModel,
+        autoSliceLongImage: _autoSliceLongImage,
+      );
+    }
+  }
+
+  String _getProviderDisplayName(AppConfig appConfig, String provider) {
+    if (provider == 'zhipu') {
+      final model = _zhipuModel.isNotEmpty ? _zhipuModel : 'glm-4.6v-flash';
+      return '智谱GLM ($model)';
+    } else if (provider == 'mimo') {
+      final model = _mimoModel.isNotEmpty ? _mimoModel : 'mimo-v2.5';
+      return '小米MIMO ($model)';
+    } else if (provider == 'custom') {
+      final model = _customModel.isNotEmpty ? _customModel : '自定义';
+      return '自定义 ($model)';
+    } else if (provider.startsWith('custom_')) {
+      final item = appConfig.customApis
+          .firstWhere((e) => e['id'] == provider, orElse: () => {});
+      if (item.isNotEmpty) {
+        return item['name'] ?? item['model'] ?? '自定义 API';
+      }
+      return '自定义 API';
+    }
+    return provider;
   }
 
   @override
@@ -81,6 +124,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
     super.initState();
     final appConfig = AppConfig();
     _selectedProvider = appConfig.defaultOcrProvider;
+    _autoSliceLongImage = appConfig.ocrAutoSliceLongImage;
 
     _zhipuApiKey = appConfig.zhipuApiKey;
     _zhipuApiUrl = appConfig.zhipuApiUrl;
@@ -187,13 +231,15 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
 
     try {
       const prompt =
-          '这是一张自选基金列表截图，请帮我从中识别出所有的基金信息。请务必只提取截图中明确写出的信息，杜绝任何联想或脑补。\n\n'
+          '这是一张基金持仓/自选列表截图，请帮我从中识别出所有的基金信息。请务必如实提取截图中写出的信息，杜绝任何联想或脑补。\n\n'
           '针对列表中的每一项基金，识别规则如下：\n'
-          '1. 请在截图中寻找6位数字的基金代码（例如：001234）以及对应的基金名称（例如：天弘恒生科技ETF联接C）。\n'
-          '2. 将它们分别提取为 code 和 name。\n\n'
+          '1. 请提取基金名称（例如：平安沪深300指数量化增强C），映射为 name。\n'
+          '2. 若截图中明确印有6位数字的基金代码（例如：001234），映射为 code；若截图中只有基金名称而没有写明6位代码，请务必将 "code" 设为空字符串 ""，切勿将金额、收益或日期的数字误认作基金代码！\n\n'
           '请仅以JSON格式数组返回，结构如下：[{"code": "xxxxxx", "name": "xxx"}]。\n'
-          '如果某项在截图中没有写明基金代码，请将"code"设为空字符串""（但请尽量从截图文字中提取那6位数字作为代码）。\n'
-          '只返回这个JSON数组，不要包含任何Markdown标记（如```json）或额外文字说明。';
+          '只返回这个JSON数组，不要包含任何Markdown标记或额外文字说明。';
+
+      // 保存 API 配置，以免因网络或识别失败而丢失用户输入的 API 密钥
+      _saveCurrentToTemp(_selectedProvider, persist: true);
 
       final results = await OcrService.recognize(
         imagePath: _selectedImagePath!,
@@ -201,6 +247,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
         apiUrl: _apiUrlController.text.trim(),
         model: _modelController.text.trim(),
         prompt: prompt,
+        autoSliceLongImage: _autoSliceLongImage,
       );
 
       final List<Map<String, dynamic>> processedResults = [];
@@ -258,6 +305,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
         customKey: _customApiKey,
         customUrl: _customApiUrl,
         customModelVal: _customModel,
+        autoSliceLongImage: _autoSliceLongImage,
       );
 
       setState(() {
@@ -737,19 +785,45 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
-                  ScaledCheckbox(
-                    checked: appConfig.ocrPreferClassC,
-                    onChanged: (val) {
-                      if (val != null) {
-                        appConfig.updateOcrPreferClassC(val);
-                      }
-                    },
-                    content: const Text(
-                      '若基金名称过长截图中未完整显示，匹配时优先选择C类',
-                      style: TextStyle(fontSize: 11),
-                    ),
+                  // 识别与匹配控制按钮 (置顶排在最前)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ScaledCheckbox(
+                          checked: appConfig.ocrPreferClassC,
+                          onChanged: (val) {
+                            if (val != null) {
+                              appConfig.updateOcrPreferClassC(val);
+                            }
+                          },
+                          content: const Text(
+                            '若名称不全优先选C类',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          fluent.ToggleSwitch(
+                            checked: _autoSliceLongImage,
+                            onChanged: (v) {
+                              setState(() {
+                                _autoSliceLongImage = v;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            '智能切分超长截图',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
 
@@ -782,10 +856,37 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                         ? Colors.white54
                                         : Colors.black54),
                                 const SizedBox(width: 6),
-                                const Text('大模型 API 配置 (截图识别)',
+                                const Text('大模型 API 配置',
                                     style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: fluent.Colors.blue.withValues(
+                                          alpha: isDark ? 0.18 : 0.08),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: fluent.Colors.blue.withValues(
+                                            alpha: isDark ? 0.35 : 0.25),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _getProviderDisplayName(
+                                          appConfig, _selectedProvider),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: fluent.Colors.blue,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
                                 const Spacer(),
                                 Icon(
                                   _isConfigExpanded
@@ -1026,6 +1127,24 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                   controller: _modelController,
                                   placeholder: '例如: glm-4.6v-flash',
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    fluent.ToggleSwitch(
+                                      checked: _autoSliceLongImage,
+                                      onChanged: (v) {
+                                        setState(() {
+                                          _autoSliceLongImage = v;
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      '智能切分超长截图（长图识别增强，推荐开启）',
+                                      style: TextStyle(fontSize: 11),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -1129,7 +1248,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                               Expanded(
                                                 child: Text(
                                                   item['name'],
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 12,
                                                     decoration: TextDecoration

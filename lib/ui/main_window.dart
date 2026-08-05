@@ -8,6 +8,9 @@ import 'package:flutter/material.dart' show Icons, Colors;
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 import '../core/fund_provider.dart';
+import '../core/config.dart';
+import '../core/services/update_service.dart';
+import 'widgets/update_dialog.dart';
 import 'tabs/holding_tab.dart';
 import 'tabs/my_funds_tab.dart';
 import 'tabs/special_attention_tab.dart';
@@ -62,6 +65,7 @@ class _MainWindowState extends State<MainWindow> {
       // 后台预加载涨跌榜和估值雷达数据，用户点击对应 tab 时无需等待
       _fundProvider.fetchRankings();
       _fundProvider.fetchValuations();
+      _checkAutoUpdate();
     });
     // 每隔 3 分钟在后台检查并自动刷新一次估值数据
     // 优化：降低频率以减少内存分配和 GC 压力
@@ -77,6 +81,25 @@ class _MainWindowState extends State<MainWindow> {
     _fundProvider.removeListener(_onFundProviderChanged);
     _fundProvider.onOpenDrawer = null;
     super.dispose();
+  }
+
+  Future<void> _checkAutoUpdate() async {
+    try {
+      if (!mounted) return;
+      final appConfig = Provider.of<AppConfig>(context, listen: false);
+      if (!appConfig.autoCheckUpdate) return;
+
+      final updateInfo = await UpdateService.checkUpdate();
+      if (updateInfo != null && updateInfo.hasUpdate && mounted) {
+        if (!updateInfo.isForce &&
+            appConfig.ignoredUpdateVersion == updateInfo.latestVersion) {
+          return;
+        }
+        await UpdateDialog.show(context, updateInfo: updateInfo);
+      }
+    } catch (e) {
+      debugPrint('启动自动检查更新失败: $e');
+    }
   }
 
   bool _handleKeyEvent(KeyEvent event) {

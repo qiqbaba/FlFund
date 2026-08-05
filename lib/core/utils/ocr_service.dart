@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 
 class OcrService {
   /// 宽松/截断容错的 JSON 列表解析器
   static List<dynamic> parseLooseJsonList(String content) {
-    String jsonText = content.trim();
+    // 0. 去除思考/推理过程标签 <think>...</think>
+    String jsonText = content.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').trim();
 
     // 1. 去除 markdown 代码块包裹
     if (jsonText.startsWith('```')) {
@@ -157,6 +159,53 @@ class OcrService {
     throw Exception('请求失败且超出最大重试次数');
   }
 
+  /// 将大长图自动切割/预处理为高为 1800px 以内的多张正常尺寸图片 base64 列表
+  static Future<List<String>> _prepareImageBase64List(String imagePath) async {
+    final file = File(imagePath);
+    final bytes = await file.readAsBytes();
+
+    try {
+      final decodedImage = img.decodeImage(bytes);
+      if (decodedImage == null || decodedImage.height <= 2000) {
+        return [base64Encode(bytes)];
+      }
+
+      // 超长图自动切割处理 (每片高 1800px，交叠 150px 避免截断文字)
+      final List<String> base64Slices = [];
+      const sliceHeight = 1800;
+      const overlap = 150;
+      int currentY = 0;
+
+      while (currentY < decodedImage.height) {
+        int h = sliceHeight;
+        if (currentY + h > decodedImage.height) {
+          h = decodedImage.height - currentY;
+        }
+
+        final cropped = img.copyCrop(
+          decodedImage,
+          x: 0,
+          y: currentY,
+          width: decodedImage.width,
+          height: h,
+        );
+
+        final sliceBytes = img.encodeJpg(cropped, quality: 85);
+        base64Slices.add(base64Encode(sliceBytes));
+
+        if (currentY + h >= decodedImage.height) break;
+        currentY += (sliceHeight - overlap);
+      }
+
+      debugPrint(
+          '[OcrService] 监测到超长截图 (${decodedImage.width}x${decodedImage.height})，已自动分割为 ${base64Slices.length} 段切片进行识别');
+      return base64Slices;
+    } catch (e) {
+      debugPrint('[OcrService] 图片切割预处理失败，降级使用原图: $e');
+      return [base64Encode(bytes)];
+    }
+  }
+
   /// 发起多模态 OCR 识别，并返回解析后的 JSON 列表结果
   static Future<List<dynamic>> recognize({
     required String imagePath,
@@ -164,13 +213,12 @@ class OcrService {
     required String apiUrl,
     required String model,
     required String prompt,
+    bool autoSliceLongImage = true,
   }) async {
     final file = File(imagePath);
     if (!await file.exists()) {
       throw Exception('图片文件不存在');
     }
-    final originalBytes = await file.readAsBytes();
-    final base64Image = base64Encode(originalBytes);
 
     String mimeType = 'image/jpeg';
     if (imagePath.toLowerCase().endsWith('.png')) {
@@ -182,6 +230,8 @@ class OcrService {
 
     if (isGlmOcr) {
       // ========== 两阶段识别架构 (GLM-OCR) ==========
+      final originalBytes = await file.readAsBytes();
+      final base64Image = base64Encode(originalBytes);
       debugPrint('[OcrService] 启动两阶段 GLM-OCR 识别流程...');
 
       // 1. 第一阶段：OCR 版面识别 (获取 Markdown 文本)
@@ -292,56 +342,82 @@ class OcrService {
         }
       }
 
-      final Map<String, dynamic> requestData = {
-        'model': model,
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'text',
-                'text': prompt,
-              },
-              {
-                'type': 'image_url',
-                'image_url': {'url': 'data:$mimeType;base64,$base64Image'}
+      final imageSlices = autoSliceLongImage
+          ? await _prepareImageBase64List(imagePath)
+          : [base64Encode(await file.readAsBytes())];
+      final List<dynamic> allParsedResults = [];
+      final Set<String> seenKeys = {};
+
+      for (int i = 0; i < imageSlices.length; i++) {
+        final base64Slice = imageSlices[i];
+        debugPrint('[OcrService] 发送第 ${i + 1}/${imageSlices.length} 段切片图片识别...');
+
+        final Map<String, dynamic> requestData = {
+          'model': model,
+          'messages': [
+            {
+              'role': 'user',
+              'content': [
+                {
+                  'type': 'text',
+                  'text': prompt,
+                },
+                {
+                  'type': 'image_url',
+                  'image_url': {'url': 'data:$mimeType;base64,$base64Slice'}
+                }
+              ]
+            }
+          ],
+          'max_tokens': 4096,
+        };
+
+        if (chatUrl.contains('bigmodel.cn') ||
+            chatUrl.contains('api.openai.com') ||
+            chatUrl.contains('deepseek.com')) {
+          requestData['response_format'] = {'type': 'json_object'};
+        }
+
+        if (model.toLowerCase().contains('deepseek')) {
+          requestData['thinking'] = {'type': 'disabled'};
+        }
+
+        final chatResponse = await _postWithRetry(
+          dio,
+          chatUrl,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          data: requestData,
+        );
+
+        if (chatResponse.statusCode != 200) {
+          throw Exception('多模态接口识别失败，状态码: ${chatResponse.statusCode}');
+        }
+
+        final content = chatResponse.data['choices'][0]['message']['content']
+                ?.toString()
+                .trim() ??
+            '';
+
+        final sliceResults = parseLooseJsonList(content);
+        for (var item in sliceResults) {
+          if (item is Map) {
+            final name = item['name']?.toString().trim() ?? '';
+            final code = item['code']?.toString().trim() ?? '';
+            final key = '$code-$name';
+            if (name.isNotEmpty || code.isNotEmpty) {
+              if (!seenKeys.contains(key)) {
+                seenKeys.add(key);
+                allParsedResults.add(item);
               }
-            ]
+            }
           }
-        ],
-        'max_tokens': 4096,
-      };
-
-      if (chatUrl.contains('bigmodel.cn') ||
-          chatUrl.contains('api.openai.com') ||
-          chatUrl.contains('deepseek.com') ||
-          chatUrl.contains('xiaomimimo.com')) {
-        requestData['response_format'] = {'type': 'json_object'};
+        }
       }
 
-      if (model.toLowerCase().contains('deepseek')) {
-        requestData['thinking'] = {'type': 'disabled'};
-      }
-
-      final chatResponse = await _postWithRetry(
-        dio,
-        chatUrl,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-        },
-        data: requestData,
-      );
-
-      if (chatResponse.statusCode != 200) {
-        throw Exception('多模态接口识别失败，状态码: ${chatResponse.statusCode}');
-      }
-
-      final content = chatResponse.data['choices'][0]['message']['content']
-              ?.toString()
-              .trim() ??
-          '';
-      return parseLooseJsonList(content);
+      return allParsedResults;
     }
   }
 

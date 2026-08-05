@@ -48,6 +48,9 @@ class AppConfig extends ChangeNotifier {
   List<Map<String, String>> customApis = [];
   bool freezeColumns = false;
   bool ocrPreferClassC = true;
+  bool ocrAutoSliceLongImage = true;
+  bool autoCheckUpdate = true;
+  String ignoredUpdateVersion = '';
   String supabaseUrl = 'https://zaslmgurbafajgoafpat.supabase.co';
   String supabaseAnonKey = 'sb_publishable__bq-rBeyAvgANPAzX_daKg_ua76Nj4U';
 
@@ -355,6 +358,13 @@ class AppConfig extends ChangeNotifier {
           volatilityUpdateTime = null;
         }
 
+        if (jsonMap['auto_check_update'] != null) {
+          autoCheckUpdate = jsonMap['auto_check_update'] as bool;
+        }
+        if (jsonMap['ignored_update_version'] != null) {
+          ignoredUpdateVersion = jsonMap['ignored_update_version'].toString();
+        }
+
         notifyListeners();
 
         // 加载配置后，对板块仍为“其它”等粗泛类型的自选基金，在后台静默触发一次自动联网修正
@@ -431,6 +441,8 @@ class AppConfig extends ChangeNotifier {
         'volatility_low_threshold': volatilityLowThreshold,
         'volatility_high_threshold': volatilityHighThreshold,
         'volatility_update_time': volatilityUpdateTime?.toIso8601String() ?? '',
+        'auto_check_update': autoCheckUpdate,
+        'ignored_update_version': ignoredUpdateVersion,
       };
 
       const encoder = JsonEncoder.withIndent('    ');
@@ -995,6 +1007,7 @@ class AppConfig extends ChangeNotifier {
     required String customKey,
     required String customUrl,
     required String customModelVal,
+    bool? autoSliceLongImage,
   }) {
     zhipuApiKey = zhipuKey;
     zhipuApiUrl = zhipuUrl;
@@ -1002,6 +1015,9 @@ class AppConfig extends ChangeNotifier {
     mimoApiKey = mimoKey;
     mimoApiUrl = mimoUrl;
     mimoModel = mimoModelVal;
+    if (autoSliceLongImage != null) {
+      ocrAutoSliceLongImage = autoSliceLongImage;
+    }
 
     if (provider == 'custom') {
       if (customKey.isNotEmpty &&
@@ -1030,11 +1046,19 @@ class AppConfig extends ChangeNotifier {
       final existingIndex =
           customApis.indexWhere((item) => item['id'] == provider);
       if (existingIndex != -1) {
-        customApis[existingIndex]['key'] = customKey;
-        customApis[existingIndex]['url'] = customUrl;
-        customApis[existingIndex]['model'] = customModelVal;
+        if (customKey.isNotEmpty) {
+          customApis[existingIndex]['key'] = customKey;
+        }
+        if (customUrl.isNotEmpty) {
+          customApis[existingIndex]['url'] = customUrl;
+        }
+        if (customModelVal.isNotEmpty) {
+          customApis[existingIndex]['model'] = customModelVal;
+        }
+        final curModel = customApis[existingIndex]['model'] ?? '';
+        final curUrl = customApis[existingIndex]['url'] ?? '';
         customApis[existingIndex]['name'] =
-            '$customModelVal (${_getHost(customUrl)})';
+            '$curModel (${_getHost(curUrl)})';
       }
       defaultOcrProvider = provider;
     } else {
@@ -1067,6 +1091,20 @@ class AppConfig extends ChangeNotifier {
   // 更新 OCR 优先选择C类配置
   void updateOcrPreferClassC(bool value) {
     ocrPreferClassC = value;
+    unawaited(saveConfig());
+    notifyListeners();
+  }
+
+  // 切换启动自动检测更新标志
+  void toggleAutoCheckUpdate(bool value) {
+    autoCheckUpdate = value;
+    unawaited(saveConfig());
+    notifyListeners();
+  }
+
+  // 记录忽略的更新版本
+  void setIgnoredUpdateVersion(String version) {
+    ignoredUpdateVersion = version;
     unawaited(saveConfig());
     notifyListeners();
   }
