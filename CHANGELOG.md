@@ -2,6 +2,11 @@
 
 本文件记录 FlFund 各版本的主要更新内容。发布新版本时，GitHub Actions 会自动提取对应版本的章节作为 Release 页面的说明。
 
+## 1.8.8
+
+### 修复
+- CI/CD 构建超时：引入 Gradle 镜像源 IP 智能检测与自动切换脚本，在 GitHub Actions 工作流打包前动态根据 Runner 地理位置配置官方源或国内加速源，解决 Android 打包超时失败的问题
+
 ## 1.8.7
 
 ### 优化

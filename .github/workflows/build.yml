@@ -47,6 +47,12 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Auto-detect IP & Configure Gradle Mirror
+        shell: bash
+        run: |
+          chmod +x ./scripts/auto_detect_gradle_mirror.sh
+          ./scripts/auto_detect_gradle_mirror.sh
+
       - name: Build Android Release APK
         run: |
           flutter build apk --release \

@@ -1,17 +1,17 @@
 {
-  "version": "1.8.7",
-  "buildNumber": 89,
+  "version": "1.8.8",
+  "buildNumber": 90,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-05",
-  "releaseNotes": "1. 项目规范优化：完善版本号自动更新机制与规范定义\n2. 自动检查同步：补全并同步更新多平台打包配置文件",
+  "releaseNotes": "1. CI/CD 构建优化：增加 Gradle 镜像源智能检测与自动切换脚本，避免 GitHub Actions 编译超时\n2. 依赖配置优化：恢复官方 Gradle 镜像配置并支持动态智能下载",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.7/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.8/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.7/FlFund-v1.8.7.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.8/FlFund-v1.8.8.apk",
       "sha256": "",
       "fileSize": 0
     }
