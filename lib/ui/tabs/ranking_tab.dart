@@ -1143,8 +1143,14 @@ class _RankingTabState extends State<RankingTab> {
               ),
               Expanded(
                 child: fluent.Scrollbar(
-                  controller: horizontalController,
-                  child: SingleChildScrollView(
+                  thumbVisibility: true,
+                  notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+                  controller: rightVerticalController,
+                  child: fluent.Scrollbar(
+                    thumbVisibility: true,
+                    notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+                    controller: horizontalController,
+                    child: SingleChildScrollView(
                     controller: horizontalController,
                     scrollDirection: Axis.horizontal,
                     child: SizedBox(
@@ -1172,9 +1178,7 @@ class _RankingTabState extends State<RankingTab> {
                             ),
                           ),
                           Expanded(
-                            child: fluent.Scrollbar(
-                              controller: rightVerticalController,
-                              child: RefreshIndicator(
+                            child: RefreshIndicator(
                                 onRefresh: () async {
                                   await fundProvider.fetchRankings(
                                       isForce: true);
@@ -1193,8 +1197,8 @@ class _RankingTabState extends State<RankingTab> {
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1224,8 +1228,14 @@ class _RankingTabState extends State<RankingTab> {
             bottomRight: Radius.circular(10),
           ),
           child: fluent.Scrollbar(
-            controller: horizontalController,
-            child: SingleChildScrollView(
+            thumbVisibility: true,
+            notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+            controller: rightVerticalController,
+            child: fluent.Scrollbar(
+              thumbVisibility: true,
+              notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+              controller: horizontalController,
+              child: SingleChildScrollView(
               controller: horizontalController,
               scrollDirection: Axis.horizontal,
               child: SizedBox(
@@ -1250,9 +1260,7 @@ class _RankingTabState extends State<RankingTab> {
                       ),
                     ),
                     Expanded(
-                      child: fluent.Scrollbar(
-                        controller: rightVerticalController,
-                        child: RefreshIndicator(
+                      child: RefreshIndicator(
                           onRefresh: () async {
                             await fundProvider.fetchRankings(isForce: true);
                           },
@@ -1268,8 +1276,8 @@ class _RankingTabState extends State<RankingTab> {
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

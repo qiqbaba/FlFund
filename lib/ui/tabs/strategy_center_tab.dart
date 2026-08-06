@@ -1414,8 +1414,14 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: fluent.Scrollbar(
-          controller: _batchHorizontalScrollController,
-          child: SingleChildScrollView(
+          thumbVisibility: true,
+          notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+          controller: _batchVerticalScrollController,
+          child: fluent.Scrollbar(
+            thumbVisibility: true,
+            notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+            controller: _batchHorizontalScrollController,
+            child: SingleChildScrollView(
             controller: _batchHorizontalScrollController,
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -1486,9 +1492,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                   ),
                   // 数据行
                   Expanded(
-                    child: fluent.Scrollbar(
-                      controller: _batchVerticalScrollController,
-                      child: ListView.builder(
+                    child: ListView.builder(
                         controller: _batchVerticalScrollController,
                         padding: const EdgeInsets.only(bottom: 14),
                         itemCount: _batchResults.length,
@@ -1497,7 +1501,6 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                           return _buildBatchRow(context, result, isDark);
                         },
                       ),
-                    ),
                   ),
                 ],
               ),
@@ -1505,6 +1508,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
         ),
       ),
+    ),
     );
 
     return Column(

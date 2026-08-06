@@ -161,7 +161,8 @@ class SupabaseManager {
       tombstones.forEach((code, tombstone) {
         if (cloudFunds.containsKey(code)) {
           final cloudFund = cloudFunds[code]!;
-          if (tombstone.updatedAt.isAfter(cloudFund.updatedAt)) {
+          if (tombstone.updatedAt.isAfter(cloudFund.updatedAt) ||
+              tombstone.updatedAt.isAtSameMomentAs(cloudFund.updatedAt)) {
             // 本地删除更新。通知云端删除，且本地该墓碑可以被物理清除了
             cloudToDelete.add(code);
             localToDelete.add(code);

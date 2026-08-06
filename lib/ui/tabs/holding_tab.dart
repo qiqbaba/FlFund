@@ -1298,9 +1298,16 @@ class _HoldingTabState extends State<HoldingTab> {
                                       ),
                                       Expanded(
                                         child: fluent.Scrollbar(
+                                          thumbVisibility: true,
+                                          notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
                                           controller:
-                                              _horizontalScrollController,
-                                          child: SingleChildScrollView(
+                                              _rightVerticalScrollController,
+                                          child: fluent.Scrollbar(
+                                            thumbVisibility: true,
+                                            notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+                                            controller:
+                                                _horizontalScrollController,
+                                            child: SingleChildScrollView(
                                             controller:
                                                 _horizontalScrollController,
                                             scrollDirection: Axis.horizontal,
@@ -1336,10 +1343,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                                     ),
                                                   ),
                                                   Expanded(
-                                                    child: fluent.Scrollbar(
-                                                      controller:
-                                                          _rightVerticalScrollController,
-                                                      child: RefreshIndicator(
+                                                    child: RefreshIndicator(
                                                         onRefresh: () async {
                                                           await appConfig
                                                               .syncWithSupabase();
@@ -1374,19 +1378,25 @@ class _HoldingTabState extends State<HoldingTab> {
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
                                                 ],
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
+                                    ),
                                     ],
                                   );
                                 } else {
                                   return fluent.Scrollbar(
-                                    controller: _horizontalScrollController,
-                                    child: SingleChildScrollView(
+                                    thumbVisibility: true,
+                                    notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+                                    controller: _rightVerticalScrollController,
+                                    child: fluent.Scrollbar(
+                                      thumbVisibility: true,
+                                      notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+                                      controller: _horizontalScrollController,
+                                      child: SingleChildScrollView(
                                       controller: _horizontalScrollController,
                                       scrollDirection: Axis.horizontal,
                                       child: SizedBox(
@@ -1417,10 +1427,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                               ),
                                             ),
                                             Expanded(
-                                              child: fluent.Scrollbar(
-                                                controller:
-                                                    _rightVerticalScrollController,
-                                                child: RefreshIndicator(
+                                              child: RefreshIndicator(
                                                   onRefresh: () async {
                                                     await appConfig
                                                         .syncWithSupabase();
@@ -1452,8 +1459,8 @@ class _HoldingTabState extends State<HoldingTab> {
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),

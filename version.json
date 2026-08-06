@@ -1,17 +1,17 @@
 {
-  "version": "1.8.9",
-  "buildNumber": 91,
+  "version": "1.8.10",
+  "buildNumber": 92,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-05",
-  "releaseNotes": "1. 依赖库替换与升级：将已废弃的 open_file_plus 依赖替换为 open_filex，优化应用内文件与 APK 安装包打开逻辑",
+  "releaseDate": "2026-08-06",
+  "releaseNotes": "1. 界面优化：修复策略中心、估值雷达等表格垂直滚动条显示及滚动响应问题\n2. 修复：离线或未登录状态下删除基金时正确记录墓碑数据，防止同步时被重新添加",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.9/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.10/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.9/FlFund-v1.8.9.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.10/FlFund-v1.8.10.apk",
       "sha256": "",
       "fileSize": 0
     }

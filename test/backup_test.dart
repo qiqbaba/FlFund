@@ -150,4 +150,37 @@ void main() {
     appConfig.customConfigPath = null;
     tempDir.deleteSync(recursive: true);
   });
+
+  test('Fund deletion records tombstone when offline/not logged in', () async {
+    final appConfig = AppConfig();
+    final tempDir = Directory.systemTemp.createTempSync();
+    appConfig.customConfigPath = '${tempDir.path}/my_funds_tombstone_test.json';
+
+    appConfig.fundsInfo.clear();
+    appConfig.deletedFunds.clear();
+
+    appConfig.addFund('000300', '广发聚鑫债券A', '债券型');
+    expect(appConfig.fundsInfo.containsKey('000300'), true);
+    expect(appConfig.deletedFunds.containsKey('000300'), false);
+
+    // 删除该基金
+    appConfig.removeFund('000300');
+    expect(appConfig.fundsInfo.containsKey('000300'), false);
+    // 即使未登录 Supabase，也必须记录墓碑
+    expect(appConfig.deletedFunds.containsKey('000300'), true);
+    expect(appConfig.deletedFunds['000300']?.isDeleted, true);
+
+    await appConfig.saveConfig(forceImmediate: true);
+
+    // 重新从文件加载配置
+    appConfig.fundsInfo.clear();
+    appConfig.deletedFunds.clear();
+    await appConfig.loadConfig(force: true);
+
+    expect(appConfig.fundsInfo.containsKey('000300'), false);
+    expect(appConfig.deletedFunds.containsKey('000300'), true);
+
+    appConfig.customConfigPath = null;
+    tempDir.deleteSync(recursive: true);
+  });
 }

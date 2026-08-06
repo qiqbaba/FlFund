@@ -671,6 +671,7 @@ class AppConfig extends ChangeNotifier {
           sector: cleanSector,
           updatedAt: DateTime.now());
       fundsInfo[code] = newFund;
+      deletedFunds.remove(code);
       unawaited(saveConfig());
       if (SupabaseManager().isLoggedIn) {
         unawaited(SupabaseManager().uploadFund(newFund));
@@ -751,11 +752,13 @@ class AppConfig extends ChangeNotifier {
   void removeFund(String code) {
     if (fundsInfo.containsKey(code)) {
       final fund = fundsInfo.remove(code);
-      if (fund != null && SupabaseManager().isLoggedIn) {
+      if (fund != null) {
         fund.isDeleted = true;
         fund.updatedAt = DateTime.now();
         deletedFunds[code] = fund;
-        unawaited(SupabaseManager().deleteFund(code));
+        if (SupabaseManager().isLoggedIn) {
+          unawaited(SupabaseManager().deleteFund(code));
+        }
       }
       unawaited(saveConfig());
       notifyListeners();
@@ -789,13 +792,16 @@ class AppConfig extends ChangeNotifier {
 
     // 删除旧基金，添加新基金
     final removedOld = fundsInfo.remove(oldCode);
-    if (removedOld != null && SupabaseManager().isLoggedIn) {
+    if (removedOld != null) {
       removedOld.isDeleted = true;
       removedOld.updatedAt = DateTime.now();
       deletedFunds[oldCode] = removedOld;
-      unawaited(SupabaseManager().deleteFund(oldCode));
+      if (SupabaseManager().isLoggedIn) {
+        unawaited(SupabaseManager().deleteFund(oldCode));
+      }
     }
     fundsInfo[newCode] = newFund;
+    deletedFunds.remove(newCode);
     unawaited(saveConfig());
     if (SupabaseManager().isLoggedIn) {
       unawaited(SupabaseManager().uploadFund(newFund));
@@ -899,6 +905,7 @@ class AppConfig extends ChangeNotifier {
             name: name,
             sector: cleanSector,
             updatedAt: DateTime.now());
+        deletedFunds.remove(code);
         changed = true;
         // 异步网络修正板块
         unawaited(autoCorrectSector(code));
@@ -944,6 +951,7 @@ class AppConfig extends ChangeNotifier {
             sector: cleanSector,
             updatedAt: DateTime.now());
         fundsInfo[code] = newFund;
+        deletedFunds.remove(code);
         updatedFunds.add(newFund);
         changed = true;
         // 异步网络修正板块
