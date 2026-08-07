@@ -1255,12 +1255,12 @@ class FundProvider extends ChangeNotifier {
       };
 
       // 天天基金官方全市场开放式基金盘中实时估值排行榜接口 (GSZZL 估算日涨跌幅排序)
-      // 服务器单页硬编码限制最多返回30只，通过顺序拉取前5页（间隔100ms防并发拒绝）获取真正全市场前150只基金
+      // 服务器单页硬编码限制最多返回30只，通过顺序拉取前7页（间隔100ms防并发拒绝）获取真正全市场前210只基金
       Future<List<Map<String, dynamic>>> fetchPagedValuations(
           String sort) async {
         try {
           final List<Map<String, dynamic>> combined = [];
-          for (int p = 1; p <= 5; p++) {
+          for (int p = 1; p <= 7; p++) {
             if (p > 1) {
               await Future.delayed(const Duration(milliseconds: 100));
             }

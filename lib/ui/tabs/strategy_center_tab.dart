@@ -166,6 +166,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       _isRecalibrating = true;
     });
 
+    // 让出主线程控制权，确保 Flutter 优先渲染界面并将按钮转换为加载状态
+    await Future.delayed(Duration.zero);
+
     try {
       final result = await appConfig.recalibrateVolatilityThresholds();
       final int count = result['count'] as int;

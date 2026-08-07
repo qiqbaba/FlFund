@@ -1,17 +1,17 @@
 {
-  "version": "1.8.10",
-  "buildNumber": 92,
+  "version": "1.8.11",
+  "buildNumber": 93,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-06",
-  "releaseNotes": "1. 界面优化：修复策略中心、估值雷达等表格垂直滚动条显示及滚动响应问题\n2. 修复：离线或未登录状态下删除基金时正确记录墓碑数据，防止同步时被重新添加",
+  "releaseDate": "2026-08-07",
+  "releaseNotes": "1. 波动率阈值校准优化：仅针对全市场代表性样本基金抓取，抓取并发度提升至 10，并优化按钮 UI 加载转圈响应\n2. 估值排行榜拓展：实时估值排行榜拉取页数提升至 7 页（共 210 只）",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.10/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.11/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.10/FlFund-v1.8.10.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.11/FlFund-v1.8.11.apk",
       "sha256": "",
       "fileSize": 0
     }

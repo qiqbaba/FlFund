@@ -511,20 +511,14 @@ class AppConfig extends ChangeNotifier {
     final db = FundHistoryDB();
     final gateway = FundDataGateway();
 
-    // 1. 合并本地历史基金和全市场代表性样本基金的代号（去重）
-    final Set<String> allCodes = {};
-    try {
-      allCodes.addAll(await db.getAllFundCodes());
-    } catch (e) {
-      debugPrint('获取本地基金代码失败: $e');
-    }
-    allCodes.addAll(marketRepresentativeCodes);
+    // 1. 全市场代表性样本基金的代号（用于计算分位数标准）
+    final Set<String> targetCodes = Set<String>.from(marketRepresentativeCodes);
 
-    // 2. 检查哪些基金没有历史数据或者历史数据已过期（超过 24 小时未更新）
+    // 2. 检查代表性样本基金哪些没有历史数据或者历史数据已过期（超过 24 小时未更新）
     final todayStr = DateTime.now().toIso8601String().substring(0, 10);
     final List<String> codesToFetch = [];
 
-    for (final code in allCodes) {
+    for (final code in targetCodes) {
       final history = await db.getHistory(code);
       bool needUpdate = false;
       if (history == null ||
@@ -546,7 +540,7 @@ class AppConfig extends ChangeNotifier {
       }
     }
 
-    // 3. 多线程/异步限流并发抓取数据（最大并发度为 5）
+    // 3. 多线程/异步限流并发抓取数据（并发度为 10）
     if (codesToFetch.isNotEmpty) {
       int nextIndex = 0;
       Future<void> worker() async {
@@ -566,7 +560,7 @@ class AppConfig extends ChangeNotifier {
         }
       }
 
-      final workers = List.generate(5, (_) => worker());
+      final workers = List.generate(10, (_) => worker());
       await Future.wait(workers);
     }
 
