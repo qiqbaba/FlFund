@@ -547,7 +547,9 @@ class PinyinSearch {
       if (cleanName.contains('创新药')) return '港股创新药';
       if (cleanName.contains('医药') ||
           cleanName.contains('医疗') ||
-          cleanName.contains('药')) return '港股医药';
+          cleanName.contains('药')) {
+        return '港股医药';
+      }
       if (cleanName.contains('消费50')) return '港股消费50';
       if (cleanName.contains('消费')) return '港股消费';
       if (cleanName.contains('红利')) return '港股红利';
@@ -561,7 +563,9 @@ class PinyinSearch {
           cleanName.contains('银行') ||
           cleanName.contains('保险') ||
           cleanName.contains('证券') ||
-          cleanName.contains('非银')) return '港股金融';
+          cleanName.contains('非银')) {
+        return '港股金融';
+      }
       if (cleanName.contains('汽车') || cleanName.contains('新能')) return '新能源汽车';
       if (cleanName.contains('专精特新')) return '专精特新';
       if (cleanName.contains('恒生') || name.contains('恒生')) return '恒生指数';

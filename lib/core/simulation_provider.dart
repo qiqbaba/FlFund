@@ -456,7 +456,7 @@ class SimulationProvider extends ChangeNotifier {
               final int holdDays = tradeDate.difference(buyDate).inDays;
               if (holdDays >= holdMax) {
                 sellReason =
-                    '到期平仓(持仓${holdDays}天≥${holdMax}天)$signalReasonSuffix';
+                    '到期平仓(持仓$holdDays天≥$holdMax天)$signalReasonSuffix';
               }
             } catch (_) {/* 日期解析失败则跳过到期判断 */}
           }
@@ -608,7 +608,9 @@ class SimulationProvider extends ChangeNotifier {
     if (availableBalance < amount ||
         amount <= 0 ||
         price <= 0 ||
-        !price.isFinite) return false;
+        !price.isFinite) {
+      return false;
+    }
     await loadSimData();
 
     final volume = amount / price;
@@ -659,8 +661,9 @@ class SimulationProvider extends ChangeNotifier {
 
   // 手动卖出 API
   Future<bool> manualSell(String code, double price) async {
-    if (!positions.containsKey(code) || price <= 0 || !price.isFinite)
+    if (!positions.containsKey(code) || price <= 0 || !price.isFinite) {
       return false;
+    }
     await loadSimData();
 
     final pos = positions[code]!;
@@ -693,12 +696,15 @@ class SimulationProvider extends ChangeNotifier {
 
   // 防御性校验：确保所有数值为有限值，防止 Infinity/NaN 污染
   void _sanitizeValues() {
-    if (!initialBalance.isFinite || initialBalance < 0)
+    if (!initialBalance.isFinite || initialBalance < 0) {
       initialBalance = 1000000.0;
-    if (!availableBalance.isFinite || availableBalance < 0)
+    }
+    if (!availableBalance.isFinite || availableBalance < 0) {
       availableBalance = initialBalance;
-    if (!defaultBuyAmount.isFinite || defaultBuyAmount <= 0)
+    }
+    if (!defaultBuyAmount.isFinite || defaultBuyAmount <= 0) {
       defaultBuyAmount = 10000.0;
+    }
 
     // 可用余额合理性上限：最多允许盈利 500%
     final double maxReasonableBalance = initialBalance + (initialBalance * 5.0);

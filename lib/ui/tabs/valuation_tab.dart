@@ -200,6 +200,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowScrollController == _lowLeftVerticalController) {
         if (_lowLeftVerticalController.hasClients &&
             _lowRightVerticalController.hasClients) {
+          if (_lowLeftVerticalController.offset <= 0 ||
+              _lowRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_lowLeftVerticalController.offset !=
               _lowRightVerticalController.offset) {
             _isSyncing = true;
@@ -220,6 +224,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowScrollController == _lowRightVerticalController) {
         if (_lowLeftVerticalController.hasClients &&
             _lowRightVerticalController.hasClients) {
+          if (_lowLeftVerticalController.offset <= 0 ||
+              _lowRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_lowRightVerticalController.offset !=
               _lowLeftVerticalController.offset) {
             _isSyncing = true;
@@ -240,6 +248,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighScrollController == _highLeftVerticalController) {
         if (_highLeftVerticalController.hasClients &&
             _highRightVerticalController.hasClients) {
+          if (_highLeftVerticalController.offset <= 0 ||
+              _highRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_highLeftVerticalController.offset !=
               _highRightVerticalController.offset) {
             _isSyncing = true;
@@ -260,6 +272,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighScrollController == _highRightVerticalController) {
         if (_highLeftVerticalController.hasClients &&
             _highRightVerticalController.hasClients) {
+          if (_highLeftVerticalController.offset <= 0 ||
+              _highRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_highRightVerticalController.offset !=
               _highLeftVerticalController.offset) {
             _isSyncing = true;
@@ -282,6 +298,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowestScrollController == _lowestLeftVerticalController) {
         if (_lowestLeftVerticalController.hasClients &&
             _lowestRightVerticalController.hasClients) {
+          if (_lowestLeftVerticalController.offset <= 0 ||
+              _lowestRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_lowestLeftVerticalController.offset !=
               _lowestRightVerticalController.offset) {
             _isSyncing = true;
@@ -302,6 +322,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowestScrollController == _lowestRightVerticalController) {
         if (_lowestLeftVerticalController.hasClients &&
             _lowestRightVerticalController.hasClients) {
+          if (_lowestLeftVerticalController.offset <= 0 ||
+              _lowestRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_lowestRightVerticalController.offset !=
               _lowestLeftVerticalController.offset) {
             _isSyncing = true;
@@ -324,6 +348,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighestScrollController == _highestLeftVerticalController) {
         if (_highestLeftVerticalController.hasClients &&
             _highestRightVerticalController.hasClients) {
+          if (_highestLeftVerticalController.offset <= 0 ||
+              _highestRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_highestLeftVerticalController.offset !=
               _highestRightVerticalController.offset) {
             _isSyncing = true;
@@ -344,6 +372,10 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighestScrollController == _highestRightVerticalController) {
         if (_highestLeftVerticalController.hasClients &&
             _highestRightVerticalController.hasClients) {
+          if (_highestLeftVerticalController.offset <= 0 ||
+              _highestRightVerticalController.offset <= 0) {
+            return;
+          }
           if (_highestRightVerticalController.offset !=
               _highestLeftVerticalController.offset) {
             _isSyncing = true;
@@ -640,7 +672,10 @@ class _ValuationTabState extends State<ValuationTab> {
 
       Widget headerText = Text(
         col.title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11.5,
+            height: 1.1),
         textAlign: col.alignLeft ? TextAlign.left : TextAlign.center,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
@@ -1561,7 +1596,7 @@ class _ValuationTabState extends State<ValuationTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 55,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -1619,7 +1654,7 @@ class _ValuationTabState extends State<ValuationTab> {
                       child: Column(
                         children: [
                           Container(
-                            height: 55,
+                            height: 30,
                             decoration: BoxDecoration(
                               color: isDark
                                   ? Colors.white.withValues(alpha: 0.06)
@@ -1703,7 +1738,7 @@ class _ValuationTabState extends State<ValuationTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 55,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -2083,7 +2118,7 @@ class _ValuationTabState extends State<ValuationTab> {
           if (!isSmallScreen)
             Padding(
               padding:
-                  const EdgeInsets.only(left: 16.0, right: 16.0, top: 12.0),
+                  const EdgeInsets.only(left: 12.0, right: 12.0, top: 6.0),
               child: headerWidget,
             ),
           _buildTabBar(isDark),

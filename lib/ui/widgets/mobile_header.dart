@@ -34,9 +34,9 @@ class MobileHeader extends StatelessWidget {
       ),
       child: SafeArea(
         bottom: false,
-        top: true,
+        top: false,
         child: SizedBox(
-          height: 50.0,
+          height: 40.0,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Row(

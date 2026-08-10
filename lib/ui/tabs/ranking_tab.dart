@@ -54,6 +54,10 @@ class _RankingTabState extends State<RankingTab> {
     _topLeftVerticalController.addListener(() {
       if (_topLeftVerticalController.hasClients &&
           _topRightVerticalController.hasClients) {
+        if (_topLeftVerticalController.offset <= 0 ||
+            _topRightVerticalController.offset <= 0) {
+          return;
+        }
         if (_topLeftVerticalController.offset !=
             _topRightVerticalController.offset) {
           _topRightVerticalController.jumpTo(_topLeftVerticalController.offset);
@@ -63,6 +67,10 @@ class _RankingTabState extends State<RankingTab> {
     _topRightVerticalController.addListener(() {
       if (_topLeftVerticalController.hasClients &&
           _topRightVerticalController.hasClients) {
+        if (_topLeftVerticalController.offset <= 0 ||
+            _topRightVerticalController.offset <= 0) {
+          return;
+        }
         if (_topRightVerticalController.offset !=
             _topLeftVerticalController.offset) {
           _topLeftVerticalController.jumpTo(_topRightVerticalController.offset);
@@ -72,6 +80,10 @@ class _RankingTabState extends State<RankingTab> {
     _botLeftVerticalController.addListener(() {
       if (_botLeftVerticalController.hasClients &&
           _botRightVerticalController.hasClients) {
+        if (_botLeftVerticalController.offset <= 0 ||
+            _botRightVerticalController.offset <= 0) {
+          return;
+        }
         if (_botLeftVerticalController.offset !=
             _botRightVerticalController.offset) {
           _botRightVerticalController.jumpTo(_botLeftVerticalController.offset);
@@ -81,6 +93,10 @@ class _RankingTabState extends State<RankingTab> {
     _botRightVerticalController.addListener(() {
       if (_botRightVerticalController.hasClients &&
           _botLeftVerticalController.hasClients) {
+        if (_botLeftVerticalController.offset <= 0 ||
+            _botRightVerticalController.offset <= 0) {
+          return;
+        }
         if (_botRightVerticalController.offset !=
             _botLeftVerticalController.offset) {
           _botLeftVerticalController.jumpTo(_botRightVerticalController.offset);
@@ -377,7 +393,10 @@ class _RankingTabState extends State<RankingTab> {
 
       Widget headerText = Text(
         col.title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11.5,
+            height: 1.1),
         textAlign: col.alignLeft ? TextAlign.left : TextAlign.center,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
@@ -1100,7 +1119,7 @@ class _RankingTabState extends State<RankingTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 55,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -1158,7 +1177,7 @@ class _RankingTabState extends State<RankingTab> {
                       child: Column(
                         children: [
                           Container(
-                            height: 55,
+                            height: 30,
                             decoration: BoxDecoration(
                               color: isDark
                                   ? Colors.white.withValues(alpha: 0.06)
@@ -1243,7 +1262,7 @@ class _RankingTabState extends State<RankingTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 55,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)

@@ -529,8 +529,12 @@ class _MainWindowState extends State<MainWindow> {
           displayMode: isSmallScreen
               ? fluent.PaneDisplayMode.minimal
               : fluent.PaneDisplayMode.expanded,
+          toggleButton: isSmallScreen
+              ? const SizedBox.shrink()
+              : const fluent.PaneToggleButton(),
           size: fluent.NavigationPaneSize(
             openWidth: dynamicOpenWidth, // 使用动态计算的宽度
+            headerHeight: isSmallScreen ? 0.0 : 40.0,
           ),
           items: paneItems,
         ),

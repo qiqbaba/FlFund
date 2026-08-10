@@ -77,6 +77,10 @@ class _HoldingTabState extends State<HoldingTab> {
     if (_activeScrollController == _leftVerticalScrollController) {
       if (_leftVerticalScrollController.hasClients &&
           _rightVerticalScrollController.hasClients) {
+        if (_leftVerticalScrollController.offset <= 0 ||
+            _rightVerticalScrollController.offset <= 0) {
+          return;
+        }
         if ((_leftVerticalScrollController.offset -
                     _rightVerticalScrollController.offset)
                 .abs() >
@@ -101,6 +105,10 @@ class _HoldingTabState extends State<HoldingTab> {
     if (_activeScrollController == _rightVerticalScrollController) {
       if (_leftVerticalScrollController.hasClients &&
           _rightVerticalScrollController.hasClients) {
+        if (_leftVerticalScrollController.offset <= 0 ||
+            _rightVerticalScrollController.offset <= 0) {
+          return;
+        }
         if ((_rightVerticalScrollController.offset -
                     _leftVerticalScrollController.offset)
                 .abs() >
@@ -740,7 +748,7 @@ class _HoldingTabState extends State<HoldingTab> {
     }
 
     final Widget summaryPanel = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.05)
@@ -958,7 +966,7 @@ class _HoldingTabState extends State<HoldingTab> {
         : const SizedBox.shrink();
 
     final Widget headerWidget = Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
+      padding: const EdgeInsets.only(bottom: 4.0),
       child: isSmallScreen
           ? summaryPanel
           : Row(
@@ -1021,10 +1029,10 @@ class _HoldingTabState extends State<HoldingTab> {
                   )
                 : Padding(
                     padding: EdgeInsets.only(
-                        left: 16.0,
-                        right: 16.0,
-                        top: isSmallScreen ? 0.0 : 12.0,
-                        bottom: 16.0),
+                        left: 12.0,
+                        right: 12.0,
+                        top: isSmallScreen ? 4.0 : 6.0,
+                        bottom: 8.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -1085,7 +1093,8 @@ class _HoldingTabState extends State<HoldingTab> {
                                     col.title,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 12),
+                                        fontSize: 11.5,
+                                        height: 1.1),
                                     textAlign: col.alignLeft
                                         ? TextAlign.left
                                         : TextAlign.center,
@@ -1200,7 +1209,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                             child: Column(
                                               children: [
                                                 Container(
-                                                  height: 55,
+                                                  height: 30,
                                                   decoration: BoxDecoration(
                                                     color: isDark
                                                         ? Colors.white
@@ -1316,7 +1325,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                               child: Column(
                                                 children: [
                                                   Container(
-                                                    height: 55,
+                                                    height: 30,
                                                     decoration: BoxDecoration(
                                                       color: isDark
                                                           ? Colors.white
@@ -1404,7 +1413,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                         child: Column(
                                           children: [
                                             Container(
-                                              height: 55,
+                                              height: 30,
                                               decoration: BoxDecoration(
                                                 color: isDark
                                                     ? Colors.white

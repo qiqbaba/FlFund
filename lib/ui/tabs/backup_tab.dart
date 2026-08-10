@@ -822,8 +822,10 @@ class _BackupTabState extends State<BackupTab> {
               Icon(Icons.drive_folder_upload_rounded,
                   color: Colors.blueAccent, size: 22),
               SizedBox(width: 8),
-              Text('选择性数据备份 (导出)',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text('选择性数据备份 (导出)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -881,8 +883,9 @@ class _BackupTabState extends State<BackupTab> {
             checked: _expSettings,
             onChanged: (val) => setState(() => _expSettings = val ?? false),
             content: const Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('系统全局参数设置'),
+                Flexible(child: Text('系统全局参数设置')),
                 SizedBox(width: 4),
                 fluent.Tooltip(
                   message: '包含主题模式、Deepseek 密钥及自定义监控参数。恢复时会覆盖本地密钥！',
@@ -945,8 +948,10 @@ class _BackupTabState extends State<BackupTab> {
               Icon(Icons.settings_backup_restore_rounded,
                   color: Color(0xFF00E676), size: 22),
               SizedBox(width: 8),
-              Text('选择性数据恢复 (导入)',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text('选择性数据恢复 (导入)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1113,13 +1118,16 @@ class _BackupTabState extends State<BackupTab> {
                   ? (val) => setState(() => _impSettings = val ?? false)
                   : null,
               content: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '系统全局参数配置',
-                    style: TextStyle(
-                        color: _parsedBackupData!['global_settings'] == null
-                            ? Colors.grey
-                            : null),
+                  Flexible(
+                    child: Text(
+                      '系统全局参数配置',
+                      style: TextStyle(
+                          color: _parsedBackupData!['global_settings'] == null
+                              ? Colors.grey
+                              : null),
+                    ),
                   ),
                   if (_parsedBackupData!['global_settings'] != null) ...[
                     const SizedBox(width: 4),
@@ -1138,63 +1146,38 @@ class _BackupTabState extends State<BackupTab> {
             const Text('选择导入冲突处理规则：',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             const SizedBox(height: 8),
-            isSmallScreen
-                ? RadioGroup<bool>(
-                    groupValue: _isMergeMode,
-                    onChanged: (v) {
-                      if (v != null) setState(() => _isMergeMode = v);
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            RadioGroup<bool>(
+              groupValue: _isMergeMode,
+              onChanged: (v) {
+                if (v != null) setState(() => _isMergeMode = v);
+              },
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  fluent.RadioButton<bool>(
+                    value: true,
+                    content: Text('合并导入 (保留本地已有基金，增量更新)',
+                        style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
+                  ),
+                  fluent.RadioButton<bool>(
+                    value: false,
+                    content: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        fluent.RadioButton<bool>(
-                          value: true,
-                          content: const Text('合并导入 (保留本地已有基金，增量更新)',
-                              style: TextStyle(fontSize: 11)),
+                        Flexible(
+                          child: Text('覆盖导入 (完全清空以备份文件为准)',
+                              style: TextStyle(fontSize: isSmallScreen ? 11 : 12)),
                         ),
-                        const SizedBox(height: 8),
-                        fluent.RadioButton<bool>(
-                          value: false,
-                          content: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('覆盖导入 (完全清空以备份文件为准)',
-                                  style: TextStyle(fontSize: 11)),
-                              SizedBox(width: 4),
-                              Icon(Icons.report_problem_rounded,
-                                  color: Colors.redAccent, size: 13),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : RadioGroup<bool>(
-                    groupValue: _isMergeMode,
-                    onChanged: (v) {
-                      if (v != null) setState(() => _isMergeMode = v);
-                    },
-                    child: Row(
-                      children: [
-                        fluent.RadioButton<bool>(
-                          value: true,
-                          content: const Text('合并导入 (保留本地已有基金，增量更新)'),
-                        ),
-                        const SizedBox(width: 20),
-                        fluent.RadioButton<bool>(
-                          value: false,
-                          content: const Row(
-                            children: [
-                              Text('覆盖导入 (完全清空以备份文件为准)'),
-                              SizedBox(width: 4),
-                              Icon(Icons.report_problem_rounded,
-                                  color: Colors.redAccent, size: 13),
-                            ],
-                          ),
-                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.report_problem_rounded,
+                            color: Colors.redAccent, size: 13),
                       ],
                     ),
                   ),
+                ],
+              ),
+            ),
             const SizedBox(height: 20),
 
             // 导入提交按钮
@@ -1232,8 +1215,10 @@ class _BackupTabState extends State<BackupTab> {
             children: [
               Icon(Icons.palette_rounded, color: Colors.purpleAccent, size: 22),
               SizedBox(width: 8),
-              Text('界面外观设置',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text('界面外观设置',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1403,6 +1388,8 @@ class _BackupTabState extends State<BackupTab> {
                                     Expanded(
                                       child: Text(
                                         _recommendedPassword,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
@@ -1861,11 +1848,15 @@ class _SyncConflictDialogState extends State<SyncConflictDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${local.name} ($code)',
-                          style: const TextStyle(
-                              fontWeight: fluent.FontWeight.bold, fontSize: 13),
+                        Expanded(
+                          child: Text(
+                            '${local.name} ($code)',
+                            style: const TextStyle(
+                                fontWeight: fluent.FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
@@ -2586,36 +2577,40 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.api_rounded, color: Colors.indigoAccent, size: 22),
-              const SizedBox(width: 8),
-              const Expanded(
+              Icon(Icons.api_rounded, color: Colors.indigoAccent, size: 22),
+              SizedBox(width: 8),
+              Expanded(
                 child: Text(
                   '全网金融数据查询 API 接入与均分管理',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
-              if (_isTesting)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: fluent.ProgressRing(strokeWidth: 2),
-                )
-              else
-                fluent.Button(
-                  onPressed: _runConnectivityTest,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.network_check_rounded, size: 14),
-                      SizedBox(width: 4),
-                      Text('一键全源连通性测试', style: TextStyle(fontSize: 11)),
-                    ],
-                  ),
-                ),
             ],
           ),
+          const SizedBox(height: 10),
+          if (_isTesting)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: fluent.ProgressRing(strokeWidth: 2),
+            )
+          else
+            fluent.Button(
+              onPressed: _runConnectivityTest,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.network_check_rounded, size: 14),
+                  SizedBox(width: 4),
+                  Text(
+                    '一键全源连通性测试',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 8),
           const Text(
             '系统全量金融数据源接入明细：包含 7 大实时估值均分负载均衡数据源、场内行情、历史 K 线、排行榜及 AI 多模态识别接口。点击测试可查看当前网络延迟。',
@@ -2650,11 +2645,13 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
                     children: [
                       Icon(icon, size: 18, color: color),
                       const SizedBox(width: 8),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -2690,7 +2687,13 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
                         }
                       }
 
+                      final screenWidth = MediaQuery.of(context).size.width;
+                      final isSmall = screenWidth < 640;
+
                       return Container(
+                        constraints: BoxConstraints(
+                          maxWidth: isSmall ? screenWidth - 72 : 360,
+                        ),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
@@ -2728,11 +2731,14 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -2819,25 +2825,25 @@ class _AboutCardState extends State<_AboutCard> {
   Future<void> _handleCheckUpdate(BuildContext context) async {
     setState(() => _isChecking = true);
     final updateInfo = await UpdateService.checkUpdate();
-    if (mounted) {
-      setState(() => _isChecking = false);
-      if (updateInfo != null) {
-        await UpdateDialog.show(
-          context,
-          updateInfo: updateInfo,
-          isManualCheck: true,
-        );
-      } else {
-        await fluent.displayInfoBar(
-          context,
-          builder: (context, close) => fluent.InfoBar(
-            title: const Text('检查更新'),
-            content: const Text('无法连接至更新服务，请检查网络连接或稍后重试。'),
-            severity: fluent.InfoBarSeverity.warning,
-            onClose: close,
-          ),
-        );
-      }
+    if (!context.mounted) return;
+    setState(() => _isChecking = false);
+    if (updateInfo != null) {
+      await UpdateDialog.show(
+        context,
+        updateInfo: updateInfo,
+        isManualCheck: true,
+      );
+    } else {
+      if (!context.mounted) return;
+      await fluent.displayInfoBar(
+        context,
+        builder: (context, close) => fluent.InfoBar(
+          title: const Text('检查更新'),
+          content: const Text('无法连接至更新服务，请检查网络连接或稍后重试。'),
+          severity: fluent.InfoBarSeverity.warning,
+          onClose: close,
+        ),
+      );
     }
   }
 
@@ -2879,13 +2885,15 @@ class _AboutCardState extends State<_AboutCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 10,
+                      runSpacing: 4,
                       children: [
                         const Text(
                           'FlFund 基金助手',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
@@ -2955,54 +2963,62 @@ class _AboutCardState extends State<_AboutCard> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              fluent.FilledButton(
-                onPressed: _isChecking ? null : () => _handleCheckUpdate(context),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_isChecking) ...[
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: fluent.ProgressRing(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('正在检测...'),
-                    ] else ...[
-                      const Icon(Icons.system_update_rounded, size: 14),
-                      const SizedBox(width: 6),
-                      const Text('检查更新'),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              fluent.Button(
-                onPressed: () {
-                  fluent.displayInfoBar(
-                    context,
-                    builder: (context, close) => fluent.InfoBar(
-                      title: const Text('系统与环境信息'),
-                      content: Text(
-                        '软件版本: v$_currentVersionStr+$_currentBuildNumber | 平台: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})',
-                      ),
-                      severity: fluent.InfoBarSeverity.info,
-                      onClose: close,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  fluent.FilledButton(
+                    onPressed: _isChecking ? null : () => _handleCheckUpdate(context),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isChecking) ...[
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: fluent.ProgressRing(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('正在检测...'),
+                        ] else ...[
+                          const Icon(Icons.system_update_rounded, size: 14),
+                          const SizedBox(width: 6),
+                          const Text('检查更新'),
+                        ],
+                      ],
                     ),
-                  );
-                },
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.computer_rounded, size: 14),
-                    SizedBox(width: 6),
-                    Text('环境信息'),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  fluent.Button(
+                    onPressed: () {
+                      fluent.displayInfoBar(
+                        context,
+                        builder: (context, close) => fluent.InfoBar(
+                          title: const Text('系统与环境信息'),
+                          content: Text(
+                            '软件版本: v$_currentVersionStr+$_currentBuildNumber | 平台: ${Platform.operatingSystem} (${Platform.operatingSystemVersion})',
+                          ),
+                          severity: fluent.InfoBarSeverity.info,
+                          onClose: close,
+                        ),
+                      );
+                    },
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.computer_rounded, size: 14),
+                        SizedBox(width: 6),
+                        Text('环境信息'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const Spacer(),
               const Text(
                 '© 2026 FlFund | MIT License',
                 style: TextStyle(fontSize: 11, color: Colors.grey),

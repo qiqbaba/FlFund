@@ -1248,7 +1248,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                               Expanded(
                                                 child: Text(
                                                   item['name'],
-                                                  style: TextStyle(
+                                                  style: const TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 12,
                                                     decoration: TextDecoration

@@ -160,34 +160,37 @@ class _FundAppState extends State<FundApp> {
         }),
         scaffoldBackgroundColor: const Color(0xFFF9FBFB),
         navigationPaneTheme: fluent.NavigationPaneThemeData(
-          unselectedTextStyle: fluent.WidgetStateProperty.all(
-            const TextStyle(
+          unselectedTextStyle: fluent.WidgetStateProperty.resolveWith((states) {
+            return const TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.normal,
               height: 1.25,
               letterSpacing: 0.2,
+              color: Colors.black87,
               fontFamilyFallback: [
                 'Microsoft YaHei',
                 'PingFang SC',
                 'SimHei',
                 'sans-serif',
               ],
-            ),
-          ),
-          selectedTextStyle: fluent.WidgetStateProperty.all(
-            const TextStyle(
+            );
+          }),
+          selectedTextStyle: fluent.WidgetStateProperty.resolveWith((states) {
+            return const TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
               height: 1.25,
               letterSpacing: 0.2,
+              color: Colors.black,
               fontFamilyFallback: [
                 'Microsoft YaHei',
                 'PingFang SC',
                 'SimHei',
                 'sans-serif',
               ],
-            ),
-          ),
+            );
+          }),
+          unselectedIconColor: fluent.WidgetStateProperty.all(Colors.black87),
         ),
       ),
       // 深色主题配色
@@ -205,34 +208,37 @@ class _FundAppState extends State<FundApp> {
         }),
         scaffoldBackgroundColor: const Color(0xFF1B2A32),
         navigationPaneTheme: fluent.NavigationPaneThemeData(
-          unselectedTextStyle: fluent.WidgetStateProperty.all(
-            const TextStyle(
+          unselectedTextStyle: fluent.WidgetStateProperty.resolveWith((states) {
+            return const TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.normal,
               height: 1.25,
               letterSpacing: 0.2,
+              color: Color(0xDDFFFFFF),
               fontFamilyFallback: [
                 'Microsoft YaHei',
                 'PingFang SC',
                 'SimHei',
                 'sans-serif',
               ],
-            ),
-          ),
-          selectedTextStyle: fluent.WidgetStateProperty.all(
-            const TextStyle(
+            );
+          }),
+          selectedTextStyle: fluent.WidgetStateProperty.resolveWith((states) {
+            return const TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
               height: 1.25,
               letterSpacing: 0.2,
+              color: Colors.white,
               fontFamilyFallback: [
                 'Microsoft YaHei',
                 'PingFang SC',
                 'SimHei',
                 'sans-serif',
               ],
-            ),
-          ),
+            );
+          }),
+          unselectedIconColor: fluent.WidgetStateProperty.all(const Color(0xDDFFFFFF)),
         ),
       ),
       home: _isInitComplete

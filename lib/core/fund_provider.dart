@@ -1720,7 +1720,7 @@ class FundProvider extends ChangeNotifier {
                 }
               } catch (e) {
                 final fundName = fundModel.name.isNotEmpty ? '${fundModel.name} ' : '';
-                debugPrint('获取关联估值失败 ${fundName}(${fundModel.code}): $e');
+                debugPrint('获取关联估值失败 $fundName(${fundModel.code}): $e');
               }
             }());
           }

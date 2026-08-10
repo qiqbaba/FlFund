@@ -3,12 +3,15 @@ ext {
         compileSdkVersion: 36,
         minSdkVersion: 21,
         targetSdkVersion: 36,
-        ndkVersion: "23.1.7779620"
+        ndkVersion: "28.2.13676358"
     ]
 }
 
 allprojects {
     repositories {
+        maven { url 'https://mirrors.tencent.com/nexus/repository/maven-public/' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
         google()
         mavenCentral()
     }
@@ -27,22 +30,30 @@ tasks.register("clean", Delete) {
 }
 
 subprojects {
-    ext.kotlin_version = '2.2.0'
+    ext.kotlin_version = '2.2.20'
     buildscript {
         repositories {
+            maven { url 'https://mirrors.tencent.com/nexus/repository/maven-public/' }
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/public' }
             google()
             mavenCentral()
         }
         configurations.all {
             resolutionStrategy.eachDependency { details ->
                 if (details.requested.group == 'org.jetbrains.kotlin') {
-                    details.useVersion '2.2.0'
+                    details.useVersion '2.2.20'
                 }
             }
         }
     }
 
     def configureProject = { proj ->
+        if (proj.extensions.findByName("android") != null) {
+            try {
+                proj.android.ndkVersion = "28.2.13676358"
+            } catch (Exception e) {}
+        }
         if (proj.name == "app") {
             return
         }

@@ -66,6 +66,10 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     if (_isSyncing) return;
     if (_leftVerticalScrollController.hasClients &&
         _rightVerticalScrollController.hasClients) {
+      if (_leftVerticalScrollController.offset <= 0 ||
+          _rightVerticalScrollController.offset <= 0) {
+        return;
+      }
       if (_leftVerticalScrollController.offset !=
           _rightVerticalScrollController.offset) {
         _isSyncing = true;
@@ -80,6 +84,10 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     if (_isSyncing) return;
     if (_leftVerticalScrollController.hasClients &&
         _rightVerticalScrollController.hasClients) {
+      if (_leftVerticalScrollController.offset <= 0 ||
+          _rightVerticalScrollController.offset <= 0) {
+        return;
+      }
       if (_rightVerticalScrollController.offset !=
           _leftVerticalScrollController.offset) {
         _isSyncing = true;
@@ -653,7 +661,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     final Widget headerWidget = isSmallScreen
         ? const SizedBox.shrink()
         : Padding(
-            padding: const EdgeInsets.only(bottom: 12.0),
+            padding: const EdgeInsets.only(bottom: 4.0),
             child: Row(
               mainAxisAlignment: fluent.MainAxisAlignment.end,
               children: [
@@ -707,10 +715,10 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                   )
                 : Padding(
                     padding: EdgeInsets.only(
-                        left: 16.0,
-                        right: 16.0,
-                        top: isSmallScreen ? 0.0 : 12.0,
-                        bottom: 16.0),
+                        left: 12.0,
+                        right: 12.0,
+                        top: isSmallScreen ? 4.0 : 6.0,
+                        bottom: 8.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -771,7 +779,8 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                     col.title,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 12),
+                                        fontSize: 11.5,
+                                        height: 1.1),
                                     textAlign: col.alignLeft
                                         ? TextAlign.left
                                         : TextAlign.center,
@@ -883,7 +892,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                             child: Column(
                                               children: [
                                                 Container(
-                                                  height: 55,
+                                                  height: 30,
                                                   decoration: BoxDecoration(
                                                     color: isDark
                                                         ? Colors.white
@@ -999,7 +1008,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                               child: Column(
                                                 children: [
                                                   Container(
-                                                    height: 55,
+                                                    height: 30,
                                                     decoration: BoxDecoration(
                                                       color: isDark
                                                           ? Colors.white
@@ -1087,7 +1096,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                         child: Column(
                                           children: [
                                             Container(
-                                              height: 55,
+                                              height: 30,
                                               decoration: BoxDecoration(
                                                 color: isDark
                                                     ? Colors.white

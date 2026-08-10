@@ -623,10 +623,12 @@ class GAOptimizer {
       Individual tournamentSelect() {
         final indices = List.generate(popSize, (i) => i)..shuffle(random);
         Individual best = population[indices[0]];
-        if (population[indices[1]].fitness!.compareTo(best.fitness!) > 0)
+        if (population[indices[1]].fitness!.compareTo(best.fitness!) > 0) {
           best = population[indices[1]];
-        if (population[indices[2]].fitness!.compareTo(best.fitness!) > 0)
+        }
+        if (population[indices[2]].fitness!.compareTo(best.fitness!) > 0) {
           best = population[indices[2]];
+        }
         return best;
       }
 

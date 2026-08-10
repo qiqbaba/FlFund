@@ -1433,7 +1433,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                 children: [
                   // 表头
                   Container(
-                    height: 55,
+                    height: 30,
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.06)
                         : Colors.black.withValues(alpha: 0.04),
@@ -2217,7 +2217,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                   children: [
                     // 表头
                     Container(
-                      height: 55,
+                      height: 30,
                       color: isDark
                           ? Colors.white.withValues(alpha: 0.06)
                           : Colors.black.withValues(alpha: 0.04),
