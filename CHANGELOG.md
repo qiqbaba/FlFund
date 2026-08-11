@@ -1,5 +1,10 @@
 # 更新日志
 
+## 1.8.14
+
+### 修复
+- CI/CD 构建配置：清理 android/gradle.properties 中硬编码的本地 JDK 路径，修复 GitHub Actions 环境下构建 Android Release APK 报 Java home 错误的问题
+
 ## 1.8.13
 
 ### 优化
