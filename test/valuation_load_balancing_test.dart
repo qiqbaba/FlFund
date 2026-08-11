@@ -9,8 +9,8 @@ void main() {
   group('Valuation Load Balancing & Fallback Tests', () {
     final gateway = FundDataGateway();
 
-    test('valuationSourceCount returns 7', () {
-      expect(gateway.valuationSourceCount, equals(7));
+    test('valuationSourceCount returns 1', () {
+      expect(gateway.valuationSourceCount, equals(1));
     });
 
     test('preferredSourceIndex distributes requests evenly', () async {

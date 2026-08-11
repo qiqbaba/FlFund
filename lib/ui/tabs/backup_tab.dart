@@ -2335,60 +2335,25 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
 
   final List<Map<String, dynamic>> _apiCategories = [
     {
-      'title': '盘中实时估值 (7 大源均分负载均衡调度)',
+      'title': '盘中实时估值 (新浪财经极速盘中估值)',
       'icon': Icons.bolt_rounded,
       'color': Colors.amber,
       'description':
-          '批量刷新自选与看板估值时，Worker 线程池按 (i % 7) 均匀打散并发调至 7 大独立源，单源失败自动顺延降级。',
+          '盘中实时估值由新浪财经 (fu行情) 极速接口提供更新，原生支持多基金一次性批量并发与单只抓取，稳定可靠。',
       'apis': [
         {
-          'id': 'EM_WEB',
-          'name': '天天基金 (网页 JS)',
-          'url': 'https://fundgz.1234567.com.cn/js/000001.js',
-          'headers': {'Referer': 'https://fund.eastmoney.com/'},
-          'badge': '均分源 1',
-        },
-        {
-          'id': 'EM_MOB',
-          'name': '天天基金 (手机 WAP)',
-          'url':
-              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationDetail?FCODE=000001&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0',
-          'badge': '均分源 2',
-        },
-        {
-          'id': 'TX_GZ',
-          'name': '腾讯财经 (jj行情)',
-          'url': 'https://qt.gtimg.cn/q=jj000001',
-          'badge': '均分源 3',
+          'id': 'SINA_BATCH_GZ',
+          'name': '新浪财经 (极速批量估值)',
+          'url': 'https://hq.sinajs.cn/list=fu_000001,fu_005827,fu_161725,fu_007713',
+          'headers': {'Referer': 'https://finance.sina.com.cn'},
+          'badge': '批量极速源',
         },
         {
           'id': 'SINA_GZ',
-          'name': '新浪财经 (fu行情)',
+          'name': '新浪财经 (fu单只行情)',
           'url': 'https://hq.sinajs.cn/list=fu_000001',
           'headers': {'Referer': 'https://finance.sina.com.cn'},
-          'badge': '均分源 4',
-        },
-        {
-          'id': 'DJ_GZ',
-          'name': '蛋卷基金 (雪球估值)',
-          'url': 'https://danjuanapp.com/djapi/fund/estimate/000001',
-          'headers': {'Referer': 'https://danjuanfunds.com/'},
-          'badge': '均分源 5',
-        },
-        {
-          'id': 'HOWBUY_GZ',
-          'name': '好买基金 (盘中估值)',
-          'url':
-              'https://m.howbuy.com/fund/ajax/guzhi/getguzhi.htm?fundcode=000001',
-          'headers': {'Referer': 'https://m.howbuy.com/'},
-          'badge': '均分源 6',
-        },
-        {
-          'id': 'JQKA_GZ',
-          'name': '同花顺 (爱基金)',
-          'url': 'http://fund.10jqka.com.cn/000001/json/jsjz.json',
-          'headers': {'Referer': 'http://fund.10jqka.com.cn/'},
-          'badge': '均分源 7',
+          'badge': '单只估值源',
         },
       ]
     },
@@ -2613,7 +2578,7 @@ class _ApiManagementCardState extends State<_ApiManagementCard> {
             ),
           const SizedBox(height: 8),
           const Text(
-            '系统全量金融数据源接入明细：包含 7 大实时估值均分负载均衡数据源、场内行情、历史 K 线、排行榜及 AI 多模态识别接口。点击测试可查看当前网络延迟。',
+            '系统全量金融数据源接入明细：包含盘中实时估值、场内行情、历史 K 线、排行榜及 AI 多模态识别接口。点击测试可查看当前网络延迟。',
             style: TextStyle(color: Colors.grey, fontSize: 12),
           ),
           const SizedBox(height: 16),

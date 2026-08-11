@@ -1689,37 +1689,43 @@ class FundProvider extends ChangeNotifier {
             valuationDetailTasks.add(() async {
               await loadHistoryAndCalculateForModel(fundModel);
               try {
-                final gateway = FundDataGateway();
-                final val = await gateway.fetchValuation(fundModel.code,
-                    name: fundModel.name,
-                    sector: fundModel.sector,
-                    preferredSourceIndex: preferredSourceIndex);
-                if (val != null) {
+                // 优先检查全量批量估值结果
+                final batchVals =
+                    await gateway.fetchValuationBatch([fundModel.code]);
+                if (batchVals.containsKey(fundModel.code)) {
+                  final val = batchVals[fundModel.code]!;
                   fundModel.gsz = val['gsz']?.toString() ?? fundModel.gsz;
                   fundModel.gszzl =
                       (val['gszzl']?.toString() ?? fundModel.gszzl)
                           .replaceAll('%', '');
                   fundModel.jzrq = val['jzrq']?.toString() ?? fundModel.jzrq;
-                  String srcName = val['source']?.toString() ?? '';
-                  if (srcName == 'EastMoneyGz') {
-                    srcName = '天天基金(网页)';
-                  } else if (srcName == 'EastMoneyMobileGz' ||
-                      srcName == 'EastMoneyMobile') {
-                    srcName = '天天基金(手机)';
-                  } else if (srcName == 'EastMoneyWeb') {
-                    srcName = '天天基金(历史)';
-                  } else if (srcName == 'TencentGz') {
-                    srcName = '腾讯财经';
-                  } else if (srcName == 'SinaGz') {
-                    srcName = '新浪财经';
+                  fundModel.gztime = '${val['gztime']} [新浪极速批量]';
+                } else {
+                  final val = await gateway.fetchValuation(fundModel.code,
+                      name: fundModel.name,
+                      sector: fundModel.sector,
+                      preferredSourceIndex: preferredSourceIndex);
+                  if (val != null) {
+                    fundModel.gsz = val['gsz']?.toString() ?? fundModel.gsz;
+                    fundModel.gszzl =
+                        (val['gszzl']?.toString() ?? fundModel.gszzl)
+                            .replaceAll('%', '');
+                    fundModel.jzrq = val['jzrq']?.toString() ?? fundModel.jzrq;
+                    String srcName = val['source']?.toString() ?? '新浪财经';
+                    if (srcName == 'SinaGz' || srcName == 'SinaGzBatch') {
+                      srcName = '新浪财经';
+                    } else if (srcName == 'ShadowETF') {
+                      srcName = '场内影子估值';
+                    }
+                    if (val['is_proxy'] == true) {
+                      srcName = '$srcName(代理)';
+                    }
+                    fundModel.gztime = '${val['gztime']} [$srcName]';
                   }
-                  if (val['is_proxy'] == true) {
-                    srcName = '$srcName(代理)';
-                  }
-                  fundModel.gztime = '${val['gztime']} [$srcName]';
                 }
               } catch (e) {
-                final fundName = fundModel.name.isNotEmpty ? '${fundModel.name} ' : '';
+                final fundName =
+                    fundModel.name.isNotEmpty ? '${fundModel.name} ' : '';
                 debugPrint('获取关联估值失败 $fundName(${fundModel.code}): $e');
               }
             }());

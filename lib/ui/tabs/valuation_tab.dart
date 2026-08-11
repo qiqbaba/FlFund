@@ -9,7 +9,8 @@ import 'package:flutter/material.dart'
         Theme,
         Brightness,
         RefreshIndicator,
-        AlwaysScrollableScrollPhysics;
+        AlwaysScrollableScrollPhysics,
+        BouncingScrollPhysics;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -200,8 +201,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowScrollController == _lowLeftVerticalController) {
         if (_lowLeftVerticalController.hasClients &&
             _lowRightVerticalController.hasClients) {
-          if (_lowLeftVerticalController.offset <= 0 ||
-              _lowRightVerticalController.offset <= 0) {
+          if (_lowLeftVerticalController.offset == 0 &&
+              _lowRightVerticalController.offset == 0) {
             return;
           }
           if (_lowLeftVerticalController.offset !=
@@ -224,8 +225,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowScrollController == _lowRightVerticalController) {
         if (_lowLeftVerticalController.hasClients &&
             _lowRightVerticalController.hasClients) {
-          if (_lowLeftVerticalController.offset <= 0 ||
-              _lowRightVerticalController.offset <= 0) {
+          if (_lowLeftVerticalController.offset == 0 &&
+              _lowRightVerticalController.offset == 0) {
             return;
           }
           if (_lowRightVerticalController.offset !=
@@ -248,8 +249,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighScrollController == _highLeftVerticalController) {
         if (_highLeftVerticalController.hasClients &&
             _highRightVerticalController.hasClients) {
-          if (_highLeftVerticalController.offset <= 0 ||
-              _highRightVerticalController.offset <= 0) {
+          if (_highLeftVerticalController.offset == 0 &&
+              _highRightVerticalController.offset == 0) {
             return;
           }
           if (_highLeftVerticalController.offset !=
@@ -272,8 +273,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighScrollController == _highRightVerticalController) {
         if (_highLeftVerticalController.hasClients &&
             _highRightVerticalController.hasClients) {
-          if (_highLeftVerticalController.offset <= 0 ||
-              _highRightVerticalController.offset <= 0) {
+          if (_highLeftVerticalController.offset == 0 &&
+              _highRightVerticalController.offset == 0) {
             return;
           }
           if (_highRightVerticalController.offset !=
@@ -298,8 +299,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowestScrollController == _lowestLeftVerticalController) {
         if (_lowestLeftVerticalController.hasClients &&
             _lowestRightVerticalController.hasClients) {
-          if (_lowestLeftVerticalController.offset <= 0 ||
-              _lowestRightVerticalController.offset <= 0) {
+          if (_lowestLeftVerticalController.offset == 0 &&
+              _lowestRightVerticalController.offset == 0) {
             return;
           }
           if (_lowestLeftVerticalController.offset !=
@@ -322,8 +323,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeLowestScrollController == _lowestRightVerticalController) {
         if (_lowestLeftVerticalController.hasClients &&
             _lowestRightVerticalController.hasClients) {
-          if (_lowestLeftVerticalController.offset <= 0 ||
-              _lowestRightVerticalController.offset <= 0) {
+          if (_lowestLeftVerticalController.offset == 0 &&
+              _lowestRightVerticalController.offset == 0) {
             return;
           }
           if (_lowestRightVerticalController.offset !=
@@ -348,8 +349,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighestScrollController == _highestLeftVerticalController) {
         if (_highestLeftVerticalController.hasClients &&
             _highestRightVerticalController.hasClients) {
-          if (_highestLeftVerticalController.offset <= 0 ||
-              _highestRightVerticalController.offset <= 0) {
+          if (_highestLeftVerticalController.offset == 0 &&
+              _highestRightVerticalController.offset == 0) {
             return;
           }
           if (_highestLeftVerticalController.offset !=
@@ -372,8 +373,8 @@ class _ValuationTabState extends State<ValuationTab> {
       if (_activeHighestScrollController == _highestRightVerticalController) {
         if (_highestLeftVerticalController.hasClients &&
             _highestRightVerticalController.hasClients) {
-          if (_highestLeftVerticalController.offset <= 0 ||
-              _highestRightVerticalController.offset <= 0) {
+          if (_highestLeftVerticalController.offset == 0 &&
+              _highestRightVerticalController.offset == 0) {
             return;
           }
           if (_highestRightVerticalController.offset !=
@@ -1596,7 +1597,7 @@ class _ValuationTabState extends State<ValuationTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 30,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -1624,7 +1625,8 @@ class _ValuationTabState extends State<ValuationTab> {
                         child: ListView.builder(
                           padding: EdgeInsets.zero,
                           controller: leftVerticalController,
-                          physics: const AlwaysScrollableScrollPhysics(),
+                          physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics()),
                           itemCount: sortedItems.length,
                           itemBuilder: (context, idx) {
                             final item = sortedItems[idx];
@@ -1654,7 +1656,7 @@ class _ValuationTabState extends State<ValuationTab> {
                       child: Column(
                         children: [
                           Container(
-                            height: 30,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: isDark
                                   ? Colors.white.withValues(alpha: 0.06)
@@ -1682,7 +1684,8 @@ class _ValuationTabState extends State<ValuationTab> {
                                   padding: EdgeInsets.zero,
                                   controller: rightVerticalController,
                                   physics:
-                                      const AlwaysScrollableScrollPhysics(),
+                                      const AlwaysScrollableScrollPhysics(
+                                          parent: BouncingScrollPhysics()),
                                   itemCount: sortedItems.length,
                                   itemBuilder: (context, idx) {
                                     final item = sortedItems[idx];
@@ -1738,7 +1741,7 @@ class _ValuationTabState extends State<ValuationTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 30,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -1762,7 +1765,8 @@ class _ValuationTabState extends State<ValuationTab> {
                           child: ListView.builder(
                             padding: EdgeInsets.zero,
                             controller: rightVerticalController,
-                            physics: const AlwaysScrollableScrollPhysics(),
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics()),
                             itemCount: sortedItems.length,
                             itemBuilder: (context, idx) {
                               final item = sortedItems[idx];
@@ -2109,6 +2113,11 @@ class _ValuationTabState extends State<ValuationTab> {
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (fundProvider.isRefreshing)
+            const SizedBox(
+              height: 4.5,
+              child: fluent.ProgressBar(),
+            ),
           if (isSmallScreen)
             MobileHeader(
               title: '估值雷达',

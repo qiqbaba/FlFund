@@ -10,7 +10,8 @@ import 'package:flutter/material.dart'
         Theme,
         Brightness,
         RefreshIndicator,
-        AlwaysScrollableScrollPhysics;
+        AlwaysScrollableScrollPhysics,
+        BouncingScrollPhysics;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -77,8 +78,8 @@ class _HoldingTabState extends State<HoldingTab> {
     if (_activeScrollController == _leftVerticalScrollController) {
       if (_leftVerticalScrollController.hasClients &&
           _rightVerticalScrollController.hasClients) {
-        if (_leftVerticalScrollController.offset <= 0 ||
-            _rightVerticalScrollController.offset <= 0) {
+        if (_leftVerticalScrollController.offset == 0 &&
+            _rightVerticalScrollController.offset == 0) {
           return;
         }
         if ((_leftVerticalScrollController.offset -
@@ -105,8 +106,8 @@ class _HoldingTabState extends State<HoldingTab> {
     if (_activeScrollController == _rightVerticalScrollController) {
       if (_leftVerticalScrollController.hasClients &&
           _rightVerticalScrollController.hasClients) {
-        if (_leftVerticalScrollController.offset <= 0 ||
-            _rightVerticalScrollController.offset <= 0) {
+        if (_leftVerticalScrollController.offset == 0 &&
+            _rightVerticalScrollController.offset == 0) {
           return;
         }
         if ((_rightVerticalScrollController.offset -
@@ -998,6 +999,11 @@ class _HoldingTabState extends State<HoldingTab> {
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (fundProvider.isRefreshing)
+            const SizedBox(
+              height: 4.5,
+              child: fluent.ProgressBar(),
+            ),
           if (isSmallScreen)
             MobileHeader(
               title: '持有基金',
@@ -1209,7 +1215,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                             child: Column(
                                               children: [
                                                 Container(
-                                                  height: 30,
+                                                  height: 40,
                                                   decoration: BoxDecoration(
                                                     color: isDark
                                                         ? Colors.white
@@ -1253,7 +1259,9 @@ class _HoldingTabState extends State<HoldingTab> {
                                                       controller:
                                                           _leftVerticalScrollController,
                                                       physics:
-                                                          const AlwaysScrollableScrollPhysics(),
+                                                          const AlwaysScrollableScrollPhysics(
+                                                              parent:
+                                                                  BouncingScrollPhysics()),
                                                       itemCount:
                                                           displayList.length,
                                                       itemBuilder:
@@ -1325,7 +1333,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                               child: Column(
                                                 children: [
                                                   Container(
-                                                    height: 30,
+                                                    height: 40,
                                                     decoration: BoxDecoration(
                                                       color: isDark
                                                           ? Colors.white
@@ -1367,7 +1375,9 @@ class _HoldingTabState extends State<HoldingTab> {
                                                           controller:
                                                               _rightVerticalScrollController,
                                                           physics:
-                                                              const AlwaysScrollableScrollPhysics(),
+                                                              const AlwaysScrollableScrollPhysics(
+                                                                  parent:
+                                                                      BouncingScrollPhysics()),
                                                           itemCount: displayList
                                                               .length,
                                                           itemBuilder:
@@ -1413,7 +1423,7 @@ class _HoldingTabState extends State<HoldingTab> {
                                         child: Column(
                                           children: [
                                             Container(
-                                              height: 30,
+                                              height: 40,
                                               decoration: BoxDecoration(
                                                 color: isDark
                                                     ? Colors.white
@@ -1449,7 +1459,9 @@ class _HoldingTabState extends State<HoldingTab> {
                                                     controller:
                                                         _rightVerticalScrollController,
                                                     physics:
-                                                        const AlwaysScrollableScrollPhysics(),
+                                                        const AlwaysScrollableScrollPhysics(
+                                                            parent:
+                                                                BouncingScrollPhysics()),
                                                     itemCount:
                                                         displayList.length,
                                                     itemBuilder:

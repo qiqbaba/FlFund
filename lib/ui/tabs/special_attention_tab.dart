@@ -10,7 +10,8 @@ import 'package:flutter/material.dart'
         Theme,
         Brightness,
         RefreshIndicator,
-        AlwaysScrollableScrollPhysics;
+        AlwaysScrollableScrollPhysics,
+        BouncingScrollPhysics;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../../core/fund_provider.dart';
@@ -66,8 +67,8 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     if (_isSyncing) return;
     if (_leftVerticalScrollController.hasClients &&
         _rightVerticalScrollController.hasClients) {
-      if (_leftVerticalScrollController.offset <= 0 ||
-          _rightVerticalScrollController.offset <= 0) {
+      if (_leftVerticalScrollController.offset == 0 &&
+          _rightVerticalScrollController.offset == 0) {
         return;
       }
       if (_leftVerticalScrollController.offset !=
@@ -84,8 +85,8 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     if (_isSyncing) return;
     if (_leftVerticalScrollController.hasClients &&
         _rightVerticalScrollController.hasClients) {
-      if (_leftVerticalScrollController.offset <= 0 ||
-          _rightVerticalScrollController.offset <= 0) {
+      if (_leftVerticalScrollController.offset == 0 &&
+          _rightVerticalScrollController.offset == 0) {
         return;
       }
       if (_rightVerticalScrollController.offset !=
@@ -684,6 +685,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (fundProvider.isRefreshing)
+            const SizedBox(
+              height: 4.5,
+              child: fluent.ProgressBar(),
+            ),
           if (isSmallScreen)
             MobileHeader(
               title: '特别关注',
@@ -892,7 +898,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                             child: Column(
                                               children: [
                                                 Container(
-                                                  height: 30,
+                                                  height: 40,
                                                   decoration: BoxDecoration(
                                                     color: isDark
                                                         ? Colors.white
@@ -935,8 +941,10 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                       padding: EdgeInsets.zero,
                                                       controller:
                                                           _leftVerticalScrollController,
-                                                      physics:
-                                                          const AlwaysScrollableScrollPhysics(),
+                                                       physics:
+                                                           const AlwaysScrollableScrollPhysics(
+                                                               parent:
+                                                                   BouncingScrollPhysics()),
                                                       itemCount:
                                                           displayList.length,
                                                       itemBuilder:
@@ -1008,7 +1016,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                               child: Column(
                                                 children: [
                                                   Container(
-                                                    height: 30,
+                                                    height: 40,
                                                     decoration: BoxDecoration(
                                                       color: isDark
                                                           ? Colors.white
@@ -1050,7 +1058,9 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                           controller:
                                                               _rightVerticalScrollController,
                                                           physics:
-                                                              const AlwaysScrollableScrollPhysics(),
+                                                               const AlwaysScrollableScrollPhysics(
+                                                                   parent:
+                                                                       BouncingScrollPhysics()),
                                                           itemCount: displayList
                                                               .length,
                                                           itemBuilder:
@@ -1096,7 +1106,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                         child: Column(
                                           children: [
                                             Container(
-                                              height: 30,
+                                              height: 40,
                                               decoration: BoxDecoration(
                                                 color: isDark
                                                     ? Colors.white
@@ -1132,7 +1142,9 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                     controller:
                                                         _rightVerticalScrollController,
                                                     physics:
-                                                        const AlwaysScrollableScrollPhysics(),
+                                                         const AlwaysScrollableScrollPhysics(
+                                                             parent:
+                                                                 BouncingScrollPhysics()),
                                                     itemCount:
                                                         displayList.length,
                                                     itemBuilder:

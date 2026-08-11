@@ -361,8 +361,8 @@ class CycleBoardTab extends StatelessWidget {
                               Expanded(
                                 child: fluent.Tooltip(
                                   message: model != null
-                                      ? '估值来源: ${model.source.isNotEmpty ? model.source : "天天基金"}\n计算基准: ${model.detrendedPct != null ? "去趋势百分位" : "全量历史百分位"}\n历史样本: ${model.dates.length}个交易日'
-                                      : '数据来源: 天天基金\n计算基准: 默认全量历史百分位\n提示: 关注该基金后可加载完整历史数据',
+                                      ? '估值来源: ${model.source.isNotEmpty ? model.source : "新浪财经"}\n计算基准: ${model.detrendedPct != null ? "去趋势百分位" : "全量历史百分位"}\n历史样本: ${model.dates.length}个交易日'
+                                      : '数据来源: 新浪财经\n计算基准: 默认全量历史百分位\n提示: 关注该基金后可加载完整历史数据',
                                   useMousePosition: true,
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(5),

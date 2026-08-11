@@ -9,7 +9,8 @@ import 'package:flutter/material.dart'
         Theme,
         Brightness,
         RefreshIndicator,
-        AlwaysScrollableScrollPhysics;
+        AlwaysScrollableScrollPhysics,
+        BouncingScrollPhysics;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../../core/fund_provider.dart';
@@ -54,8 +55,8 @@ class _RankingTabState extends State<RankingTab> {
     _topLeftVerticalController.addListener(() {
       if (_topLeftVerticalController.hasClients &&
           _topRightVerticalController.hasClients) {
-        if (_topLeftVerticalController.offset <= 0 ||
-            _topRightVerticalController.offset <= 0) {
+        if (_topLeftVerticalController.offset == 0 &&
+            _topRightVerticalController.offset == 0) {
           return;
         }
         if (_topLeftVerticalController.offset !=
@@ -67,8 +68,8 @@ class _RankingTabState extends State<RankingTab> {
     _topRightVerticalController.addListener(() {
       if (_topLeftVerticalController.hasClients &&
           _topRightVerticalController.hasClients) {
-        if (_topLeftVerticalController.offset <= 0 ||
-            _topRightVerticalController.offset <= 0) {
+        if (_topLeftVerticalController.offset == 0 &&
+            _topRightVerticalController.offset == 0) {
           return;
         }
         if (_topRightVerticalController.offset !=
@@ -80,8 +81,8 @@ class _RankingTabState extends State<RankingTab> {
     _botLeftVerticalController.addListener(() {
       if (_botLeftVerticalController.hasClients &&
           _botRightVerticalController.hasClients) {
-        if (_botLeftVerticalController.offset <= 0 ||
-            _botRightVerticalController.offset <= 0) {
+        if (_botLeftVerticalController.offset == 0 &&
+            _botRightVerticalController.offset == 0) {
           return;
         }
         if (_botLeftVerticalController.offset !=
@@ -93,8 +94,8 @@ class _RankingTabState extends State<RankingTab> {
     _botRightVerticalController.addListener(() {
       if (_botRightVerticalController.hasClients &&
           _botLeftVerticalController.hasClients) {
-        if (_botLeftVerticalController.offset <= 0 ||
-            _botRightVerticalController.offset <= 0) {
+        if (_botLeftVerticalController.offset == 0 &&
+            _botRightVerticalController.offset == 0) {
           return;
         }
         if (_botRightVerticalController.offset !=
@@ -1119,7 +1120,7 @@ class _RankingTabState extends State<RankingTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 30,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -1147,7 +1148,8 @@ class _RankingTabState extends State<RankingTab> {
                         child: ListView.builder(
                           padding: EdgeInsets.zero,
                           controller: leftVerticalController,
-                          physics: const AlwaysScrollableScrollPhysics(),
+                          physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics()),
                           itemCount: filteredList.length,
                           itemBuilder: (context, idx) {
                             final model = filteredList[idx];
@@ -1177,7 +1179,7 @@ class _RankingTabState extends State<RankingTab> {
                       child: Column(
                         children: [
                           Container(
-                            height: 30,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: isDark
                                   ? Colors.white.withValues(alpha: 0.06)
@@ -1206,7 +1208,8 @@ class _RankingTabState extends State<RankingTab> {
                                   padding: EdgeInsets.zero,
                                   controller: rightVerticalController,
                                   physics:
-                                      const AlwaysScrollableScrollPhysics(),
+                                      const AlwaysScrollableScrollPhysics(
+                                          parent: BouncingScrollPhysics()),
                                   itemCount: filteredList.length,
                                   itemBuilder: (context, idx) {
                                     final model = filteredList[idx];
@@ -1262,7 +1265,7 @@ class _RankingTabState extends State<RankingTab> {
                 child: Column(
                   children: [
                     Container(
-                      height: 30,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.06)
@@ -1286,7 +1289,8 @@ class _RankingTabState extends State<RankingTab> {
                           child: ListView.builder(
                             padding: EdgeInsets.zero,
                             controller: rightVerticalController,
-                            physics: const AlwaysScrollableScrollPhysics(),
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics()),
                             itemCount: filteredList.length,
                             itemBuilder: (context, idx) {
                               final model = filteredList[idx];
@@ -1500,6 +1504,11 @@ class _RankingTabState extends State<RankingTab> {
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (fundProvider.isRefreshing)
+            const SizedBox(
+              height: 4.5,
+              child: fluent.ProgressBar(),
+            ),
           if (isSmallScreen)
             MobileHeader(
               title: 'ETF涨跌榜',

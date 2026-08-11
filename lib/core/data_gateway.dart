@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -41,7 +40,6 @@ class FundDataGateway {
     const trustedHosts = {
       '1234567.com.cn',
       'eastmoney.com',
-      'fundgz.1234567.com.cn',
       'fundmobapi.eastmoney.com',
       'fundf10.eastmoney.com',
       'api.fund.eastmoney.com',
@@ -58,6 +56,7 @@ class FundDataGateway {
       createHttpClient: () {
         final client = HttpClient();
         client.idleTimeout = const Duration(seconds: 3);
+        client.findProxy = (uri) => 'DIRECT';
         client.badCertificateCallback =
             (X509Certificate cert, String host, int port) {
           return trustedHosts
@@ -318,7 +317,7 @@ class FundDataGateway {
     '015693': '160625', // 鹏华中证800证券保险C -> 映射为A类(160625)抓取估值
   };
 
-  int get valuationSourceCount => 7;
+  int get valuationSourceCount => 1;
 
   /// 判断基金是否属于已知无盘中实时估值的品种（如货币基金、理财基金、现金管理、同业存单等）
   static bool isNoLiveValuationFund(String code, {String? name, String? sector}) {
@@ -341,6 +340,76 @@ class FundDataGateway {
         s.contains('货币') ||
         s.contains('理财') ||
         s.contains('现金管理');
+  }
+
+  /// 批量获取多只基金的盘中实时估值 (基于新浪财经极速批量接口 fu_code1,fu_code2...)
+  Future<Map<String, Map<String, dynamic>>> fetchValuationBatch(
+      List<String> codes) async {
+    final Map<String, Map<String, dynamic>> results = {};
+    final validCodes = codes
+        .where((c) => c.isNotEmpty && !isNoLiveValuationFund(c))
+        .toSet()
+        .toList();
+    if (validCodes.isEmpty) return results;
+
+    const chunkSize = 50;
+    for (int i = 0; i < validCodes.length; i += chunkSize) {
+      final chunk = validCodes.sublist(
+          i, i + chunkSize > validCodes.length ? validCodes.length : i + chunkSize);
+      final listParam = chunk.map((c) => 'fu_$c').join(',');
+      final url = 'https://hq.sinajs.cn/list=$listParam';
+
+      try {
+        final response = await _dio.get(
+          url,
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {
+              'Referer': 'https://finance.sina.com.cn',
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            },
+          ),
+        );
+
+        if (response.statusCode == 200) {
+          final text = response.data.toString();
+          final matches =
+              RegExp(r'var hq_str_fu_(\d+)="([^"]+)"').allMatches(text);
+          for (final m in matches) {
+            final code = m.group(1)!;
+            final parts = m.group(2)!.split(',');
+            if (parts.length >= 8) {
+              final name = parts[0];
+              final gztime = parts[1];
+              final dwjz = parts[2];
+              final gsz = parts[3];
+              final gszzl = parts[6];
+              final jzrq = parts[7];
+
+              if (double.tryParse(gsz) != null &&
+                  gsz != '0.0000' &&
+                  gsz.isNotEmpty) {
+                final fullGztime =
+                    gztime.contains('-') ? gztime : '$jzrq $gztime';
+                results[code] = {
+                  'source': 'SinaGzBatch',
+                  'name': name,
+                  'jzrq': jzrq,
+                  'dwjz': dwjz,
+                  'gsz': gsz,
+                  'gszzl': gszzl.replaceAll('%', ''),
+                  'gztime': fullGztime
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('新浪批量估值抓取失败 chunk [${chunk.first}..]: $e');
+      }
+    }
+    return results;
   }
 
   Future<Map<String, dynamic>?> fetchValuation(String code,
@@ -484,16 +553,8 @@ class FundDataGateway {
 
   Future<Map<String, dynamic>?> _fetchValuationDirect(String code,
       {String? name, int preferredSourceIndex = 0}) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-
     final sources = <Future<Map<String, dynamic>?> Function()>[
-      () => _tryEastMoneyGz(code, timestamp),
-      () => _tryEastMoneyMobileGz(code),
-      () => _tryTencentGz(code),
       () => _trySinaGz(code),
-      () => _tryDanjuanGz(code),
-      () => _tryHowbuyGz(code),
-      () => _try10JqkaGz(code),
     ];
 
     final total = sources.length;
@@ -506,136 +567,9 @@ class FundDataGateway {
     }
 
     final label = _formatFundLabel(code, name);
-    final msg =
-        '抓取基金估值失败 $label: 所有 7 大估值数据源 (天天网页/天天手机/腾讯/新浪/蛋卷/好买/同花顺) 均无响应';
+    final msg = '抓取基金估值失败 $label: 新浪盘中估值数据源无响应';
     debugPrint(msg);
     errors.add(msg);
-    return null;
-  }
-
-  Future<Map<String, dynamic>?> _tryEastMoneyGz(
-      String code, int timestamp) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url = 'https://fundgz.1234567.com.cn/js/$code.js?rt=$timestamp';
-        final response = await _dio.get(
-          url,
-          options: Options(
-            responseType: ResponseType.plain,
-            headers: {
-              'Referer': 'https://fund.eastmoney.com/',
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            },
-          ),
-        );
-        if (response.statusCode == 200) {
-          final text = response.data.toString();
-          final match = RegExp(r'jsonpgz\((.*?)\);').firstMatch(text);
-          if (match != null) {
-            final content = match.group(1);
-            if (content != null && content.trim().isNotEmpty) {
-              final rawJson = json.decode(content);
-              return {
-                'source': 'EastMoneyGz',
-                'name': rawJson['name'],
-                'jzrq': rawJson['jzrq'],
-                'dwjz': rawJson['dwjz'],
-                'gsz': rawJson['gsz'],
-                'gszzl': rawJson['gszzl'],
-                'gztime': rawJson['gztime']
-              };
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 1) {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
-      }
-    }
-    return null;
-  }
-
-  Future<Map<String, dynamic>?> _tryEastMoneyMobileGz(String code) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url =
-            'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationDetail?FCODE=$code&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0';
-        final response = await _dio.get(url);
-        if (response.statusCode == 200) {
-          final data = response.data;
-          if (data is Map && data['ErrCode'] == 0 && data['Datas'] != null) {
-            final datas = data['Datas'];
-            final gsz = datas['GZ']?.toString();
-            final gszzl = datas['GSZZL']?.toString();
-            final gztime = datas['GZTIME']?.toString();
-            final dwjz = datas['DWJZ']?.toString();
-            final jzrq = datas['FSRQ']?.toString();
-            final name =
-                datas['SHORTNAME']?.toString() ?? datas['NAME']?.toString();
-
-            if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
-              return {
-                'source': 'EastMoneyMobileGz',
-                'name': name ?? '',
-                'jzrq': jzrq ?? '',
-                'dwjz': dwjz ?? '',
-                'gsz': gsz,
-                'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
-                'gztime': gztime ?? '',
-              };
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 1) {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
-      }
-    }
-    return null;
-  }
-
-  Future<Map<String, dynamic>?> _tryTencentGz(String code) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url = 'https://qt.gtimg.cn/q=jj$code';
-        final response = await _dio.get(url);
-        if (response.statusCode == 200) {
-          final text = response.data.toString();
-          final match = RegExp(r'v_jj\d+="([^"]+)"').firstMatch(text);
-          if (match != null) {
-            final parts = match.group(1)!.split('~');
-            if (parts.length >= 9) {
-              final gsz = parts[5];
-              final gszzl = parts[7];
-              final jzrq = parts[8];
-
-              final todayStr =
-                  DateTime.now().toIso8601String().substring(0, 10);
-              if (jzrq != todayStr) {
-                // 如果腾讯返回的不是今天的日期，说明盘中未更新，返回 null 以便降级到其他数据源抓取
-                return null;
-              }
-
-              return {
-                'source': 'TencentGz',
-                'jzrq': jzrq,
-                'dwjz': gsz, // 腾讯降级时用估值代替昨日净值
-                'gsz': gsz,
-                'gszzl': gszzl,
-                'gztime': '$jzrq ${DateTime.now().toString().substring(11, 16)}'
-              };
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 1) {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
-      }
-    }
     return null;
   }
 
@@ -755,156 +689,7 @@ class FundDataGateway {
     return null;
   }
 
-  Future<Map<String, dynamic>?> _tryDanjuanGz(String code) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url = 'https://danjuanapp.com/djapi/fund/estimate/$code';
-        final response = await _dio.get(
-          url,
-          options: Options(
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Referer': 'https://danjuanfunds.com/',
-            },
-          ),
-        );
-        if (response.statusCode == 200) {
-          final data = response.data;
-          if (data is Map) {
-            final resCode = data['result_code'];
-            final d = data['data'];
-            if ((resCode == 0 || resCode == null) && d is Map) {
-              final gsz = d['estimate_value']?.toString() ?? d['gsz']?.toString();
-              final gszzl = d['estimate_growth_rate']?.toString() ?? d['gszzl']?.toString();
-              final dwjz = d['last_nav']?.toString() ?? d['dwjz']?.toString();
-              final gztime = d['estimate_time']?.toString() ?? d['gztime']?.toString();
-              final name = d['name']?.toString() ?? d['fund_name']?.toString();
 
-              if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
-                return {
-                  'source': 'DanjuanGz',
-                  'name': name ?? '',
-                  'jzrq': gztime?.contains(' ') == true ? gztime!.split(' ').first : '',
-                  'dwjz': dwjz ?? '',
-                  'gsz': gsz,
-                  'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
-                  'gztime': gztime ?? '',
-                };
-              }
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 1) {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
-      }
-    }
-    return null;
-  }
-
-  Future<Map<String, dynamic>?> _tryHowbuyGz(String code) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url = 'https://m.howbuy.com/fund/ajax/guzhi/getguzhi.htm?fundcode=$code';
-        final response = await _dio.get(
-          url,
-          options: Options(
-            responseType: ResponseType.plain,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Referer': 'https://m.howbuy.com/',
-            },
-          ),
-        );
-        if (response.statusCode == 200) {
-          final text = response.data.toString();
-          if (text.trim().startsWith('{')) {
-            final data = json.decode(text);
-            if (data is Map) {
-              final gsz = data['gssz']?.toString() ?? data['gsz']?.toString();
-              final gszzl = data['gszzl']?.toString();
-              final dwjz = data['dwjz']?.toString();
-              final gztime = data['gztime']?.toString();
-
-              if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
-                return {
-                  'source': 'HowbuyGz',
-                  'name': data['jjmc']?.toString() ?? '',
-                  'jzrq': gztime?.contains(' ') == true ? gztime!.split(' ').first : '',
-                  'dwjz': dwjz ?? '',
-                  'gsz': gsz,
-                  'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
-                  'gztime': gztime ?? '',
-                };
-              }
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 1) {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
-      }
-    }
-    return null;
-  }
-
-  Future<Map<String, dynamic>?> _try10JqkaGz(String code) async {
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final url = 'http://fund.10jqka.com.cn/$code/json/jsjz.json';
-        final response = await _dio.get(
-          url,
-          options: Options(
-            responseType: ResponseType.plain,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Referer': 'http://fund.10jqka.com.cn/',
-            },
-          ),
-        );
-        if (response.statusCode == 200) {
-          final text = response.data.toString();
-          if (text.trim().isNotEmpty) {
-            final decoded = json.decode(text);
-            Map? latest;
-            if (decoded is List && decoded.isNotEmpty) {
-              latest = decoded.first is Map ? decoded.first : null;
-            } else if (decoded is Map) {
-              latest = decoded;
-            }
-            if (latest != null) {
-              final gsz = latest['gsz']?.toString() ?? latest['dwjz']?.toString();
-              final gszzl = latest['gszzl']?.toString() ?? latest['zdf']?.toString();
-              final dwjz = latest['dwjz']?.toString();
-              final gztime = latest['gztime']?.toString() ?? latest['date']?.toString();
-
-              if (gsz != null && double.tryParse(gsz) != null && gsz != '0.0000') {
-                return {
-                  'source': '10JqkaGz',
-                  'name': latest['name']?.toString() ?? '',
-                  'jzrq': gztime?.contains(' ') == true ? gztime!.split(' ').first : '',
-                  'dwjz': dwjz ?? '',
-                  'gsz': gsz,
-                  'gszzl': (gszzl ?? '0.00').replaceAll('%', ''),
-                  'gztime': gztime ?? '',
-                };
-              }
-            }
-          }
-        }
-      } catch (e) {
-        if (attempt == 1) {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
-      }
-    }
-    return null;
-  }
 
   Future<Map<String, dynamic>> testApiConnectivity(
       String apiName, String testUrl,
