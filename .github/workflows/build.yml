@@ -28,6 +28,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Install Android CMake
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1"
+
       - name: Determine Version
         id: version
         shell: bash

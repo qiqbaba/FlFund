@@ -1,5 +1,10 @@
 # 更新日志
 
+## 1.8.16
+
+### 修复
+- CI/CD CMake 构建依赖配置：在 GitHub Actions 构建流程中新增自动安装 cmake;3.22.1 组件，并在 Android 构建配置中显式声明 CMake 版本，修复 sqlite3_flutter_libs Native 库编译失败导致的 Android APK 构建异常
+
 ## 1.8.15
 
 ### 修复

@@ -1,6 +1,6 @@
 # FlFund (基金分析与策略回测系统)
 
-[![Version](https://img.shields.io/badge/version-1.8.15%2B97-blue)](pubspec.yaml)
+[![Version](https://img.shields.io/badge/version-1.8.16%2B98-blue)](pubspec.yaml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-green)](#)
 
 `FlFund` 是一个基于 Flutter 开发的跨平台基金分析、持有管理与策略回测系统。项目界面采用 Fluent UI 风格设计，支持 Windows 桌面无边框体验与移动端自适应布局。同时，项目在 Windows 环境下运行时支持读取并迁移原 Python 基金软件的历史数据库，保障数据无缝衔接。

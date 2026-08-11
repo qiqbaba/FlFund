@@ -1,17 +1,17 @@
 {
-  "version": "1.8.15",
-  "buildNumber": 97,
+  "version": "1.8.16",
+  "buildNumber": 98,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-11",
-  "releaseNotes": "1. 修复 CI/CD Gradle 自动配置脚本：动态解析 Gradle 版本，解决构建流程中 AGP 与 Gradle 版本不兼容问题",
+  "releaseNotes": "1. 修复 CI/CD 构建依赖配置：在 GitHub Actions 中自动安装 cmake;3.22.1 组件，解决 sqlite3_flutter_libs Native 库编译失败问题",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.15/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.16/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.15/FlFund-v1.8.15.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.16/FlFund-v1.8.16.apk",
       "sha256": "",
       "fileSize": 0
     }
