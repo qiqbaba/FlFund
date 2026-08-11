@@ -1,5 +1,10 @@
 # 更新日志
 
+## 1.8.15
+
+### 修复
+- CI/CD Gradle 自动配置脚本优化：动态解析 gradle-wrapper.properties 中的 Gradle 版本，修复 GitHub Actions 下 Gradle 与 AGP 版本不匹配导致的 Android APK 构建异常
+
 ## 1.8.14
 
 ### 修复

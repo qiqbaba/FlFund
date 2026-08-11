@@ -29,8 +29,14 @@ if (-not $countryCode) {
     } catch {}
 }
 
-$officialUrl = "https\://services.gradle.org/distributions/gradle-8.11.1-all.zip"
-$domesticUrl = "https\://mirrors.cloud.tencent.com/gradle/gradle-8.11.1-all.zip"
+$currentZip = "gradle-8.14-all.zip"
+$propContent = Get-Content $gradleProp -Raw
+if ($propContent -match 'gradle-[0-9.]*-[a-z]*\.zip') {
+    $currentZip = $Matches[0]
+}
+
+$officialUrl = "https\://services.gradle.org/distributions/$currentZip"
+$domesticUrl = "https\://mirrors.cloud.tencent.com/gradle/$currentZip"
 
 if ($countryCode -eq "CN") {
     Write-Host "Detected domestic IP (CN). Using Tencent Cloud Gradle mirror."

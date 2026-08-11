@@ -28,8 +28,13 @@ if [ -z "$COUNTRY_CODE" ]; then
   fi
 fi
 
-OFFICIAL_URL="https\\://services.gradle.org/distributions/gradle-8.11.1-all.zip"
-DOMESTIC_URL="https\\://mirrors.cloud.tencent.com/gradle/gradle-8.11.1-all.zip"
+CURRENT_ZIP=$(grep "^distributionUrl=" "$GRADLE_PROP" | grep -o 'gradle-[0-9.]*-[a-z]*\.zip' || echo "gradle-8.14-all.zip")
+if [ -z "$CURRENT_ZIP" ]; then
+  CURRENT_ZIP="gradle-8.14-all.zip"
+fi
+
+OFFICIAL_URL="https\\://services.gradle.org/distributions/${CURRENT_ZIP}"
+DOMESTIC_URL="https\\://mirrors.cloud.tencent.com/gradle/${CURRENT_ZIP}"
 
 if [ "$COUNTRY_CODE" = "CN" ]; then
   echo "Detected domestic IP (CN). Using Tencent Cloud Gradle mirror."
