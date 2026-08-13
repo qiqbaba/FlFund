@@ -12,10 +12,13 @@ class SimulatedPosition {
   final String code;
   final String name;
   double volume; // 持有份额
-  double buyPrice; // 平均买入成本价
+  double buyPrice; // 平均买入成本价 (含网格加仓合并)
   double currentPrice; // 最新估值/净值
   String buyDateStr; // 首次买入的核算净值日期 (用于到期平仓计算)
   int gridCount; // 已加仓次数 (网格加仓计数)
+  double firstBuyPrice; // 首次买入价 (止损基准，网格加仓不钝化止损)
+  double lastBuyPrice; // 最近一次买入价 (网格步进基准，与回测 lastBuyPrice 对齐)
+  double maxHoldNav; // 持仓期间最高净值 (追踪止盈)
 
   SimulatedPosition({
     required this.code,
@@ -25,7 +28,12 @@ class SimulatedPosition {
     required this.currentPrice,
     this.buyDateStr = '',
     this.gridCount = 0,
-  });
+    double? firstBuyPrice,
+    double? lastBuyPrice,
+    double? maxHoldNav,
+  })  : firstBuyPrice = firstBuyPrice ?? buyPrice,
+        lastBuyPrice = lastBuyPrice ?? buyPrice,
+        maxHoldNav = maxHoldNav ?? currentPrice;
 
   double get amount {
     final v = volume * currentPrice;
@@ -57,6 +65,9 @@ class SimulatedPosition {
         'currentPrice': currentPrice,
         'buyDateStr': buyDateStr,
         'gridCount': gridCount,
+        'firstBuyPrice': firstBuyPrice,
+        'lastBuyPrice': lastBuyPrice,
+        'maxHoldNav': maxHoldNav,
       };
 
   factory SimulatedPosition.fromJson(Map<String, dynamic> json) =>
@@ -68,6 +79,9 @@ class SimulatedPosition {
         currentPrice: (json['currentPrice'] as num).toDouble(),
         buyDateStr: json['buyDateStr'] ?? '',
         gridCount: json['gridCount'] ?? 0,
+        firstBuyPrice: (json['firstBuyPrice'] as num?)?.toDouble(),
+        lastBuyPrice: (json['lastBuyPrice'] as num?)?.toDouble(),
+        maxHoldNav: (json['maxHoldNav'] as num?)?.toDouble(),
       );
 }
 
@@ -146,6 +160,11 @@ class SimulationProvider extends ChangeNotifier {
   static const double stopLossPct = -15.0; // 固定止损线 (-15%)
   static const int defaultHoldMax = 90; // 默认最大持仓天数 (无策略参数时的回退值)
   static const double defaultTargetProfit = 8.0; // 默认止盈线 (无策略参数时的回退值)
+  static const double defaultTrailingDropPct = 2.0; // 默认追踪止盈回撤阈值
+  static const double defaultSlippagePct = 0.0; // 默认滑点 (与回测引擎默认一致)
+  static const double defaultPurchaseFeePct = 0.0; // 默认申购费率
+  static const double defaultShortHoldPenaltyPct = 1.5; // 默认短持惩罚费率 (C类<7天)
+  static const int defaultShortHoldDays = 7; // 默认短持惩罚天数
 
   Map<String, SimulatedPosition> positions = {};
   List<SimulatedTransaction> transactions = [];
@@ -353,7 +372,7 @@ class SimulationProvider extends ChangeNotifier {
       if (matchingFund.code.isNotEmpty) {
         double? currentPrice;
         if (tailTrade && matchingFund.isTodayValuation) {
-          currentPrice = double.tryParse(matchingFund.gsz);
+          currentPrice = matchingFund.estimatedNav;
         }
         currentPrice ??=
             matchingFund.navs.isNotEmpty ? matchingFund.navs.first : null;
@@ -363,6 +382,10 @@ class SimulationProvider extends ChangeNotifier {
             currentPrice.isFinite) {
           if (pos.currentPrice != currentPrice) {
             pos.currentPrice = currentPrice;
+            changed = true;
+          }
+          if (currentPrice > pos.maxHoldNav) {
+            pos.maxHoldNav = currentPrice;
             changed = true;
           }
         }
@@ -382,8 +405,9 @@ class SimulationProvider extends ChangeNotifier {
 
       if (tailTrade && fund.isTodayValuation) {
         evalIndex = 0;
-        price = double.tryParse(fund.gsz) ??
-            (fund.navs.isNotEmpty ? fund.navs.first : 0.0);
+        // 修复：使用修正估值（最新确认净值×当日估值涨跌幅），避免估值与净值
+        // 基准不一致导致信号错位；估值不可用时回退到最新确认净值
+        price = fund.estimatedNav ?? (fund.navs.isNotEmpty ? fund.navs.first : 0.0);
         tradeDateStr = todayStr;
         signalReasonSuffix = ' (尾盘估值信号)';
       } else {
@@ -400,11 +424,14 @@ class SimulationProvider extends ChangeNotifier {
       // ========== A. 卖出判断（优先级高于买入，且同日互斥） ==========
       if (isHeld) {
         final pos = positions[code]!;
+        // 盈亏基于合并平均成本（与回测网格加仓后口径一致）
         final double profitRate = pos.buyPrice > 0
             ? ((price - pos.buyPrice) / pos.buyPrice) * 100.0
             : 0.0;
 
-        // T+1 限制：同一净值日刚买入的基金不能在同一天卖出
+        // T+1 限制：同一日历日内刚买入的基金不能在当天卖出。
+        // 修复：改用操作系统日历日比较，避免“尾盘买入后次日非尾盘时段
+        // 净值日期仍为买入日”时被误判为同日而延误卖出。
         final lastBuyTx = transactions.firstWhere(
             (tx) => tx.code == code && tx.type == 'BUY',
             orElse: () => SimulatedTransaction(
@@ -417,8 +444,12 @@ class SimulationProvider extends ChangeNotifier {
                 amount: 0,
                 dateTime: DateTime(2000),
                 dateTimeStr: ''));
-        final bool isBoughtSameDate =
-            lastBuyTx.id.isNotEmpty && lastBuyTx.dateTimeStr == tradeDateStr;
+        final String todayCalStr =
+            now.toIso8601String().substring(0, 10);
+        final bool isBoughtToday =
+            lastBuyTx.id.isNotEmpty &&
+                lastBuyTx.dateTime.toIso8601String().substring(0, 10) ==
+                    todayCalStr;
 
         // 防止同结算日内重复卖出
         final bool alreadySoldOnDate = transactions.any((tx) =>
@@ -426,23 +457,65 @@ class SimulationProvider extends ChangeNotifier {
             tx.type == 'SELL' &&
             tx.dateTimeStr == tradeDateStr);
 
-        if (!isBoughtSameDate && !alreadySoldOnDate) {
+        if (!isBoughtToday && !alreadySoldOnDate) {
           String? sellReason;
 
-          // I. 固定止损平仓
-          if (profitRate <= stopLossPct) {
-            sellReason =
-                '止损平仓(${profitRate.toStringAsFixed(1)}%≤${stopLossPct.toStringAsFixed(0)}%)$signalReasonSuffix';
+          // 策略参数读取（无策略时使用与回测引擎一致的默认值）
+          final double stopLoss =
+              (fund.optimalStrategy?['stop_loss_pct'] as num?)?.toDouble() ??
+                  15.0;
+          final double trailingDrop =
+              (fund.optimalStrategy?['trailing_drop_pct'] as num?)?.toDouble() ??
+                  defaultTrailingDropPct;
+          final double trailingActivate =
+              (fund.optimalStrategy?['trailing_activate_pct'] as num?)
+                      ?.toDouble() ??
+                  trailingDrop;
+          final double slippagePct =
+              (fund.optimalStrategy?['slippage_pct'] as num?)?.toDouble() ??
+                  defaultSlippagePct;
+          final double shortHoldPenalty =
+              (fund.optimalStrategy?['short_hold_penalty_pct'] as num?)
+                      ?.toDouble() ??
+                  defaultShortHoldPenaltyPct;
+          final int shortHoldDays =
+              (fund.optimalStrategy?['short_hold_days'] as num?)?.toInt() ??
+                  defaultShortHoldDays;
+
+          // 更新持仓期最高净值（追踪止盈基准）
+          if (price > pos.maxHoldNav) {
+            pos.maxHoldNav = price;
+            changed = true;
           }
 
-          // II. 固定目标止盈平仓
+          // I. 固定止损平仓（基于首次买入价，网格加仓摊低均价不钝化止损）
+          final double lossFromFirst = pos.firstBuyPrice > 0
+              ? ((price - pos.firstBuyPrice) / pos.firstBuyPrice) * 100.0
+              : 0.0;
+          if (lossFromFirst <= -stopLoss) {
+            sellReason =
+                '止损平仓(${lossFromFirst.toStringAsFixed(1)}%≤-${stopLoss.toStringAsFixed(0)}%)$signalReasonSuffix';
+          }
+
+          // II. 固定目标止盈平仓（持有期少于 shortHoldDays 天包含惩罚费率，与回测对齐）
           if (sellReason == null) {
             final double targetProfit =
                 (fund.optimalStrategy?['target_profit'] as num?)?.toDouble() ??
                     defaultTargetProfit;
-            if (profitRate >= targetProfit) {
+            int holdDays = 0;
+            if (pos.buyDateStr.isNotEmpty) {
+              try {
+                final buyDate = DateTime.parse(pos.buyDateStr);
+                final tradeDate = DateTime.parse(tradeDateStr);
+                holdDays = tradeDate.difference(buyDate).inDays;
+              } catch (_) {}
+            }
+            final double requiredProfit = (holdDays < shortHoldDays)
+                ? targetProfit + shortHoldPenalty
+                : targetProfit;
+            if (profitRate >= requiredProfit) {
               sellReason =
-                  '止盈平仓(${profitRate.toStringAsFixed(1)}%≥${targetProfit.toStringAsFixed(1)}%)$signalReasonSuffix';
+                  '止盈平仓(${profitRate.toStringAsFixed(1)}%≥${requiredProfit.toStringAsFixed(1)}%)$signalReasonSuffix';
             }
           }
 
@@ -461,17 +534,37 @@ class SimulationProvider extends ChangeNotifier {
             } catch (_) {/* 日期解析失败则跳过到期判断 */}
           }
 
-          // IV. 卖出信号平仓
-          if (sellReason == null && fund.isSellSignalAt(evalIndex)) {
+          // IV. 追踪止盈平仓（与回测引擎 trailingStop 逻辑对齐）
+          if (sellReason == null && trailingDrop > 0.0) {
+            final double avgCost = pos.buyPrice;
+            if (avgCost > 0.0) {
+              final double maxProfitSoFar =
+                  ((pos.maxHoldNav - avgCost) / avgCost) * 100.0;
+              if (maxProfitSoFar >= trailingActivate) {
+                final double dropFromPeak =
+                    ((price - pos.maxHoldNav) / pos.maxHoldNav) * 100.0;
+                if (dropFromPeak <= -trailingDrop) {
+                  sellReason =
+                      '追踪止盈(高点回撤${dropFromPeak.toStringAsFixed(1)}%)$signalReasonSuffix';
+                }
+              }
+            }
+          }
+
+          // V. 卖出信号平仓（基准锚定实际买入日，与回测一致）
+          if (sellReason == null &&
+              fund.isSellSignalAt(evalIndex, buyDateStr: pos.buyDateStr)) {
             sellReason = '卖出信号触发$signalReasonSuffix';
           }
 
-          // 执行卖出
+          // 执行卖出（扣除滑点，与回测 slippagePct 对齐）
           if (sellReason != null) {
             final double sellVolume = pos.volume;
             final double sellAmt = sellVolume * price;
-            if (sellAmt.isFinite && sellAmt > 0) {
-              availableBalance += sellAmt;
+            final double afterSlippage =
+                sellAmt * (1.0 - slippagePct / 100.0);
+            if (afterSlippage.isFinite && afterSlippage > 0) {
+              availableBalance += afterSlippage;
               positions.remove(code);
 
               transactions.insert(
@@ -483,7 +576,7 @@ class SimulationProvider extends ChangeNotifier {
                     type: 'SELL',
                     price: price,
                     volume: sellVolume,
-                    amount: sellAmt,
+                    amount: afterSlippage,
                     dateTime: DateTime.now(),
                     dateTimeStr: tradeDateStr,
                     signalReason: sellReason,
@@ -510,6 +603,11 @@ class SimulationProvider extends ChangeNotifier {
       // 单日买入笔数限制
       if (dailyBuyCount >= maxDailyBuys) continue;
 
+      // 申购费率（与回测 purchaseFeePct 对齐，买入时从余额扣除）
+      final double purchaseFeePct =
+          (fund.optimalStrategy?['purchase_fee_pct'] as num?)?.toDouble() ??
+              defaultPurchaseFeePct;
+
       final bool stillHeld = positions.containsKey(code);
 
       if (!stillHeld) {
@@ -519,10 +617,12 @@ class SimulationProvider extends ChangeNotifier {
         if (availableBalance < 100.0) continue;
 
         final double buyAmt = math.min(defaultBuyAmount, availableBalance);
+        final double fee = buyAmt * purchaseFeePct / 100.0;
+        if (buyAmt + fee > availableBalance) continue;
         final double volume = buyAmt / price;
         if (!volume.isFinite) continue;
 
-        availableBalance -= buyAmt;
+        availableBalance -= buyAmt + fee;
         positions[code] = SimulatedPosition(
           code: code,
           name: name,
@@ -531,6 +631,9 @@ class SimulationProvider extends ChangeNotifier {
           currentPrice: price,
           buyDateStr: tradeDateStr,
           gridCount: 0,
+          firstBuyPrice: price,
+          lastBuyPrice: price,
+          maxHoldNav: price,
         );
 
         transactions.insert(
@@ -545,7 +648,8 @@ class SimulationProvider extends ChangeNotifier {
               amount: buyAmt,
               dateTime: DateTime.now(),
               dateTimeStr: tradeDateStr,
-              signalReason: '买入信号触发$signalReasonSuffix',
+              signalReason:
+                  '买入信号触发$signalReasonSuffix${fee > 0 ? '(含${fee.toStringAsFixed(2)}元申购费)' : ''}',
             ));
         dailyBuyCount++;
         changed = true;
@@ -555,25 +659,29 @@ class SimulationProvider extends ChangeNotifier {
         if (pos.gridCount >= maxGridCount) continue;
         if (availableBalance < 100.0) continue;
 
-        // 网格步进检查：当前价格必须相对上次买入价下跌超过网格间距
+        // 网格步进检查：当前价格必须相对最近一次买入价下跌超过网格间距
+        // （与回测引擎基于 lastBuyPrice 的步进判断对齐）
         final double buyDrop =
             (fund.optimalStrategy?['buy_drop'] as num?)?.toDouble() ?? 5.0;
         final double gridSpacingPct = (buyDrop * 0.3).clamp(1.0, 5.0);
-        final double dropFromBuy =
-            ((price - pos.buyPrice) / pos.buyPrice) * 100.0;
-        if (dropFromBuy > -gridSpacingPct) continue; // 跌幅不够，不加仓
+        final double dropFromLast =
+            ((price - pos.lastBuyPrice) / pos.lastBuyPrice) * 100.0;
+        if (dropFromLast > -gridSpacingPct) continue; // 跌幅不够，不加仓
 
         final double buyAmt = math.min(defaultBuyAmount, availableBalance);
+        final double fee = buyAmt * purchaseFeePct / 100.0;
+        if (buyAmt + fee > availableBalance) continue;
         final double volume = buyAmt / price;
         if (!volume.isFinite) continue;
 
-        availableBalance -= buyAmt;
+        availableBalance -= buyAmt + fee;
         // 更新平均成本
         final double totalCost = pos.volume * pos.buyPrice + buyAmt;
         final double totalVolume = pos.volume + volume;
         pos.volume = totalVolume;
         pos.buyPrice = totalCost / totalVolume;
         pos.currentPrice = price;
+        pos.lastBuyPrice = price; // 更新最近买入价（网格步进基准）
         pos.gridCount++;
 
         transactions.insert(
@@ -589,7 +697,7 @@ class SimulationProvider extends ChangeNotifier {
               dateTime: DateTime.now(),
               dateTimeStr: tradeDateStr,
               signalReason:
-                  '网格加仓(第${pos.gridCount}次,跌${dropFromBuy.toStringAsFixed(1)}%)$signalReasonSuffix',
+                  '网格加仓(第${pos.gridCount}次,跌${dropFromLast.toStringAsFixed(1)}%)$signalReasonSuffix${fee > 0 ? '(含${fee.toStringAsFixed(2)}元申购费)' : ''}',
             ));
         dailyBuyCount++;
         changed = true;
@@ -613,6 +721,9 @@ class SimulationProvider extends ChangeNotifier {
     }
     await loadSimData();
 
+    // 手动交易不计费率（用户主动操作，与自动信号交易的口径区分）
+    if (amount > availableBalance) return false;
+
     final volume = amount / price;
     if (!volume.isFinite) return false;
     availableBalance -= amount;
@@ -626,6 +737,7 @@ class SimulationProvider extends ChangeNotifier {
       pos.volume = totalVolume;
       pos.buyPrice = totalCost / totalVolume;
       pos.currentPrice = price;
+      pos.lastBuyPrice = price;
       pos.gridCount++;
     } else {
       positions[code] = SimulatedPosition(
@@ -636,6 +748,9 @@ class SimulationProvider extends ChangeNotifier {
         currentPrice: price,
         buyDateStr: todayStr,
         gridCount: 0,
+        firstBuyPrice: price,
+        lastBuyPrice: price,
+        maxHoldNav: price,
       );
     }
 
@@ -671,7 +786,9 @@ class SimulationProvider extends ChangeNotifier {
     final double sellAmt = sellVolume * price;
     if (!sellAmt.isFinite) return false;
 
-    availableBalance += sellAmt;
+    // 手动交易不计费率
+    final double afterSlippage = sellAmt;
+    availableBalance += afterSlippage;
     positions.remove(code);
 
     transactions.insert(
@@ -683,7 +800,7 @@ class SimulationProvider extends ChangeNotifier {
           type: 'SELL',
           price: price,
           volume: sellVolume,
-          amount: sellAmt,
+          amount: afterSlippage,
           dateTime: DateTime.now(),
           dateTimeStr: DateTime.now().toIso8601String().substring(0, 10),
           signalReason: '手动卖出',
@@ -706,18 +823,27 @@ class SimulationProvider extends ChangeNotifier {
       defaultBuyAmount = 10000.0;
     }
 
-    // 可用余额合理性上限：最多允许盈利 500%
+    // 修复：不再对高盈利余额做“5倍上限截断”——合法的持续盈利会被静默清零造成数据丢失。
+    // 仅保留异常告警日志，由用户自行决定是否重置账户。
     final double maxReasonableBalance = initialBalance + (initialBalance * 5.0);
     if (availableBalance > maxReasonableBalance) {
       debugPrint(
-          '[Simulation] 警告: 可用余额异常偏高 (¥${availableBalance.toStringAsFixed(0)})，已截断至初始资金');
-      availableBalance = initialBalance;
+          '[Simulation] 提示: 可用余额高于初始资金的 5 倍 (¥${availableBalance.toStringAsFixed(0)})，若为异常数据请手动重置账户');
     }
 
     positions.removeWhere((code, pos) {
       if (!pos.volume.isFinite || pos.volume < 0) return true;
       if (!pos.buyPrice.isFinite || pos.buyPrice <= 0) return true;
       if (!pos.currentPrice.isFinite || pos.currentPrice <= 0) return true;
+      if (!pos.firstBuyPrice.isFinite || pos.firstBuyPrice <= 0) {
+        pos.firstBuyPrice = pos.buyPrice;
+      }
+      if (!pos.lastBuyPrice.isFinite || pos.lastBuyPrice <= 0) {
+        pos.lastBuyPrice = pos.buyPrice;
+      }
+      if (!pos.maxHoldNav.isFinite || pos.maxHoldNav <= 0) {
+        pos.maxHoldNav = pos.currentPrice;
+      }
       return false;
     });
   }

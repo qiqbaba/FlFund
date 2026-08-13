@@ -56,6 +56,15 @@ class FundHistoryDB {
       macd_filter_enabled INTEGER,
       pe_percentile_limit REAL,
       pb_percentile_limit REAL,
+      stop_loss_pct REAL,
+      trailing_drop_pct REAL,
+      trailing_activate_pct REAL,
+      short_hold_days INTEGER,
+      short_hold_penalty_pct REAL,
+      purchase_fee_pct REAL,
+      slippage_pct REAL,
+      max_grid_adds INTEGER,
+      oos_validated INTEGER,
       update_time REAL
     );
   ''';
@@ -79,6 +88,15 @@ class FundHistoryDB {
     ('macd_filter_enabled', 'INTEGER'),
     ('pe_percentile_limit', 'REAL'),
     ('pb_percentile_limit', 'REAL'),
+    ('stop_loss_pct', 'REAL'),
+    ('trailing_drop_pct', 'REAL'),
+    ('trailing_activate_pct', 'REAL'),
+    ('short_hold_days', 'INTEGER'),
+    ('short_hold_penalty_pct', 'REAL'),
+    ('purchase_fee_pct', 'REAL'),
+    ('slippage_pct', 'REAL'),
+    ('max_grid_adds', 'INTEGER'),
+    ('oos_validated', 'INTEGER'),
   ];
 
 
@@ -422,17 +440,28 @@ class FundHistoryDB {
     int? macdFilterEnabled,
     double? pePercentileLimit,
     double? pbPercentileLimit,
+    double? stopLossPct,
+    double? trailingDropPct,
+    double? trailingActivatePct,
+    int? shortHoldDays,
+    double? shortHoldPenaltyPct,
+    double? purchaseFeePct,
+    double? slippagePct,
+    int? maxGridAdds,
+    int? oosValidated,
   }) async {
     if (_executor == null) return;
     final double nowTime = DateTime.now().millisecondsSinceEpoch / 1000.0;
     await _executor!.execute('''
       INSERT OR REPLACE INTO fund_optimal_strategy 
-      (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, update_time)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
       fundCode, fundName, buyDays, buyDrop, targetProfit,
       holdMin, holdMax, winRate, totalTrades, avgProfit, sellX, sellWinRate, sellTrades, maPeriod, maEnvelopePct,
-      rsiFilterLimit, macdFilterEnabled, pePercentileLimit, pbPercentileLimit, nowTime
+      rsiFilterLimit, macdFilterEnabled, pePercentileLimit, pbPercentileLimit,
+      stopLossPct, trailingDropPct, trailingActivatePct, shortHoldDays, shortHoldPenaltyPct, purchaseFeePct, slippagePct, maxGridAdds, oosValidated,
+      nowTime
     ]);
   }
 
@@ -444,12 +473,14 @@ class FundHistoryDB {
       for (final s in strategies) {
         await txn.execute('''
           INSERT OR REPLACE INTO fund_optimal_strategy 
-          (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, update_time)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', [
           s['fund_code'], s['fund_name'], s['buy_days'], s['buy_drop'], s['target_profit'],
           s['hold_min'], s['hold_max'], s['win_rate'], s['total_trades'], s['avg_profit'], s['sell_x'], s['sell_win_rate'], s['sell_trades'], s['ma_period'], s['ma_envelope_pct'],
-          s['rsi_filter_limit'], s['macd_filter_enabled'], s['pe_percentile_limit'], s['pb_percentile_limit'], nowTime
+          s['rsi_filter_limit'], s['macd_filter_enabled'], s['pe_percentile_limit'], s['pb_percentile_limit'],
+          s['stop_loss_pct'], s['trailing_drop_pct'], s['trailing_activate_pct'], s['short_hold_days'], s['short_hold_penalty_pct'], s['purchase_fee_pct'], s['slippage_pct'], s['max_grid_adds'], s['oos_validated'],
+          nowTime
         ]);
       }
     });
@@ -459,7 +490,7 @@ class FundHistoryDB {
   Future<Map<String, dynamic>?> getOptimalStrategy(String fundCode) async {
     if (_executor == null) return null;
     final rows = await _executor!.query('''
-      SELECT buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, update_time 
+      SELECT buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time 
       FROM fund_optimal_strategy WHERE fund_code = ? AND buy_days IS NOT NULL
     ''', [fundCode]);
 
@@ -483,6 +514,15 @@ class FundHistoryDB {
         'macd_filter_enabled': (row['macd_filter_enabled'] as num?)?.toInt(),
         'pe_percentile_limit': (row['pe_percentile_limit'] as num?)?.toDouble(),
         'pb_percentile_limit': (row['pb_percentile_limit'] as num?)?.toDouble(),
+        'stop_loss_pct': (row['stop_loss_pct'] as num?)?.toDouble(),
+        'trailing_drop_pct': (row['trailing_drop_pct'] as num?)?.toDouble(),
+        'trailing_activate_pct': (row['trailing_activate_pct'] as num?)?.toDouble(),
+        'short_hold_days': (row['short_hold_days'] as num?)?.toInt(),
+        'short_hold_penalty_pct': (row['short_hold_penalty_pct'] as num?)?.toDouble(),
+        'purchase_fee_pct': (row['purchase_fee_pct'] as num?)?.toDouble(),
+        'slippage_pct': (row['slippage_pct'] as num?)?.toDouble(),
+        'max_grid_adds': (row['max_grid_adds'] as num?)?.toInt(),
+        'oos_validated': (row['oos_validated'] as num?)?.toInt(),
         'update_time': (row['update_time'] as num?)?.toDouble(),
       };
     }
@@ -495,7 +535,7 @@ class FundHistoryDB {
     final Map<String, Map<String, dynamic>> result = {};
 
     final rows = await _executor!.query('''
-      SELECT fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, update_time 
+      SELECT fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time 
       FROM fund_optimal_strategy WHERE buy_days IS NOT NULL
     ''');
 
@@ -519,6 +559,15 @@ class FundHistoryDB {
         'macd_filter_enabled': (row['macd_filter_enabled'] as num?)?.toInt(),
         'pe_percentile_limit': (row['pe_percentile_limit'] as num?)?.toDouble(),
         'pb_percentile_limit': (row['pb_percentile_limit'] as num?)?.toDouble(),
+        'stop_loss_pct': (row['stop_loss_pct'] as num?)?.toDouble(),
+        'trailing_drop_pct': (row['trailing_drop_pct'] as num?)?.toDouble(),
+        'trailing_activate_pct': (row['trailing_activate_pct'] as num?)?.toDouble(),
+        'short_hold_days': (row['short_hold_days'] as num?)?.toInt(),
+        'short_hold_penalty_pct': (row['short_hold_penalty_pct'] as num?)?.toDouble(),
+        'purchase_fee_pct': (row['purchase_fee_pct'] as num?)?.toDouble(),
+        'slippage_pct': (row['slippage_pct'] as num?)?.toDouble(),
+        'max_grid_adds': (row['max_grid_adds'] as num?)?.toInt(),
+        'oos_validated': (row['oos_validated'] as num?)?.toInt(),
         'update_time': (row['update_time'] as num?)?.toDouble(),
       };
     }

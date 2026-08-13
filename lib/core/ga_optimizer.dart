@@ -99,8 +99,10 @@ Map<String, dynamic> _walkForwardEval(
   double? sellPct,
   double slippagePct,
   double rsiFilterLimit,
-  bool useMacdFilter,
-) {
+  bool useMacdFilter, {
+  double stopLossPct = 0.0,
+  int maxGridAdds = 0,
+}) {
   if (!wf.hasOutSample) {
     return {'trades': 0, 'validFolds': 0, 'positiveFolds': 0, 'avgCalmar': 0.0};
   }
@@ -133,6 +135,8 @@ Map<String, dynamic> _walkForwardEval(
       rsiFilterLimit: rsiFilterLimit,
       useMacdFilter: useMacdFilter,
       gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
+      stopLossPct: stopLossPct,
+      maxGridAdds: maxGridAdds,
     );
     if (res.totalTrades > 0) {
       totalTrades += res.totalTrades;
@@ -236,6 +240,8 @@ bool _isStablePlateau(
   Map<int, List<double>>? fullMaMap,
   List<double>? precalculatedVol10,
   List<double>? precalculatedVol60,
+  double stopLossPct = 0.0,
+  int maxGridAdds = 0,
 }) {
   if (baseCalmar <= 0) return true; // 如果原本就未盈利，无需进行高原验证
 
@@ -297,6 +303,8 @@ bool _isStablePlateau(
       rsiFilterLimit: rsiFilterLimit,
       useMacdFilter: useMacdFilter,
       gridSpacingPct: (n.buyDrop * 0.3).clamp(1.0, 5.0),
+      stopLossPct: stopLossPct,
+      maxGridAdds: maxGridAdds,
     );
     if (res.totalTrades > 0) {
       neighborCalmarSum += res.calmarRatio;
@@ -335,6 +343,9 @@ class GAOptimizer {
     double highThreshold = 48.0,
     double rsiFilterLimit = 35.0,
     bool useMacdFilter = true,
+    // 与模拟盘风控参数对齐：单笔硬止损（默认 -15%），网格加仓最多 3 次
+    double stopLossPct = 15.0,
+    int maxGridAdds = 3,
   }) {
     if (allNavs.length < 20) return null;
 
@@ -500,6 +511,8 @@ class GAOptimizer {
         rsiFilterLimit: rsiFilterLimit,
         useMacdFilter: useMacdFilter,
         gridSpacingPct: (ind.buyDrop * 0.3).clamp(1.0, 5.0),
+        stopLossPct: stopLossPct,
+        maxGridAdds: maxGridAdds,
       );
 
       if (inSampleRes.totalTrades == 0) {
@@ -515,15 +528,11 @@ class GAOptimizer {
         ind.totalTrades = 0;
       } else {
         // 适应度仅由训练集（样本内）决定；样本外前推窗口不参与进化，避免样本外信息泄漏。
-        // 整合 Calmar 与 Sortino 比率作为更科学的风险调整适应度分值
-        final double inScore =
+        // 整合 Calmar 与 Sortino 比率作为科学的风险调整适应度分值。
+        // 注意：不再乘 avgEfficiency 调节系数 —— 该指标依赖买入后未来 holdMax 天内最高价
+        // （前视信息），乘入适应度会系统性偏向“恰好买在低点后暴涨”的过拟合参数。
+        final double calmarScore =
             (inSampleRes.calmarRatio + inSampleRes.sortinoRatio) / 2.0;
-        double calmarScore = inScore;
-
-        // 将综合收益捕获效率乘入 calmarScore 中作为调节系数
-        final double effMultiplier =
-            0.4 + 0.6 * (inSampleRes.avgEfficiency / 100.0);
-        calmarScore *= effMultiplier;
 
         // 鲁棒性判定：训练集总交易数 >= 5
         final bool isRobust = inSampleRes.totalTrades >= 5;
@@ -734,7 +743,6 @@ class GAOptimizer {
     // 5. 参数敏感性高原校验（训练集上）+ 走动前推样本外验收
     final Individual defaultBest = bestOverall ?? population.first;
     Individual finalBest = defaultBest;
-    Individual? stableFallback; // 训练集稳定但未通过样本外验收时的兜底
     for (int i = 0; i < min(5, population.length); i++) {
       final cand = population[i];
       if (cand.fitness == null || !cand.fitness!.isValid) continue;
@@ -759,6 +767,8 @@ class GAOptimizer {
         rsiFilterLimit: rsiFilterLimit,
         useMacdFilter: useMacdFilter,
         gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
+        stopLossPct: stopLossPct,
+        maxGridAdds: maxGridAdds,
       );
       final bool stable = _isStablePlateau(
         cand,
@@ -779,9 +789,10 @@ class GAOptimizer {
         fullMaMap: inSampleMaMap,
         precalculatedVol10: inSampleVol10,
         precalculatedVol60: inSampleVol60,
+        stopLossPct: stopLossPct,
+        maxGridAdds: maxGridAdds,
       );
       if (!stable) continue;
-      stableFallback ??= cand; // 记录首个训练集稳定候选作为兜底
 
       // 数据太短无样本外时，训练集稳定即可接受
       if (!wf.hasOutSample) {
@@ -793,7 +804,8 @@ class GAOptimizer {
       // 至少一半有效前推窗口盈利，且平均风险调整收益为正，方视为泛化良好
       final wfRes = _walkForwardEval(cand, allNavs, allDates, wf, holdMax,
           trailingDropPct, sellX, sellPct, slippagePct, rsiFilterLimit,
-          useMacdFilter);
+          useMacdFilter,
+          stopLossPct: stopLossPct, maxGridAdds: maxGridAdds);
       final int validFolds = wfRes['validFolds'] as int;
       final int positiveFolds = wfRes['positiveFolds'] as int;
       final double avgCalmar = wfRes['avgCalmar'] as double;
@@ -802,9 +814,11 @@ class GAOptimizer {
         break;
       }
     }
-    // 若无候选通过样本外验收，退回首个训练集稳定候选
-    if (identical(finalBest, defaultBest) && stableFallback != null) {
-      finalBest = stableFallback;
+
+    // 修复：有样本外数据时不再无条件回退到“训练集稳定”候选。
+    // 若全部候选均未通过样本外验收，直接返回 null，避免向实盘推荐过拟合的样本内最优参数。
+    if (wf.hasOutSample && identical(finalBest, defaultBest)) {
+      return null;
     }
 
     // 全样本回测得出最终评估用于回传
@@ -827,6 +841,8 @@ class GAOptimizer {
       rsiFilterLimit: rsiFilterLimit,
       useMacdFilter: useMacdFilter,
       gridSpacingPct: (finalBest.buyDrop * 0.3).clamp(1.0, 5.0),
+      stopLossPct: stopLossPct,
+      maxGridAdds: maxGridAdds,
     );
 
     if (finalRes.totalTrades > 0) {
@@ -841,6 +857,16 @@ class GAOptimizer {
         'avg_profit': finalRes.avgProfit,
         'ma_period': finalBest.maPeriod,
         'ma_envelope_pct': finalBest.maEnvelopePct,
+        // 与模拟盘风控参数对齐：止损/追踪止盈/滑点/网格加仓上限
+        'stop_loss_pct': stopLossPct,
+        'trailing_drop_pct': trailingDropPct ?? 2.0,
+        'slippage_pct': slippagePct,
+        'short_hold_days': 7,
+        'short_hold_penalty_pct': 1.5,
+        'purchase_fee_pct': 0.0,
+        'max_grid_adds': maxGridAdds,
+        // 样本外验收结果：null=数据不足无样本外，true=通过，false=未通过(此时已返回null)
+        'oos_validated': wf.hasOutSample ? 1 : 0,
       };
     }
 

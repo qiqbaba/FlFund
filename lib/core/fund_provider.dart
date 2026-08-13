@@ -139,14 +139,16 @@ class FundUIModel {
     if (navList.length <= index) return false;
 
     // 1. 指数估值百分位过滤（由于历史百分位静态存储受限，仅在当天判断）
+    // 修复：默认 0.0（关闭）。回测引擎无法验证该过滤（历史百分位序列不可得），
+    // 若默认生效会导致实盘信号显著少于回测；仅在策略显式配置时才启用。
     if (index == 0) {
       final double peLimit =
-          (optimalStrategy!['pe_percentile_limit'] as num?)?.toDouble() ?? 30.0;
+          (optimalStrategy!['pe_percentile_limit'] as num?)?.toDouble() ?? 0.0;
       if (peLimit > 0.0 && pePercentile != null && pePercentile! > peLimit) {
         return false;
       }
       final double pbLimit =
-          (optimalStrategy!['pb_percentile_limit'] as num?)?.toDouble() ?? 30.0;
+          (optimalStrategy!['pb_percentile_limit'] as num?)?.toDouble() ?? 0.0;
       if (pbLimit > 0.0 && pbPercentile != null && pbPercentile! > pbLimit) {
         return false;
       }
@@ -414,7 +416,10 @@ class FundUIModel {
   }
 
   // 判断历史特定索引处是否触发卖出警报
-  bool isSellSignalAt(int index) {
+  // buyDateStr：持仓的实际买入核算净值日期（模拟盘传参）。
+  // 修复：当 60 天内找不到系统买点时，将对比基准锚定到实际买入日；
+  // 若仍无法定位买入点则视为无卖出信号，避免基准与持仓脱钩导致的过早无条件卖出。
+  bool isSellSignalAt(int index, {String? buyDateStr = ''}) {
     if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
       final int encodedVal = optimalStrategy!['sell_x'];
       int sellX;
@@ -439,11 +444,26 @@ class FundUIModel {
         }
       }
 
-      // 如果找到了系统买入点，限制卖出的对比基准最远只能回溯到该买入点
-      int effectiveSellX = sellX;
-      if (buyIdx != null) {
-        effectiveSellX = math.min(buyIdx - index, sellX);
+      // 找不到历史系统买点时，锚定到实际持仓买入日（买入日必须早于当前研判日才有意义）
+      if (buyIdx == null && buyDateStr != null && buyDateStr.isNotEmpty) {
+        final int offset = isTodayValuation ? 1 : 0;
+        final int dateIdx = dates.indexOf(buyDateStr);
+        if (dateIdx >= 0) {
+          final int actualBuyIdx = dateIdx + offset;
+          if (actualBuyIdx > index) {
+            buyIdx = actualBuyIdx;
+          }
+        }
       }
+      // 模拟盘传入了实际买入日却仍无法定位：基准与持仓脱钩，保守地不触发卖出信号。
+      // 独立调用（UI 展示/测试，buyDateStr 为空）保持原语义，不做绑定。
+      if (buyIdx == null && buyDateStr != null && buyDateStr.isNotEmpty) {
+        return false;
+      }
+
+      // 限制卖出的对比基准最远只能回溯到该买入点
+      final int effectiveSellX =
+          math.min(buyIdx == null ? sellX : buyIdx - index, sellX);
 
       if (effectiveSellX > 0 && navList.length > index + effectiveSellX) {
         final double currentNav = navList[index];
@@ -476,12 +496,19 @@ class FundUIModel {
     return 0.0;
   }
 
-  // 完整的净值列表（含今日实时估值）
+  // 估算的当日净值：东方财富接口的 gsz 字段即估算净值（如 '1.06'），
+  // 与净值序列基准一致，可直接用于当日交易核算；无今日估值时返回 null
+  double? get estimatedNav {
+    if (!isTodayValuation) return null;
+    final double? gszVal = double.tryParse(gsz.trim());
+    if (gszVal == null || gszVal <= 0.0 || !gszVal.isFinite) return null;
+    return gszVal;
+  }
+
+  // 完整的净值序列（含今日修正估值）
   List<double> get fullNavs {
-    final double currentVal = isTodayValuation
-        ? (double.tryParse(gsz) ?? (navs.isNotEmpty ? navs.first : 0.0))
-        : (navs.isNotEmpty ? navs.first : 0.0);
-    return isTodayValuation ? [currentVal, ...navs] : navs;
+    final double? est = estimatedNav;
+    return est != null ? [est, ...navs] : navs;
   }
 
   // 计算任意天数的涨跌幅

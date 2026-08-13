@@ -1972,6 +1972,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           final bool oldMacd = optStrategy?['macd_filter_enabled'] != null
               ? (optStrategy!['macd_filter_enabled'] == 1)
               : defaultMacd;
+          final double stopLossPct =
+              (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
 
           final optResult =
               await safeCompute(_runStrategyOptimizationInIsolate, {
@@ -1985,6 +1987,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             'highThreshold': appConfig.volatilityHighThreshold,
             'rsiFilterLimit': oldRsi,
             'useMacdFilter': oldMacd,
+            'stopLossPct': stopLossPct,
+            'maxGridAdds': 3,
           });
 
           if (!mounted) return;
@@ -2034,6 +2038,14 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               'macd_filter_enabled': oldMacd ? 1 : 0,
               'pe_percentile_limit': oldPe,
               'pb_percentile_limit': oldPb,
+              'stop_loss_pct': opt['stop_loss_pct'],
+              'trailing_drop_pct': opt['trailing_drop_pct'],
+              'short_hold_days': opt['short_hold_days'],
+              'short_hold_penalty_pct': opt['short_hold_penalty_pct'],
+              'purchase_fee_pct': opt['purchase_fee_pct'],
+              'slippage_pct': opt['slippage_pct'],
+              'max_grid_adds': opt['max_grid_adds'],
+              'oos_validated': opt['oos_validated'],
             });
           } else {
             setState(() {
@@ -2370,6 +2382,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     if (!mounted || _selectedCode != targetCode) return;
 
     // 在后台执行回测与卖出信号寻优，避免阻塞 UI 线程
+    final double stopLossPct =
+        (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
     final computeResult = await safeCompute(_runSingleBacktestInIsolate, {
       'navs': navs,
       'dates': dates,
@@ -2385,6 +2399,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       'useMacdFilter': _useMacdFilter,
       'slippagePct': _slippagePct,
       'gridSpacingPct': (_buyDrop * 0.3).clamp(1.0, 5.0),
+      'stopLossPct': stopLossPct,
+      'maxGridAdds': 3,
     });
     final BacktestResult res = computeResult['result'] as BacktestResult;
     final Map<String, dynamic>? sellOpt =
@@ -2481,6 +2497,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
       // 在 Dart 中，通过 compute 可以直接在新后台 Isolate 里并发运算，防止界面卡顿
       // 核心优化：将买入和卖出寻优统一合入后台 Isolate 计算，保证主线程零负荷
+      final double stopLossPct =
+          (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
       final optResult = await safeCompute(_runStrategyOptimizationInIsolate, {
         'navs': navs,
         'dates': dates,
@@ -2492,6 +2510,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         'highThreshold': appConfig.volatilityHighThreshold,
         'rsiFilterLimit': _rsiFilterLimit,
         'useMacdFilter': _useMacdFilter,
+        'stopLossPct': stopLossPct,
+        'maxGridAdds': 3,
       });
 
       // 异步完成后校验：若组件已销毁或基金已切换，丢弃本次结果防止写入错误基金
@@ -2532,6 +2552,14 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           macdFilterEnabled: _useMacdFilter ? 1 : 0,
           pePercentileLimit: _pePercentileLimit,
           pbPercentileLimit: _pbPercentileLimit,
+          stopLossPct: opt['stop_loss_pct'],
+          trailingDropPct: opt['trailing_drop_pct'],
+          shortHoldDays: opt['short_hold_days'],
+          shortHoldPenaltyPct: opt['short_hold_penalty_pct'],
+          purchaseFeePct: opt['purchase_fee_pct'],
+          slippagePct: opt['slippage_pct'],
+          maxGridAdds: opt['max_grid_adds'],
+          oosValidated: opt['oos_validated'],
         );
 
         if (!mounted) return;
@@ -2739,6 +2767,9 @@ Map<String, dynamic> _runSingleBacktestInIsolate(Map<String, dynamic> params) {
     useMacdFilter: params['useMacdFilter'] as bool? ?? false,
     slippagePct: params['slippagePct'] as double? ?? 0.0,
     gridSpacingPct: params['gridSpacingPct'] as double? ?? 0.0,
+    // 与模拟盘风控参数对齐：止损默认 -15%、网格加仓最多 3 次
+    stopLossPct: params['stopLossPct'] as double? ?? 15.0,
+    maxGridAdds: params['maxGridAdds'] as int? ?? 3,
   );
   final sellOpt = SellSignalOptimizer.optimize(allNavs: navs, allDates: dates);
   return {'result': result, 'sellOpt': sellOpt};
@@ -2760,6 +2791,8 @@ Map<String, dynamic>? _runStrategyOptimizationInIsolate(
   final double highThreshold = params['highThreshold'] ?? 48.0;
   final double rsiFilterLimit = params['rsiFilterLimit'] ?? 35.0;
   final bool useMacdFilter = params['useMacdFilter'] ?? true;
+  final double stopLossPct = params['stopLossPct'] ?? 15.0;
+  final int maxGridAdds = params['maxGridAdds'] ?? 3;
 
   final opt = GAOptimizer.optimize(
     allNavs: navs,
@@ -2772,15 +2805,83 @@ Map<String, dynamic>? _runStrategyOptimizationInIsolate(
     highThreshold: highThreshold,
     rsiFilterLimit: rsiFilterLimit,
     useMacdFilter: useMacdFilter,
+    stopLossPct: stopLossPct,
+    maxGridAdds: maxGridAdds,
   );
   if (opt == null) return null;
 
+  // 卖出信号集成验证：候选卖出参数必须与寻优出的买入策略组合回测，
+  // 整体风险调整收益不显著劣于“无卖出信号”基线时才予以采纳，
+  // 避免卖出信号独立寻优但破坏整体组合表现。
+  int? finalSellX;
+  int? sellTrades;
+  double? sellWinRate;
+
   final sellOpt = SellSignalOptimizer.optimize(allNavs: navs, allDates: dates);
+  if (sellOpt != null && sellOpt['sell_x'] != null) {
+    final int encodedVal = sellOpt['sell_x'] as int;
+    int candX;
+    double candPct;
+    if (encodedVal >= 100) {
+      candX = encodedVal ~/ 1000;
+      candPct = (encodedVal % 1000).toDouble();
+    } else {
+      candX = encodedVal;
+      candPct = encodedVal.toDouble();
+    }
+
+    final int buyDays = opt['buy_days'] as int;
+    final double buyDrop = opt['buy_drop'] as double;
+    final double targetProfit = opt['target_profit'] as double;
+    final int holdMax = opt['hold_max'] as int;
+    final int maPeriod = opt['ma_period'] as int? ?? 0;
+    final double maEnvelopePct = opt['ma_envelope_pct'] as double? ?? 0.0;
+    final double slippagePct = opt['slippage_pct'] as double? ?? 0.0;
+    final double gridSpacingPct = (buyDrop * 0.3).clamp(1.0, 5.0);
+
+    BacktestResult runWithSell(int? sx, double? sp) =>
+        BacktestEngine.runBacktest(
+          allNavs: navs,
+          allDates: dates,
+          buyDays: buyDays,
+          buyDropPct: buyDrop,
+          targetProfitPct: targetProfit,
+          holdMax: holdMax,
+          maPeriod: maPeriod,
+          maEnvelopePct: maEnvelopePct,
+          trailingDropPct: trailingDropPct,
+          sellX: sx,
+          sellPct: sp,
+          slippagePct: slippagePct,
+          rsiFilterLimit: rsiFilterLimit,
+          useMacdFilter: useMacdFilter,
+          gridSpacingPct: gridSpacingPct,
+          stopLossPct: stopLossPct,
+          maxGridAdds: maxGridAdds,
+        );
+
+    final resWithSell = runWithSell(candX, candPct);
+    final resWithoutSell = runWithSell(null, null);
+    final double withScore =
+        (resWithSell.calmarRatio + resWithSell.sortinoRatio) / 2.0;
+    final double baseScore =
+        (resWithoutSell.calmarRatio + resWithoutSell.sortinoRatio) / 2.0;
+    final bool accepted = resWithSell.totalTrades >= 3 &&
+        (baseScore <= 0.0
+            ? withScore > 0.0
+            : withScore >= baseScore * 0.8);
+    if (accepted) {
+      finalSellX = encodedVal;
+      sellWinRate = sellOpt['sell_win_rate'] as double?;
+      sellTrades = sellOpt['sell_trades'] as int?;
+    }
+  }
+
   return {
     'opt': opt,
-    'sell_x': sellOpt?['sell_x'],
-    'sell_win_rate': sellOpt?['sell_win_rate'],
-    'sell_trades': sellOpt?['sell_trades'],
+    'sell_x': finalSellX,
+    'sell_win_rate': sellWinRate,
+    'sell_trades': sellTrades,
   };
 }
 

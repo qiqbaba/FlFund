@@ -52,6 +52,7 @@ fund_history.db-wal
 # Simulated portfolio data (generated during backtesting)
 simulated_portfolio*.json
 my_funds.json
+opencode.json
 
 # Temporary diff & encoding files
 *_diff.txt

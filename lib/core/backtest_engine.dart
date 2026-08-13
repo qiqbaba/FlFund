@@ -293,6 +293,9 @@ class BacktestEngine {
     int shortHoldDays = 7,
     double shortHoldPenaltyPct = 1.5,
     double purchaseFeePct = 0.0,
+    // 网格加仓次数上限：>0 时持仓基金继续下跌超过网格间距则向同一仓位追加买入并合并均价，
+    // 与模拟盘网格加仓语义完全对齐（0=关闭，保持旧的多仓位间距过滤行为）
+    int maxGridAdds = 0,
   }) {
     final int n = allNavs.length;
     if (n <= buyDays) {
@@ -515,13 +518,17 @@ class BacktestEngine {
             slot.maxHoldNav = currentNav;
           }
 
-          final double profit = (currentNav - slot.buyNav) / slot.buyNav;
+          // 网格加仓后按合并平均成本计算浮动盈亏（与模拟盘口径一致）
+          final double avgCost = slot.avgCostNav > 0.0
+              ? slot.avgCostNav
+              : slot.buyNav;
+          final double profit = (currentNav - avgCost) / avgCost;
 
           // I. 追踪止盈平仓判断 (设定激活门槛，默认需要达到 trailingDropPct 的收益)
           bool isTrailingStopTriggered = false;
           if (trailingDropPct != null && slot.maxHoldNav > 0.0) {
             final double maxProfitSoFar =
-                (slot.maxHoldNav - slot.buyNav) / slot.buyNav;
+                (slot.maxHoldNav - avgCost) / avgCost;
             final double activateThreshold =
                 (trailingActivatePct ?? trailingDropPct) / 100.0;
             if (maxProfitSoFar >= activateThreshold) {
@@ -557,8 +564,10 @@ class BacktestEngine {
           final bool isExpired = holdDays >= holdMax;
 
           // V. 单笔硬止损平仓判断（stopLossPct>0 时生效，默认关闭）
-          final bool isStopLossTriggered =
-              stopLossPct > 0.0 && profit <= -stopLossPct / 100.0;
+          // 止损基准为首次买入净值，网格加仓摊低均价不会钝化止损（与模拟盘一致）
+          final bool isStopLossTriggered = stopLossPct > 0.0 &&
+              (currentNav - slot.buyNav) / slot.buyNav <=
+                  -stopLossPct / 100.0;
 
           // 平仓决策
           final bool shouldSell = isTargetProfitTriggered ||
@@ -570,7 +579,7 @@ class BacktestEngine {
 
           if (shouldSell) {
             final double sellNav = currentNav;
-            double finalProfit = (sellNav - slot.buyNav) / slot.buyNav;
+            double finalProfit = (sellNav - avgCost) / avgCost;
             if (holdDays < shortHoldDays) {
               finalProfit -= shortHoldPenalty;
             }
@@ -647,51 +656,107 @@ class BacktestEngine {
         }
       }
 
-      if (triggerMask[i] && i < n - 1 && !circuitBreakerActive) {
-        if (gridSpacingPct > 0.0 && lastBuyPrice != null) {
-          final double dropFromLast =
-              (allNavs[i] - lastBuyPrice) / lastBuyPrice;
-          if (dropFromLast > -gridSpacingPct / 100.0) {
-            continue; // 跌幅不够，跳过本次开仓
-          }
-        }
-
-        _PositionSlot? freeSlot;
+      bool gridAdded = false;
+      if (maxGridAdds > 0 &&
+          triggerMask[i] &&
+          i < n - 1 &&
+          !circuitBreakerActive &&
+          gridSpacingPct > 0.0) {
+        // 网格加仓：向跌幅相对上次买入价超过网格间距的持仓追加买入（合并均价，不产生独立交易），
+        // 与模拟盘“网格加仓(最多N次)”语义完全对齐
+        _PositionSlot? gridSlot;
+        double deepestDrop = 0.0;
         for (final slot in slots) {
-          if (!slot.isHolding) {
-            freeSlot = slot;
-            break;
+          if (!slot.isHolding || slot.gridCount >= maxGridAdds) continue;
+          if (slot.lastBuyNav <= 0.0) continue;
+          final double dropFromLast =
+              (allNavs[i] - slot.lastBuyNav) / slot.lastBuyNav;
+          if (dropFromLast <= -gridSpacingPct / 100.0 &&
+              dropFromLast < deepestDrop) {
+            deepestDrop = dropFromLast;
+            gridSlot = slot;
           }
         }
-
-        if (freeSlot != null) {
-          // 计算静态总资产：现金 + 已持仓位的买入本金（排除浮动盈亏的干扰，避免高位重仓、低位轻仓的反向选择）
+        if (gridSlot != null) {
           double staticTotalEquity = cash;
           for (final s in slots) {
             if (s.isHolding) {
               staticTotalEquity += s.buyBalance;
             }
           }
+          final double allocate = staticTotalEquity / maxConcurrentTrades;
+          if (cash >= allocate * 0.9 && allocate > 0.000001) {
+            cash -= allocate;
+            gridSlot.shares += allocate / allNavs[i];
+            gridSlot.buyBalance += allocate;
+            gridSlot.avgCostNav =
+                gridSlot.buyBalance / gridSlot.shares;
+            gridSlot.lastBuyNav = allNavs[i];
+            gridSlot.gridCount++;
+            gridSlot.balance = gridSlot.shares * allNavs[i];
+            lastBuyPrice = allNavs[i];
+            gridAdded = true;
+          }
+        }
+      }
 
-          double allocate = staticTotalEquity / maxConcurrentTrades;
+      if (!gridAdded &&
+          triggerMask[i] &&
+          i < n - 1 &&
+          !circuitBreakerActive) {
+        // 修复：原实现用 continue 直接跳到下一天，会跳过当日权益曲线更新
+        // （equityCurve 保持默认值 1.0，且不更新权益峰值），改为布尔开关
+        bool skipOpen = false;
+        if (gridSpacingPct > 0.0 && lastBuyPrice != null) {
+          final double dropFromLast =
+              (allNavs[i] - lastBuyPrice) / lastBuyPrice;
+          if (dropFromLast > -gridSpacingPct / 100.0) {
+            skipOpen = true; // 跌幅不够，跳过本次开仓
+          }
+        }
 
-          // 尾余仓位保护：如果现金不足分配额度的 90%，为了防止仓位过小导致平摊风险失效，直接放弃本次开仓
-          if (cash < allocate * 0.9) {
-            allocate = 0.0;
-          } else if (allocate > cash) {
-            allocate = cash;
+        if (!skipOpen) {
+          _PositionSlot? freeSlot;
+          for (final slot in slots) {
+            if (!slot.isHolding) {
+              freeSlot = slot;
+              break;
+            }
           }
 
-          if (allocate > 0.000001) {
-            cash -= allocate;
-            freeSlot.isHolding = true;
-            freeSlot.buyIdx = i;
-            freeSlot.buyNav = allNavs[i];
-            freeSlot.maxHoldNav = allNavs[i];
-            freeSlot.buyBalance = allocate;
+          if (freeSlot != null) {
+            // 计算静态总资产：现金 + 已持仓位的买入本金（排除浮动盈亏的干扰，避免高位重仓、低位轻仓的反向选择）
+            double staticTotalEquity = cash;
+            for (final s in slots) {
+              if (s.isHolding) {
+                staticTotalEquity += s.buyBalance;
+              }
+            }
 
-            // 更新最近开仓价
-            lastBuyPrice = allNavs[i];
+            double allocate = staticTotalEquity / maxConcurrentTrades;
+
+            // 尾余仓位保护：如果现金不足分配额度的 90%，为了防止仓位过小导致平摊风险失效，直接放弃本次开仓
+            if (cash < allocate * 0.9) {
+              allocate = 0.0;
+            } else if (allocate > cash) {
+              allocate = cash;
+            }
+
+            if (allocate > 0.000001) {
+              cash -= allocate;
+              freeSlot.isHolding = true;
+              freeSlot.buyIdx = i;
+              freeSlot.buyNav = allNavs[i];
+              freeSlot.avgCostNav = allNavs[i];
+              freeSlot.lastBuyNav = allNavs[i];
+              freeSlot.maxHoldNav = allNavs[i];
+              freeSlot.buyBalance = allocate;
+              freeSlot.shares = allocate / allNavs[i];
+              freeSlot.gridCount = 0;
+
+              // 更新最近开仓价
+              lastBuyPrice = allNavs[i];
+            }
           }
         }
       }
@@ -703,7 +768,7 @@ class BacktestEngine {
       }
       for (final slot in slots) {
         if (slot.isHolding) {
-          slot.balance = slot.buyBalance * (allNavs[i] / slot.buyNav);
+          slot.balance = slot.shares * allNavs[i];
           dailyTotalEquity += slot.balance;
         } else {
           slot.balance = 0.0;
@@ -866,8 +931,12 @@ class BacktestEngine {
 class _PositionSlot {
   bool isHolding = false;
   int buyIdx = 0;
-  double buyNav = 0.0;
+  double buyNav = 0.0; // 首次买入净值（止损/回撤基准）
+  double avgCostNav = 0.0; // 网格加仓后的合并平均成本
+  double lastBuyNav = 0.0; // 最近一次买入（含网格加仓）净值，用于网格步进判断
   double maxHoldNav = 0.0;
-  double buyBalance = 0.0;
+  double buyBalance = 0.0; // 累计投入本金（含网格加仓）
+  double shares = 0.0; // 累计持有份额
   double balance = 0.0;
+  int gridCount = 0; // 网格加仓次数
 }
