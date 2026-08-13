@@ -1,17 +1,17 @@
 {
-  "version": "1.8.17",
-  "buildNumber": 99,
+  "version": "1.8.18",
+  "buildNumber": 100,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-13",
-  "releaseNotes": "1. 优化策略回测与模拟盘风控参数对齐：支持止损、网格上限、申购费率与滑点；优化卖出信号集成校验与模拟盘资金校验逻辑",
+  "releaseNotes": "1. 调整大模型截图识别设置：将超长截图切分功能默认关闭并隐藏界面控制开关",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.17/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.18/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.17/FlFund-v1.8.17.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.18/FlFund-v1.8.18.apk",
       "sha256": "",
       "fileSize": 0
     }

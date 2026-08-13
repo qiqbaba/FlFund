@@ -48,7 +48,7 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
   final List<TextEditingController> _ocrAmountControllers = [];
   final List<TextEditingController> _ocrYieldControllers = [];
 
-  bool _autoSliceLongImage = true;
+  bool _autoSliceLongImage = false;
 
   late String _zhipuApiKey;
   late String _zhipuApiUrl;
@@ -1221,24 +1221,6 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                                 fluent.TextBox(
                                   controller: _modelController,
                                   placeholder: '例如: glm-4.6v-flash',
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    fluent.ToggleSwitch(
-                                      checked: _autoSliceLongImage,
-                                      onChanged: (v) {
-                                        setState(() {
-                                          _autoSliceLongImage = v;
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      '智能切分超长截图（长图识别增强，推荐开启）',
-                                      style: TextStyle(fontSize: 11),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),

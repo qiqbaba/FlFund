@@ -40,7 +40,7 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
   List<Map<String, dynamic>> _ocrResults = [];
   final Set<int> _selectedOcrIndices = {};
 
-  bool _autoSliceLongImage = true;
+  bool _autoSliceLongImage = false;
 
   late String _zhipuApiKey;
   late String _zhipuApiUrl;
@@ -1126,24 +1126,6 @@ class _ImportMyFundsDialogState extends State<ImportMyFundsDialog> {
                                 fluent.TextBox(
                                   controller: _modelController,
                                   placeholder: '例如: glm-4.6v-flash',
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    fluent.ToggleSwitch(
-                                      checked: _autoSliceLongImage,
-                                      onChanged: (v) {
-                                        setState(() {
-                                          _autoSliceLongImage = v;
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      '智能切分超长截图（长图识别增强，推荐开启）',
-                                      style: TextStyle(fontSize: 11),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),

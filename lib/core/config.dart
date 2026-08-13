@@ -48,7 +48,7 @@ class AppConfig extends ChangeNotifier {
   List<Map<String, String>> customApis = [];
   bool freezeColumns = false;
   bool ocrPreferClassC = true;
-  bool ocrAutoSliceLongImage = true;
+  bool ocrAutoSliceLongImage = false;
   bool autoCheckUpdate = true;
   String ignoredUpdateVersion = '';
   String supabaseUrl = 'https://zaslmgurbafajgoafpat.supabase.co';
