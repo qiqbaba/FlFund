@@ -1,17 +1,17 @@
 {
-  "version": "1.8.18",
-  "buildNumber": 100,
+  "version": "1.8.19",
+  "buildNumber": 101,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-13",
-  "releaseNotes": "1. 调整大模型截图识别设置：将超长截图切分功能默认关闭并隐藏界面控制开关",
+  "releaseDate": "2026-08-14",
+  "releaseNotes": "1. 优化指数基金映射：新增 800医卫(000933) 到中信保诚中证800医药指数(LOF)A(165519) 的映射",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.18/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.19/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.18/FlFund-v1.8.18.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.19/FlFund-v1.8.19.apk",
       "sha256": "",
       "fileSize": 0
     }

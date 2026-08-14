@@ -148,6 +148,7 @@ class PinyinSearch {
     if (indexCode == '399005') return '006246'; // 华夏中小企业100ETF联接A（本地缓存缺失）
     if (indexCode == '399702') return '070023'; // 深证F120 -> 嘉实深证基本面120ETF联接A
     if (indexCode == '399361') return '014578'; // 在线消费 -> 南方国证在线消费ETF联接A
+    if (indexCode == '000933') return '165519'; // 800医卫 -> 中信保诚中证800医药指数(LOF)A（"医卫"是"医药卫生"缩写，与基金名"医药"不匹配）
     if (!_isLoaded || _registry.isEmpty) return indexCode;
 
     // 清理关键词
