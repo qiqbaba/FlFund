@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.8.28
+
+### 修复
+- CI/CD 自动打包：在 Android 构建流程中添加 `--android-skip-build-dependency-validation` 参数，解决 Flutter 对 Gradle 依赖版本的强校验拦截
+- 估值过滤优化：修正现金流主题 ETF 联接基金的无盘中估值过滤规则，确保正常拉取实时估值
+
 ## 1.8.27
 
 ### 依赖升级与重构

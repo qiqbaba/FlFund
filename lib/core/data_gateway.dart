@@ -332,7 +332,7 @@ class FundDataGateway {
 
     return fundName.contains('货币') ||
         fundName.contains('理财') ||
-        fundName.contains('现金') ||
+        (fundName.contains('现金') && !fundName.contains('现金流')) ||
         fundName.contains('存单') ||
         fundName.contains('日聚宝') ||
         fundName.contains('日盈') ||

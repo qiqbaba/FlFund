@@ -38,6 +38,7 @@ void main() {
       expect(FundDataGateway.isNoLiveValuationFund('000739', name: '广发天天红货币A'), isTrue);
       expect(FundDataGateway.isNoLiveValuationFund('015645', name: '惠升中证同业存单AAA指数'), isTrue);
       expect(FundDataGateway.isNoLiveValuationFund('000001', name: '华夏成长混合'), isFalse);
+      expect(FundDataGateway.isNoLiveValuationFund('023918', name: '华夏国证自由现金流ETF发起式联接C'), isFalse);
     });
 
     test('fetchValuation skips polling for money market funds', () async {

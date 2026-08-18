@@ -61,6 +61,7 @@ jobs:
       - name: Build Android Release APK
         run: |
           flutter build apk --release \
+            --android-skip-build-dependency-validation \
             --build-name=${{ steps.version.outputs.version_name }} \
             --build-number=${{ steps.version.outputs.build_number }}
 
