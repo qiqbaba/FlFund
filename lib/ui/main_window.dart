@@ -59,12 +59,15 @@ class _MainWindowState extends State<MainWindow> {
       }
     };
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
-    // 窗口加载出来后自动在后台触发静默刷新以同步实时估值数据
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fundProvider.refreshAll();
-      // 后台预加载涨跌榜和估值雷达数据，用户点击对应 tab 时无需等待
-      _fundProvider.fetchRankings();
-      _fundProvider.fetchValuations();
+      // 稍微错开后台预加载任务，优先保障首屏自选估值毫秒级极速呈现
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _fundProvider.fetchRankings();
+      });
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (mounted) _fundProvider.fetchValuations();
+      });
       _checkAutoUpdate();
     });
     // 每隔 3 分钟在后台检查并自动刷新一次估值数据

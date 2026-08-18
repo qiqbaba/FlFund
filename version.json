@@ -1,17 +1,17 @@
 {
-  "version": "1.8.22",
-  "buildNumber": 104,
+  "version": "1.8.23",
+  "buildNumber": 105,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-18",
-  "releaseNotes": "1. 遗传算法寻优升级：优化早停、走动前推验收与高原稳健兜底机制\n2. 云同步回传机制修复：完善持仓金额与收益率字段变动回传，解决重复同步问题\n3. 策略中心进度与体验优化：进度条增加完成数计数展示与自适应宽度",
+  "releaseNotes": "1. 数据加载与并发性能优化：常规估值刷新按需加载历史数据，排行榜分页调优，避免重复抓取导致的阻塞卡顿\n2. 估值雷达批量请求加速：指数关联基金估值改为单次全量批量拉取，显著减少网络请求往返\n3. 启动后台预加载错峰调度：错开涨跌榜与估值雷达初始化延时，优先保障首屏自选极速呈现",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.22/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.23/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.22/FlFund-v1.8.22.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.23/FlFund-v1.8.23.apk",
       "sha256": "",
       "fileSize": 0
     }

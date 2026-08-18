@@ -30,8 +30,8 @@ class FundDataGateway {
       'User-Agent':
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15'
     };
-    _dio.options.connectTimeout = const Duration(seconds: 15);
-    _dio.options.receiveTimeout = const Duration(seconds: 15);
+    _dio.options.connectTimeout = const Duration(seconds: 6);
+    _dio.options.receiveTimeout = const Duration(seconds: 8);
     _dio.transformer = SafeTransformer();
 
     // 仅对已知可信的基金数据源域名跳过 SSL 证书校验

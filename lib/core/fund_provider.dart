@@ -859,7 +859,9 @@ class FundProvider extends ChangeNotifier {
 
   // 通用的加载历史净值并计算指标方法
   Future<void> loadHistoryAndCalculateForModel(FundUIModel model,
-      {bool isForce = false, bool onlyLocal = false}) async {
+      {bool isForce = false,
+      bool onlyLocal = false,
+      bool onlyIfMissing = false}) async {
     final db = FundHistoryDB();
     final gateway = FundDataGateway();
     final config = AppConfig();
@@ -871,16 +873,20 @@ class FundProvider extends ChangeNotifier {
       bool needApiUpdate = false;
 
       if (!onlyLocal) {
-        if (history == null || history['dates'] == null) {
+        if (history == null ||
+            history['dates'] == null ||
+            (history['navs'] as List?)?.isEmpty == true) {
           needApiUpdate = true;
-        } else {
+        } else if (!onlyIfMissing) {
           final String dMax = history['jzrq'] ?? '';
           final double updateTime =
               (history['update_time'] as num?)?.toDouble() ?? 0.0;
           final double nowTime = DateTime.now().millisecondsSinceEpoch / 1000.0;
+          final nowHour = DateTime.now().hour;
+          final isEvening = nowHour >= 19 || nowHour < 8;
 
-          if (dMax != todayStr) {
-            // 如果最新净值日期不是今天，但距离上一次网络拉取（updateTime）不足 4 小时，则不重复发起网络请求
+          if (dMax != todayStr && isEvening) {
+            // 如果最新净值日期不是今天，且处于夜间官方净值公布时段，且距离上一次网络拉取超过 4 小时，才发起网络请求
             if (nowTime - updateTime > 14400) {
               needApiUpdate = true;
             }
@@ -1212,6 +1218,7 @@ class FundProvider extends ChangeNotifier {
   // 限制最大并发数执行任务的辅助函数
   Future<List<T>> _runWithConcurrencyLimit<T>(
       List<Future<T> Function()> tasks, int limit) async {
+    if (tasks.isEmpty) return <T>[];
     // 优化：使用队列模式，避免预分配大列表
     final results = List<T?>.filled(tasks.length, null);
     int nextIndex = 0;
@@ -1229,10 +1236,11 @@ class FundProvider extends ChangeNotifier {
       }
     }
 
-    // 错开并发 Worker 启动时间（相隔 50ms），防止微秒级高并发冲垮 HTTPS 握手
-    final workers = List.generate(limit, (i) async {
+    final effectiveLimit = math.min(limit, tasks.length);
+    // 错开并发 Worker 启动时间（相隔 25ms），防止微秒级高并发冲垮 HTTPS 握手
+    final workers = List.generate(effectiveLimit, (i) async {
       if (i > 0) {
-        await Future.delayed(Duration(milliseconds: i * 50));
+        await Future.delayed(Duration(milliseconds: i * 25));
       }
       await worker();
     });
@@ -1262,100 +1270,109 @@ class FundProvider extends ChangeNotifier {
     _refreshErrors.clear();
     notifyListeners();
 
-    // 1. 整理自选基金以及周期榜单中尚未关注的基金列表
-    final List<FundUIModel> fundList = [
-      ...myFunds.values,
-      ...cycleFunds.values.where((m) => !myFunds.containsKey(m.code)),
-    ];
-
-    // 2. 优先利用新浪极速批量接口 (50 只/批次) 一次性拉取所有估值
-    final allCodes = fundList.map((f) => f.code).toList();
-    Map<String, Map<String, dynamic>> batchVals = {};
     try {
-      batchVals = await gateway.fetchValuationBatch(allCodes);
-    } catch (e) {
-      debugPrint('批量估值拉取异常，将自动降级为单只拉取: $e');
-    }
+      // 1. 整理自选基金以及周期榜单中尚未关注的基金列表
+      final List<FundUIModel> fundList = [
+        ...myFunds.values,
+        ...cycleFunds.values.where((m) => !myFunds.containsKey(m.code)),
+      ];
 
-    // 3. 并行限流刷新：将任务组装为闭包，由并发调度器执行以控制网络并发数
-    final List<Future<List<String>> Function()> tasks = [];
+      // 2. 优先利用新浪极速批量接口 (50 只/批次) 一次性拉取所有估值
+      final allCodes = fundList.map((f) => f.code).toList();
+      Map<String, Map<String, dynamic>> batchVals = {};
+      try {
+        batchVals = await gateway.fetchValuationBatch(allCodes);
+      } catch (e) {
+        debugPrint('批量估值拉取异常，将自动降级为单只拉取: $e');
+      }
 
-    for (int i = 0; i < fundList.length; i++) {
-      final model = fundList[i];
-      final preferredSourceIndex = (i % gateway.valuationSourceCount);
+      // 3. 并行限流刷新：将任务组装为闭包，由并发调度器执行以控制网络并发数
+      final List<Future<List<String>> Function()> tasks = [];
 
-      tasks.add(() async {
-        final localErrors = <String>[];
-        model.errorMsg = null; // 每次刷新前重置
-        try {
-          // A. 优先应用新浪极速批量估值结果
-          if (batchVals.containsKey(model.code)) {
-            final val = batchVals[model.code]!;
-            model.gsz = val['gsz']?.toString() ?? model.gsz;
-            model.gszzl =
-                (val['gszzl']?.toString() ?? model.gszzl).replaceAll('%', '');
-            model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
-            model.gztime = '${val['gztime']} [新浪极速批量]';
-          } else {
-            // 未在批量接口中覆盖的个基（如特殊场内影子ETF），走单源精准抓取
-            final val = await gateway.fetchValuation(model.code,
-                name: model.name,
-                sector: model.sector,
-                preferredSourceIndex: preferredSourceIndex);
+      for (int i = 0; i < fundList.length; i++) {
+        final model = fundList[i];
+        final preferredSourceIndex = (i % gateway.valuationSourceCount);
 
-            if (val != null) {
+        tasks.add(() async {
+          final localErrors = <String>[];
+          model.errorMsg = null; // 每次刷新前重置
+          try {
+            // A. 优先应用新浪极速批量估值结果
+            if (batchVals.containsKey(model.code)) {
+              final val = batchVals[model.code]!;
               model.gsz = val['gsz']?.toString() ?? model.gsz;
               model.gszzl =
                   (val['gszzl']?.toString() ?? model.gszzl).replaceAll('%', '');
               model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
-              String srcName = val['source']?.toString() ?? '';
-              if (srcName == 'EastMoneyGz') {
-                srcName = '天天基金(网页)';
-              } else if (srcName == 'EastMoneyMobileGz' ||
-                  srcName == 'EastMoneyMobile') {
-                srcName = '天天基金(手机)';
-              } else if (srcName == 'EastMoneyWeb') {
-                srcName = '天天基金(历史)';
-              } else if (srcName == 'TencentGz') {
-                srcName = '腾讯财经';
-              } else if (srcName == 'SinaGz' || srcName == 'SinaGzBatch') {
-                srcName = '新浪财经';
-              } else if (srcName == 'DanjuanGz') {
-                srcName = '蛋卷基金';
-              } else if (srcName == 'HowbuyGz') {
-                srcName = '好买基金';
-              } else if (srcName == '10JqkaGz') {
-                srcName = '同花顺';
-              } else if (srcName == 'ShadowETF') {
-                srcName = '场内影子估值';
+              model.gztime = '${val['gztime']} [新浪极速批量]';
+            } else {
+              // 未在批量接口中覆盖的个基（如特殊场内影子ETF），走单源精准抓取
+              final val = await gateway.fetchValuation(model.code,
+                  name: model.name,
+                  sector: model.sector,
+                  preferredSourceIndex: preferredSourceIndex);
+
+              if (val != null) {
+                model.gsz = val['gsz']?.toString() ?? model.gsz;
+                model.gszzl =
+                    (val['gszzl']?.toString() ?? model.gszzl).replaceAll('%', '');
+                model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
+                String srcName = val['source']?.toString() ?? '';
+                if (srcName == 'EastMoneyGz') {
+                  srcName = '天天基金(网页)';
+                } else if (srcName == 'EastMoneyMobileGz' ||
+                    srcName == 'EastMoneyMobile') {
+                  srcName = '天天基金(手机)';
+                } else if (srcName == 'EastMoneyWeb') {
+                  srcName = '天天基金(历史)';
+                } else if (srcName == 'TencentGz') {
+                  srcName = '腾讯财经';
+                } else if (srcName == 'SinaGz' || srcName == 'SinaGzBatch') {
+                  srcName = '新浪财经';
+                } else if (srcName == 'DanjuanGz') {
+                  srcName = '蛋卷基金';
+                } else if (srcName == 'HowbuyGz') {
+                  srcName = '好买基金';
+                } else if (srcName == '10JqkaGz') {
+                  srcName = '同花顺';
+                } else if (srcName == 'ShadowETF') {
+                  srcName = '场内影子估值';
+                }
+                if (val['is_proxy'] == true) {
+                  srcName = '$srcName(代理)';
+                }
+                model.gztime = '${val['gztime']} [$srcName]';
               }
-              if (val['is_proxy'] == true) {
-                srcName = '$srcName(代理)';
-              }
-              model.gztime = '${val['gztime']} [$srcName]';
             }
+
+            // B. 加载历史与百分位计算：常规估值刷新使用 onlyIfMissing: true，避免白天重复向天天基金抓取 2000 天历史数据导致卡死
+            await loadHistoryAndCalculateForModel(
+              model,
+              isForce: isForce,
+              onlyIfMissing: !isForce,
+            );
+          } catch (e) {
+            final msg = '刷新自选 ${model.code} 失败: $e';
+            debugPrint(msg);
+            model.errorMsg = msg;
+            localErrors.add(msg);
           }
+          return localErrors;
+        });
+      }
 
-          // B. 加载历史与百分位计算 (包含三源降级逻辑与 L1 内存缓存)
-          await loadHistoryAndCalculateForModel(model, isForce: isForce);
-        } catch (e) {
-          final msg = '刷新自选 ${model.code} 失败: $e';
-          debugPrint(msg);
-          model.errorMsg = msg;
-          localErrors.add(msg);
-        }
-        return localErrors;
-      });
+      // 限制最大并发数为 8 并发执行
+      final results = await _runWithConcurrencyLimit(tasks, 8);
+
+      // 合并所有局部错误列表
+      _refreshErrors = results.expand((e) => e).toList();
+      _lastRefreshTime = DateTime.now();
+    } catch (e) {
+      debugPrint('全局 refreshAll 异常: $e');
+    } finally {
+      isRefreshing = false;
+      notifyListeners();
     }
-
-    // 限制最大并发数为 8 并发执行
-    final results = await _runWithConcurrencyLimit(tasks, 8);
-
-    // 合并所有局部错误列表
-    _refreshErrors = results.expand((e) => e).toList();
-    _lastRefreshTime = DateTime.now();
-    isRefreshing = false;
-    notifyListeners();
 
     // 触发模拟盘自动交易检测
     unawaited(SimulationProvider().checkAndExecute(myFunds.values.toList()));
@@ -1412,14 +1429,14 @@ class FundProvider extends ChangeNotifier {
         }
       }
 
-      // 只展示 ETF 联接基金（名称含 ETF 的场外基金）：默认拉10页，
+      // 只展示 ETF 联接基金（名称含 ETF 的场外基金）：默认拉5页，
       // 板块同质化去重不足10只时每次追加2页，直到凑满10只或翻完无更多数据
       Future<List<Map<String, dynamic>>> fetchEtfRankingCandidates(
           String sort) async {
         final List<Map<String, dynamic>> combined = [];
         int nextPage = 1;
-        int batch = 10;
-        const int maxPages = 60;
+        int batch = 5;
+        const int maxPages = 15;
         while (nextPage <= maxPages) {
           final chunk = await fetchPagedValuations(
               sort, nextPage, nextPage + batch - 1);
@@ -1451,7 +1468,11 @@ class FundProvider extends ChangeNotifier {
       // 异步并发加载这些排行基金的历史数据
       final List<Future<void>> detailTasks = [];
       for (final model in [...topFunds, ...botFunds]) {
-        detailTasks.add(loadHistoryAndCalculateForModel(model));
+        detailTasks.add(loadHistoryAndCalculateForModel(
+          model,
+          isForce: isForce,
+          onlyIfMissing: !isForce,
+        ));
       }
       await Future.wait(detailTasks);
 
@@ -1802,6 +1823,30 @@ class FundProvider extends ChangeNotifier {
       final List<Future<void>> valuationDetailTasks = [];
       int valTaskIndex = 0;
 
+      // 预先收集所有需要批量获取估值的关联基金代码
+      final List<String> allAssocCodes = [];
+      for (final item in valuationList) {
+        final String indexCode = item['code'] ?? '';
+        final String indexName = item['name'] ?? '';
+        final String assocCode =
+            pinyinSearch.findFundForIndex(indexCode, indexName);
+        if (assocCode != indexCode) {
+          final String tag = item['tag'] ?? '正常';
+          if (myFunds.containsKey(assocCode) ||
+              tag.contains('低') ||
+              tag.contains('高')) {
+            allAssocCodes.add(assocCode);
+          }
+        }
+      }
+
+      Map<String, Map<String, dynamic>> allAssocBatchVals = {};
+      if (allAssocCodes.isNotEmpty) {
+        try {
+          allAssocBatchVals = await gateway.fetchValuationBatch(allAssocCodes);
+        } catch (_) {}
+      }
+
       for (final item in valuationList) {
         final String indexCode = item['code'] ?? '';
         final String indexName = item['name'] ?? '';
@@ -1840,13 +1885,12 @@ class FundProvider extends ChangeNotifier {
             final preferredSourceIndex =
                 (valTaskIndex++ % gateway.valuationSourceCount);
             valuationDetailTasks.add(() async {
-              await loadHistoryAndCalculateForModel(fundModel);
+              await loadHistoryAndCalculateForModel(fundModel,
+                  onlyIfMissing: true);
               try {
                 // 优先检查全量批量估值结果
-                final batchVals =
-                    await gateway.fetchValuationBatch([fundModel.code]);
-                if (batchVals.containsKey(fundModel.code)) {
-                  final val = batchVals[fundModel.code]!;
+                if (allAssocBatchVals.containsKey(fundModel.code)) {
+                  final val = allAssocBatchVals[fundModel.code]!;
                   fundModel.gsz = val['gsz']?.toString() ?? fundModel.gsz;
                   fundModel.gszzl =
                       (val['gszzl']?.toString() ?? fundModel.gszzl)
