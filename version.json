@@ -1,17 +1,17 @@
 {
-  "version": "1.8.24",
-  "buildNumber": 106,
+  "version": "1.8.25",
+  "buildNumber": 107,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-18",
-  "releaseNotes": "1. 交易算法与信号逻辑对齐：修复估值双重叠加、卖出统计边界与持仓交易日计算，完善策略参数缓存签名\n2. 数据刷新与并发优化：各页面下拉刷新支持并行执行，新浪批量估值并发抓取\n3. 增加信号算法单元测试，保障核心交易回测准确性",
+  "releaseNotes": "1. 修复当日同时满足买入与卖出条件时，卖出信号研判被吞掉的问题\n2. 优化持仓卖出信号买点回溯逻辑，优先精确锚定实际持仓买入日\n3. 补充买卖信号并发场景专项单元测试",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.24/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.25/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.24/FlFund-v1.8.24.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.25/FlFund-v1.8.25.apk",
       "sha256": "",
       "fileSize": 0
     }

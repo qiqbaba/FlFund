@@ -160,5 +160,51 @@ void main() {
       model.navs[0] = 0.82;
       expect(model.isBuySignalAt(0), true);
     });
+
+    test('isSellSignal should NOT be swallowed when today also meets buy condition', () {
+      final model = FundUIModel(code: '000003', name: 'Test Dual Signal Fund', sector: 'Tech');
+      
+      model.optimalStrategy = {
+        'buy_days': 5,
+        'buy_drop': 5.0,
+        'sell_x': 7005, // 7 天涨 5.0%
+        'ma_period': 0, // 禁用均线过滤
+        'rsi_filter_limit': 0.0,
+        'macd_filter_enabled': 0,
+      };
+
+      final List<String> testDates = List.generate(60, (i) => '2026-08-${(60 - i).toString().padLeft(2, '0')}');
+      model.dates = testDates;
+
+      // 构造净值序列（从近到远，index 0 为今日）：
+      // index 30 (历史买点): 0.90
+      // index 7 (7天前): 1.00
+      // index 1 (昨日高点): 1.12
+      // index 0 (今日): 1.06
+      // 今日 7 天涨幅：(1.06 - 1.00) / 1.00 = +6.0% >= +5.0% (满足卖出)
+      // 今日 5 天回撤：(1.06 - 1.12) / 1.12 = -5.35% <= -5.0% (同时满足买入)
+      model.navs = List.generate(60, (index) {
+        if (index == 0) return 1.06;
+        if (index == 1) return 1.12;
+        if (index <= 5) return 1.10;
+        if (index == 7) return 1.00;
+        if (index == 30) return 0.90;
+        return 1.00;
+      });
+
+      // 验证历史买点（第30天）触发了买入
+      expect(model.isBuySignalAt(30), true);
+
+      // 验证今日满足买入条件
+      expect(model.isBuySignalAt(0), true);
+
+      // 验证今日卖出信号没有被今日买入信号吞掉
+      expect(model.isSellSignal, true);
+      expect(model.isSellSignalAt(0), true);
+
+      // 验证模拟盘传入实际买入日（30天前）时也能正确识别卖出
+      expect(model.isSellSignalAt(0, buyDateStr: testDates[30]), true);
+    });
   });
 }
+

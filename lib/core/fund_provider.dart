@@ -506,19 +506,13 @@ class FundUIModel {
         sellPct = 5.0;
       }
 
-      // 寻找在该 index 之后的最近一个买点（即从该天往更早的历史搜索最近一次触发买入的索引，最长回溯 60 个交易日）
+      // 确定持仓买入点 buyIdx：
+      // 1. 若模拟盘传入了具体持仓的 buyDateStr，优先精确锚定到该持仓的实际买入日
+      // 2. 否则（UI 通用信号展示），从研判日前一个交易日 (index + 1) 开始往更早历史搜索最近一次触发买入的索引，最长回溯 60 个交易日
       int? buyIdx;
       final navList = fullNavs;
-      final int searchLimit = math.min(index + 60, navList.length);
-      for (int i = index; i < searchLimit; i++) {
-        if (isBuySignalAt(i)) {
-          buyIdx = i;
-          break;
-        }
-      }
 
-      // 找不到历史系统买点时，锚定到实际持仓买入日（买入日必须早于当前研判日才有意义）
-      if (buyIdx == null && buyDateStr != null && buyDateStr.isNotEmpty) {
+      if (buyDateStr != null && buyDateStr.isNotEmpty) {
         final int offset = isTodayValuation ? 1 : 0;
         final int dateIdx = dates.indexOf(buyDateStr);
         if (dateIdx >= 0) {
@@ -527,11 +521,18 @@ class FundUIModel {
             buyIdx = actualBuyIdx;
           }
         }
-      }
-      // 模拟盘传入了实际买入日却仍无法定位：基准与持仓脱钩，保守地不触发卖出信号。
-      // 独立调用（UI 展示/测试，buyDateStr 为空）保持原语义，不做绑定。
-      if (buyIdx == null && buyDateStr != null && buyDateStr.isNotEmpty) {
-        return false;
+        // 模拟盘传入了实际买入日却无法在历史中定位（或买入日不早于当前研判日）：基准脱钩，保守不触发卖出
+        if (buyIdx == null) {
+          return false;
+        }
+      } else {
+        final int searchLimit = math.min(index + 60, navList.length);
+        for (int i = index + 1; i < searchLimit; i++) {
+          if (isBuySignalAt(i)) {
+            buyIdx = i;
+            break;
+          }
+        }
       }
 
       // 限制卖出的对比基准最远只能回溯到该买入点
