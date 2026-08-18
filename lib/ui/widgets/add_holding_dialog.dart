@@ -217,13 +217,13 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
   // 拾取文件截图
   Future<void> _pickImage() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['jpg', 'jpeg', 'png', 'bmp'],
       );
-      if (result != null && result.files.single.path != null) {
+      if (file != null && file.path != null) {
         setState(() {
-          _selectedImagePath = result.files.single.path;
+          _selectedImagePath = file.path;
           _ocrResults = []; // 清理旧数据
           _errorMessage = null;
         });

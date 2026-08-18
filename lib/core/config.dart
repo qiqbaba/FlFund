@@ -1125,6 +1125,117 @@ class AppConfig extends ChangeNotifier {
     notifyListeners();
   }
 
+  // 生成导出数据的 JSON 字符串 (支持可选密码加密，未加密导出时自动对密钥脱敏)
+  Future<String> generateExportJsonString({
+    required bool includeFundsList,
+    required bool includeHoldings,
+    required bool includeSpecials,
+    required bool includeStrategies,
+    required bool includeSettings,
+    String? password,
+  }) async {
+    final Map<String, dynamic> backupMap = {
+      'version': '1.0',
+      'export_time': DateTime.now().toIso8601String(),
+    };
+
+    // 1. 导出自选基金列表
+    if (includeFundsList) {
+      final List<Map<String, dynamic>> list = [];
+      fundsInfo.forEach((code, info) {
+        list.add({
+          'code': code,
+          'name': info.name,
+          'sector': info.sector,
+          'is_pinned': info.isPinned,
+        });
+      });
+      backupMap['funds_list'] = list;
+    }
+
+    // 2. 导出持仓数据
+    if (includeHoldings) {
+      final List<Map<String, dynamic>> list = [];
+      fundsInfo.forEach((code, info) {
+        if (info.isHeld) {
+          list.add({
+            'code': code,
+            'name': info.name,
+            'sector': info.sector,
+            'amount': info.amount,
+            'yield_rate': info.yieldRate,
+          });
+        }
+      });
+      backupMap['holdings'] = list;
+    }
+
+    // 3. 导出特别关注列表
+    if (includeSpecials) {
+      final List<String> list = [];
+      fundsInfo.forEach((code, info) {
+        if (info.isSpecial) {
+          list.add(code);
+        }
+      });
+      backupMap['specials'] = list;
+    }
+
+    // 4. 导出回测寻优策略
+    if (includeStrategies) {
+      final db = FundHistoryDB();
+      final allStrategies = await db.getAllOptimalStrategies();
+      backupMap['optimal_strategies'] = allStrategies;
+    }
+
+    // 5. 导出系统全局设置
+    if (includeSettings) {
+      final bool shouldRedact = password == null || password.isEmpty;
+
+      final List<Map<String, String>> cleanCustomApis =
+          customApis.map((provider) {
+        final Map<String, String> copy = Map.from(provider);
+        if (shouldRedact) {
+          copy['key'] = ''; // 脱敏
+        }
+        return copy;
+      }).toList();
+
+      backupMap['global_settings'] = {
+        'theme': themeMode,
+        'drop_days': dropDays,
+        'percentile_months': percentileMonths,
+        'hidden_columns': hiddenColumns,
+        'zhipu_api_key': shouldRedact ? '' : zhipuApiKey,
+        'zhipu_api_url': zhipuApiUrl,
+        'zhipu_model': zhipuModel,
+        'mimo_api_key': shouldRedact ? '' : mimoApiKey,
+        'mimo_api_url': mimoApiUrl,
+        'mimo_model': mimoModel,
+        'custom_apis': cleanCustomApis,
+        'default_ocr_provider': defaultOcrProvider,
+        'freeze_columns': freezeColumns,
+      };
+    }
+
+    const encoder = JsonEncoder.withIndent('    ');
+    String fileContent = encoder.convert(backupMap);
+
+    // 加密外壳封装
+    if (password != null && password.isNotEmpty) {
+      final encryptedBase64 =
+          SimpleCrypto.xorEncryptDecrypt(fileContent, password);
+      final encryptedMap = {
+        'encrypted': true,
+        'data': encryptedBase64,
+        'export_time': DateTime.now().toIso8601String(),
+      };
+      fileContent = encoder.convert(encryptedMap);
+    }
+
+    return fileContent;
+  }
+
   // 选择性导出数据为 JSON 字符串并保存到文件 (支持可选密码加密，未加密导出时自动对密钥脱敏)
   Future<bool> exportSelectedData({
     required String destPath,
@@ -1136,106 +1247,16 @@ class AppConfig extends ChangeNotifier {
     String? password,
   }) async {
     try {
-      final Map<String, dynamic> backupMap = {
-        'version': '1.0',
-        'export_time': DateTime.now().toIso8601String(),
-      };
-
-      // 1. 导出自选基金列表
-      if (includeFundsList) {
-        final List<Map<String, dynamic>> list = [];
-        fundsInfo.forEach((code, info) {
-          list.add({
-            'code': code,
-            'name': info.name,
-            'sector': info.sector,
-            'is_pinned': info.isPinned,
-          });
-        });
-        backupMap['funds_list'] = list;
-      }
-
-      // 2. 导出持仓数据
-      if (includeHoldings) {
-        final List<Map<String, dynamic>> list = [];
-        fundsInfo.forEach((code, info) {
-          if (info.isHeld) {
-            list.add({
-              'code': code,
-              'name': info.name,
-              'sector': info.sector,
-              'amount': info.amount,
-              'yield_rate': info.yieldRate,
-            });
-          }
-        });
-        backupMap['holdings'] = list;
-      }
-
-      // 3. 导出特别关注列表
-      if (includeSpecials) {
-        final List<String> list = [];
-        fundsInfo.forEach((code, info) {
-          if (info.isSpecial) {
-            list.add(code);
-          }
-        });
-        backupMap['specials'] = list;
-      }
-
-      // 4. 导出回测寻优策略
-      if (includeStrategies) {
-        final db = FundHistoryDB();
-        final allStrategies = await db.getAllOptimalStrategies();
-        backupMap['optimal_strategies'] = allStrategies;
-      }
-
-      // 5. 导出系统全局设置
-      if (includeSettings) {
-        final bool shouldRedact = password == null || password.isEmpty;
-
-        final List<Map<String, String>> cleanCustomApis =
-            customApis.map((provider) {
-          final Map<String, String> copy = Map.from(provider);
-          if (shouldRedact) {
-            copy['key'] = ''; // 脱敏
-          }
-          return copy;
-        }).toList();
-
-        backupMap['global_settings'] = {
-          'theme': themeMode,
-          'drop_days': dropDays,
-          'percentile_months': percentileMonths,
-          'hidden_columns': hiddenColumns,
-          'zhipu_api_key': shouldRedact ? '' : zhipuApiKey,
-          'zhipu_api_url': zhipuApiUrl,
-          'zhipu_model': zhipuModel,
-          'mimo_api_key': shouldRedact ? '' : mimoApiKey,
-          'mimo_api_url': mimoApiUrl,
-          'mimo_model': mimoModel,
-          'custom_apis': cleanCustomApis,
-          'default_ocr_provider': defaultOcrProvider,
-          'freeze_columns': freezeColumns,
-        };
-      }
+      final fileContent = await generateExportJsonString(
+        includeFundsList: includeFundsList,
+        includeHoldings: includeHoldings,
+        includeSpecials: includeSpecials,
+        includeStrategies: includeStrategies,
+        includeSettings: includeSettings,
+        password: password,
+      );
 
       final file = File(destPath);
-      const encoder = JsonEncoder.withIndent('    ');
-      String fileContent = encoder.convert(backupMap);
-
-      // 加密外壳封装
-      if (password != null && password.isNotEmpty) {
-        final encryptedBase64 =
-            SimpleCrypto.xorEncryptDecrypt(fileContent, password);
-        final encryptedMap = {
-          'encrypted': true,
-          'data': encryptedBase64,
-          'export_time': DateTime.now().toIso8601String(),
-        };
-        fileContent = encoder.convert(encryptedMap);
-      }
-
       await file.writeAsString(fileContent, encoding: utf8);
       return true;
     } catch (e) {

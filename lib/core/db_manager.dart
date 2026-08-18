@@ -617,7 +617,7 @@ class FundHistoryDB {
         _executor!.dispose();
       }
       if (_winDb != null) {
-        _winDb!.dispose();
+        _winDb!.close();
         _winDb = null;
         debugPrint('Windows SQLite 数据库连接已释放');
       }
@@ -657,7 +657,7 @@ class WinDbExecutor implements DbExecutor {
   void dispose() {
     for (final stmt in _stmtCache.values) {
       try {
-        stmt.dispose();
+        stmt.close();
       } catch (_) {}
     }
     _stmtCache.clear();

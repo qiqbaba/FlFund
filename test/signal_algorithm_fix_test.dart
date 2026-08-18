@@ -86,7 +86,7 @@ void main() {
       };
 
       model.updateCalculatedSignals();
-      final initialBuySignal = model.isBuySignal;
+      expect(model.isBuySignal, isFalse);
 
       // 1. 模拟异步填充 sumOf119 / closedMa120 缓存
       model.sumOf119 = 150.0; // 极高的均线总和，导致 MA120 > 当前价格，使价格偏离 envelope

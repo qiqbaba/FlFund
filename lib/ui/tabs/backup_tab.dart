@@ -328,40 +328,14 @@ class _BackupTabState extends State<BackupTab> {
     }
 
     try {
-      String? destPath;
       final dateStr = DateTime.now().toIso8601String().substring(0, 10);
       final defaultFileName = 'flfund_backup_$dateStr.json';
-
-      if (!kIsWeb && Platform.isWindows) {
-        destPath = await FilePicker.platform.saveFile(
-          dialogTitle: '选择备份文件保存位置',
-          fileName: defaultFileName,
-        );
-      } else {
-        // 安卓端或其他平台：选择文件夹并在其下生成文件
-        final selectedDir = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: '选择保存备份的文件夹',
-        );
-        if (selectedDir != null) {
-          destPath = path.join(selectedDir, defaultFileName);
-        }
-      }
-
-      if (destPath == null) {
-        return; // 用户取消了保存
-      }
-
-      // 确保文件格式是 .json
-      if (!destPath.toLowerCase().endsWith('.json')) {
-        destPath = '$destPath.json';
-      }
 
       final bool useEncrypt = _enableExportEncrypt;
       final String? password =
           useEncrypt ? _exportPasswordController.text.trim() : null;
 
-      final success = await appConfig.exportSelectedData(
-        destPath: destPath,
+      final fileContent = await appConfig.generateExportJsonString(
         includeFundsList: _expFundsList,
         includeHoldings: _expHoldings,
         includeSpecials: _expSpecials,
@@ -370,16 +344,44 @@ class _BackupTabState extends State<BackupTab> {
         password: password,
       );
 
-      if (success) {
-        if (!useEncrypt && _expSettings) {
-          _showInfoBar('导出成功', '明文备份已导出。为保安全，API 密钥已被自动剔除。',
-              fluent.InfoBarSeverity.success);
-        } else {
-          _showInfoBar(
-              '导出成功', '数据已成功导出至：$destPath', fluent.InfoBarSeverity.success);
+      String? destPath;
+
+      if (!kIsWeb && Platform.isWindows) {
+        final savedUri = await FilePicker.saveFile(
+          dialogTitle: '选择备份文件保存位置',
+          fileName: defaultFileName,
+          bytes: Uint8List.fromList(utf8.encode(fileContent)),
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+        );
+        if (savedUri != null) {
+          destPath = savedUri.toFilePath();
         }
       } else {
-        _showInfoBar('导出失败', '写入文件时发生内部异常。', fluent.InfoBarSeverity.error);
+        // 安卓端或其他平台：选择文件夹并在其下生成文件
+        final selectedDir = await FilePicker.getDirectoryPath(
+          dialogTitle: '选择保存备份的文件夹',
+        );
+        if (selectedDir != null) {
+          destPath = path.join(selectedDir, defaultFileName);
+          if (!destPath.toLowerCase().endsWith('.json')) {
+            destPath = '$destPath.json';
+          }
+          final file = File(destPath);
+          await file.writeAsString(fileContent, encoding: utf8);
+        }
+      }
+
+      if (destPath == null) {
+        return; // 用户取消了保存
+      }
+
+      if (!useEncrypt && _expSettings) {
+        _showInfoBar('导出成功', '明文备份已导出。为保安全，API 密钥已被自动剔除。',
+            fluent.InfoBarSeverity.success);
+      } else {
+        _showInfoBar(
+            '导出成功', '数据已成功导出至：$destPath', fluent.InfoBarSeverity.success);
       }
     } catch (e) {
       _showInfoBar('导出异常', '异常信息: $e', fluent.InfoBarSeverity.error);
@@ -391,13 +393,13 @@ class _BackupTabState extends State<BackupTab> {
   // 选择导入备份文件
   Future<void> _pickImportFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
 
-      if (result != null && result.files.single.path != null) {
-        final filePath = result.files.single.path!;
+      if (picked != null && picked.path != null) {
+        final filePath = picked.path!;
         final file = File(filePath);
         if (!await file.exists()) {
           _showInfoBar('文件不存在', '选定的备份文件无法读取。', fluent.InfoBarSeverity.error);
