@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -35,10 +36,12 @@ class UpdateInfo {
 }
 
 class UpdateService {
-  /// 远程版本控制 JSON 数据源 URL 列表（支持主源与备用镜像源）
+  /// 远程版本控制 JSON 数据源 URL 列表（支持主源与备用 CDN 镜像源）
   static const List<String> updateUrls = [
+    'https://cdn.jsdelivr.net/gh/qiqbaba/FlFund@main/version.json',
+    'https://fastly.jsdelivr.net/gh/qiqbaba/FlFund@main/version.json',
     'https://raw.githubusercontent.com/qiqbaba/FlFund/main/version.json',
-    'https://gitee.com/qiqbaba/FlFund/raw/main/version.json',
+    'https://ghproxy.net/https://raw.githubusercontent.com/qiqbaba/FlFund/main/version.json',
   ];
 
   /// 检查软件是否有更新
@@ -69,11 +72,19 @@ class UpdateService {
           final response = await dio.get(url);
           if (response.statusCode == 200 && response.data != null) {
             if (response.data is Map<String, dynamic>) {
-              data = response.data;
+              data = response.data as Map<String, dynamic>;
+            } else if (response.data is Map) {
+              data = Map<String, dynamic>.from(response.data as Map);
             } else if (response.data is String) {
-              data = Map<String, dynamic>.from(
-                (response.data as String).isEmpty ? {} : response.data,
-              );
+              final rawStr = (response.data as String).trim();
+              if (rawStr.isNotEmpty) {
+                final decoded = jsonDecode(rawStr);
+                if (decoded is Map<String, dynamic>) {
+                  data = decoded;
+                } else if (decoded is Map) {
+                  data = Map<String, dynamic>.from(decoded);
+                }
+              }
             }
             if (data != null && data.containsKey('version')) {
               break;

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/material.dart' show Colors;
+import 'package:flutter/material.dart' show Colors, Icons;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../widgets/scaled_checkbox.dart';
@@ -88,6 +88,7 @@ class BatchOptResult {
   final String code;
   final String name;
   final String sector;
+  final int originalIndex;
   String status; // '等待中', '计算中', '成功', '无历史数据', '未发现交易', '计算出错'
   double? winRate;
   int? buyDays;
@@ -105,6 +106,7 @@ class BatchOptResult {
     required this.code,
     required this.name,
     required this.sector,
+    this.originalIndex = 0,
     this.status = '等待中',
     this.winRate,
     this.buyDays,
@@ -131,6 +133,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
   String? _selectedCode;
   bool _isOptimizing = false;
   bool _isRecalibrating = false;
+  String? _recalibrateProgress;
 
   // 回测控制参数
   int _buyDays = 5;
@@ -165,13 +168,22 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
   Future<void> _recalibrateThresholds(AppConfig appConfig) async {
     setState(() {
       _isRecalibrating = true;
+      _recalibrateProgress = null;
     });
 
     // 让出主线程控制权，确保 Flutter 优先渲染界面并将按钮转换为加载状态
     await Future.delayed(Duration.zero);
 
     try {
-      final result = await appConfig.recalibrateVolatilityThresholds();
+      final result = await appConfig.recalibrateVolatilityThresholds(
+        onProgress: (current, total) {
+          if (mounted) {
+            setState(() {
+              _recalibrateProgress = '$current/$total';
+            });
+          }
+        },
+      );
       final int count = result['count'] as int;
       final double low = result['low'] as double;
       final double high = result['high'] as double;
@@ -211,6 +223,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       if (mounted) {
         setState(() {
           _isRecalibrating = false;
+          _recalibrateProgress = null;
         });
       }
     }
@@ -1151,10 +1164,22 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                           ? null
                           : () => _recalibrateThresholds(appConfig),
                       child: _isRecalibrating
-                          ? const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: fluent.ProgressRing(strokeWidth: 2))
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: fluent.ProgressRing(strokeWidth: 2)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _recalibrateProgress != null
+                                      ? '校准中 ($_recalibrateProgress)'
+                                      : '校准中...',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            )
                           : const Text('动态校准'),
                     ),
                   ],
@@ -1390,18 +1415,19 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
 
     // 定义每列的配置宽度与标题
     final List<_BatchColConfig> columns = [
-      _BatchColConfig(title: '代码', width: 70),
+      _BatchColConfig(title: '序号', width: 45),
+      _BatchColConfig(title: '代码', width: 75),
       _BatchColConfig(title: '基金名称', width: 140, alignLeft: true),
       _BatchColConfig(title: '板块', width: 90, alignLeft: true),
       _BatchColConfig(title: '寻优状态', width: 85),
-      _BatchColConfig(title: '买入天数', width: 65),
-      _BatchColConfig(title: '买入下跌', width: 65),
-      _BatchColConfig(title: '止盈年化', width: 65),
-      _BatchColConfig(title: '最优胜率', width: 75),
+      _BatchColConfig(title: '买入天数', width: 70),
+      _BatchColConfig(title: '买入下跌', width: 70),
+      _BatchColConfig(title: '止盈年化', width: 70),
+      _BatchColConfig(title: '最优胜率', width: 80),
       _BatchColConfig(title: '交易次数', width: 70),
-      _BatchColConfig(title: '单均收益', width: 75),
-      _BatchColConfig(title: '卖出参数', width: 90),
-      _BatchColConfig(title: '卖出胜率', width: 75),
+      _BatchColConfig(title: '单均收益', width: 80),
+      _BatchColConfig(title: '卖出参数', width: 95),
+      _BatchColConfig(title: '卖出胜率', width: 80),
       _BatchColConfig(title: '数据时长', width: 100),
     ];
 
@@ -1442,51 +1468,71 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                     child: Row(
                       children: columns.map((col) {
                         final isCurrentSort = _sortColumn == col.title;
-                        return GestureDetector(
-                          onTap: _isBatchOptimizing
-                              ? null
-                              : () => _sortBatchResults(col.title),
-                          behavior: HitTestBehavior.opaque,
-                          child: SizedBox(
-                            width: col.width,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 2.0),
-                              child: Row(
-                                mainAxisAlignment: col.alignLeft
-                                    ? MainAxisAlignment.start
-                                    : MainAxisAlignment.center,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      col.title,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        color: _isBatchOptimizing
-                                            ? Colors.grey
-                                            : (isCurrentSort
+                        return MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: () => _sortBatchResults(col.title),
+                            behavior: HitTestBehavior.opaque,
+                            child: SizedBox(
+                              width: col.width,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2.0),
+                                child: Row(
+                                  mainAxisAlignment: col.alignLeft
+                                      ? MainAxisAlignment.start
+                                      : MainAxisAlignment.center,
+                                  children: [
+                                    if (col.alignLeft) ...[
+                                      Flexible(
+                                        child: Text(
+                                          col.title,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: isCurrentSort
                                                 ? Colors.blue
-                                                : null),
+                                                : null,
+                                          ),
+                                          textAlign: TextAlign.left,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      textAlign: col.alignLeft
-                                          ? TextAlign.left
-                                          : TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (isCurrentSort) ...[
-                                    const SizedBox(width: 4),
+                                      const SizedBox(width: 2),
+                                    ] else ...[
+                                      Flexible(
+                                        child: Text(
+                                          col.title,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: isCurrentSort
+                                                ? Colors.blue
+                                                : null,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
                                     Icon(
-                                      _sortAscending
-                                          ? fluent.FluentIcons.up
-                                          : fluent.FluentIcons.down,
-                                      size: 8,
-                                      color: Colors.blue,
+                                      isCurrentSort
+                                          ? (_sortAscending
+                                              ? Icons.arrow_upward_rounded
+                                              : Icons.arrow_downward_rounded)
+                                          : Icons.unfold_more_rounded,
+                                      size: 12,
+                                      color: isCurrentSort
+                                          ? Colors.blue
+                                          : (isDark
+                                              ? Colors.white38
+                                              : Colors.black26),
                                     ),
                                   ],
-                                ],
+                                ),
                               ),
                             ),
                           ),
@@ -1502,7 +1548,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                         itemCount: _batchResults.length,
                         itemBuilder: (context, index) {
                           final result = _batchResults[index];
-                          return _buildBatchRow(context, result, isDark);
+                          return _buildBatchRow(context, result, index, isDark);
                         },
                       ),
                   ),
@@ -1581,7 +1627,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
   }
 
   Widget _buildBatchRow(
-      BuildContext context, BatchOptResult result, bool isDark) {
+      BuildContext context, BatchOptResult result, int index, bool isDark) {
     Widget statusWidget = Text(result.status,
         style: const TextStyle(fontSize: 12, color: Colors.grey));
 
@@ -1638,9 +1684,25 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       padding: EdgeInsets.zero,
       child: Row(
         children: [
+          // 序号
+          SizedBox(
+            width: 45,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2.0),
+              child: Text(
+                '${index + 1}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
           // 代码
           SizedBox(
-            width: 70,
+            width: 75,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: CopyableText(result.code,
@@ -1683,7 +1745,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 买入天数
           SizedBox(
-            width: 65,
+            width: 70,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Text(result.buyDays != null ? '${result.buyDays}天' : '--',
@@ -1693,7 +1755,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 买入下跌
           SizedBox(
-            width: 65,
+            width: 70,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Text(result.buyDrop != null ? '${result.buyDrop}%' : '--',
@@ -1703,7 +1765,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 止盈年化
           SizedBox(
-            width: 65,
+            width: 70,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Text(
@@ -1716,7 +1778,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 最优胜率
           SizedBox(
-            width: 75,
+            width: 80,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Text(
@@ -1748,7 +1810,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 单均收益
           SizedBox(
-            width: 75,
+            width: 80,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Text(
@@ -1761,7 +1823,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 卖出参数
           SizedBox(
-            width: 90,
+            width: 95,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Builder(
@@ -1780,7 +1842,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           ),
           // 卖出胜率
           SizedBox(
-            width: 75,
+            width: 80,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2.0),
               child: Text(
@@ -1877,13 +1939,19 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       _isBatchOptimizing = true;
       _batchProgress = '准备中...';
       _batchResults = targets
-          .map((f) => BatchOptResult(
-                code: f.code,
-                name: f.name,
-                sector: f.sector,
+          .asMap()
+          .entries
+          .map((entry) => BatchOptResult(
+                code: entry.value.code,
+                name: entry.value.name,
+                sector: entry.value.sector,
+                originalIndex: entry.key,
                 status: '等待中',
               ))
           .toList();
+      if (_sortColumn.isNotEmpty) {
+        _applyBatchSort();
+      }
     });
 
     final int maxConcurrency =
@@ -1902,6 +1970,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           resultItem.status = '计算中';
           _batchProgress =
               '正在寻优 (${currentIndex + 1}/${targets.length}): ${fund.code} - ${fund.name}';
+          if (_sortColumn.isNotEmpty) {
+            _applyBatchSort();
+          }
         });
 
         final proxyCode = AppConfig.indexProxyMap[fund.code] ?? fund.code;
@@ -1926,6 +1997,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             resultItem.status = '数据不足(<30天)';
             resultItem.dataDuration = '--';
             resultItem.dataDurationDays = 0;
+            if (_sortColumn.isNotEmpty) {
+              _applyBatchSort();
+            }
           });
           continue;
         }
@@ -2015,6 +2089,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               resultItem.sellX = sellX;
               resultItem.sellWinRate = sellWinRate;
               resultItem.sellTrades = sellTrades;
+              if (_sortColumn.isNotEmpty) {
+                _applyBatchSort();
+              }
             });
 
             final oldPe = optStrategy?['pe_percentile_limit'] ?? defaultPe;
@@ -2054,6 +2131,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               resultItem.status = '无有效策略';
               resultItem.dataDuration = durationStr;
               resultItem.dataDurationDays = durationDays;
+              if (_sortColumn.isNotEmpty) {
+                _applyBatchSort();
+              }
             });
           }
         } catch (e, st) {
@@ -2063,6 +2143,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             resultItem.status = '计算出错';
             resultItem.dataDuration = durationStr;
             resultItem.dataDurationDays = durationDays;
+            if (_sortColumn.isNotEmpty) {
+              _applyBatchSort();
+            }
           });
         }
       }
@@ -2104,106 +2187,153 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
   void _sortBatchResults(String columnTitle) {
     setState(() {
       if (_sortColumn == columnTitle) {
-        _sortAscending = !_sortAscending;
+        if (!_sortAscending) {
+          _sortAscending = true;
+        } else {
+          _sortColumn = '';
+          _sortAscending = false;
+        }
       } else {
         _sortColumn = columnTitle;
         _sortAscending = false;
       }
+      _applyBatchSort();
+    });
+  }
 
-      _batchResults.sort((a, b) {
-        dynamic valA;
-        dynamic valB;
+  void _applyBatchSort() {
+    if (_sortColumn.isEmpty) {
+      _batchResults.sort((a, b) => a.originalIndex.compareTo(b.originalIndex));
+      return;
+    }
 
-        switch (columnTitle) {
-          case '代码':
-            valA = a.code;
-            valB = b.code;
-            break;
-          case '基金名称':
-            valA = a.name;
-            valB = b.name;
-            break;
-          case '板块':
-            valA = a.sector;
-            valB = b.sector;
-            break;
-          case '寻优状态':
-            valA = a.status;
-            valB = b.status;
-            break;
-          case '买入天数':
-            valA = a.buyDays;
-            valB = b.buyDays;
-            break;
-          case '买入下跌':
-            valA = a.buyDrop;
-            valB = b.buyDrop;
-            break;
-          case '止盈年化':
-            valA = a.targetProfit;
-            valB = b.targetProfit;
-            break;
-          case '最优胜率':
-            valA = a.winRate;
-            valB = b.winRate;
-            break;
-          case '交易次数':
-            valA = a.totalTrades;
-            valB = b.totalTrades;
-            break;
-          case '单均收益':
-            valA = a.avgProfit;
-            valB = b.avgProfit;
-            break;
-          case '卖出参数':
-            valA = a.sellX;
-            valB = b.sellX;
-            break;
-          case '卖出胜率':
-            valA = a.sellWinRate;
-            valB = b.sellWinRate;
-            break;
-          case '数据时长':
-            valA = a.dataDurationDays;
-            valB = b.dataDurationDays;
-            break;
-          default:
-            return 0;
-        }
+    _batchResults.sort((a, b) {
+      dynamic valA;
+      dynamic valB;
 
-        if (valA == null && valB == null) return 0;
-        if (valA == null) return 1;
-        if (valB == null) return -1;
+      switch (_sortColumn) {
+        case '序号':
+          valA = a.originalIndex;
+          valB = b.originalIndex;
+          break;
+        case '代码':
+          valA = a.code;
+          valB = b.code;
+          break;
+        case '基金名称':
+          valA = a.name;
+          valB = b.name;
+          break;
+        case '板块':
+          valA = a.sector;
+          valB = b.sector;
+          break;
+        case '寻优状态':
+          int getStatusWeight(String s) {
+            switch (s) {
+              case '成功':
+                return 100;
+              case '计算中':
+                return 80;
+              case '等待中':
+                return 60;
+              case '未发现交易':
+                return 40;
+              case '无有效策略':
+                return 30;
+              case '无历史数据':
+                return 20;
+              case '数据不足(<30天)':
+                return 15;
+              case '计算出错':
+                return 0;
+              default:
+                return 50;
+            }
+          }
 
-        int cmp;
-        if (valA is String && valB is String) {
-          cmp = valA.compareTo(valB);
-        } else if (valA is num && valB is num) {
-          cmp = valA.compareTo(valB);
-        } else {
-          cmp = valA.toString().compareTo(valB.toString());
-        }
+          valA = getStatusWeight(a.status);
+          valB = getStatusWeight(b.status);
+          break;
+        case '买入天数':
+          valA = a.buyDays;
+          valB = b.buyDays;
+          break;
+        case '买入下跌':
+          valA = a.buyDrop;
+          valB = b.buyDrop;
+          break;
+        case '止盈年化':
+          valA = a.targetProfit;
+          valB = b.targetProfit;
+          break;
+        case '最优胜率':
+          valA = a.winRate;
+          valB = b.winRate;
+          break;
+        case '交易次数':
+          valA = a.totalTrades;
+          valB = b.totalTrades;
+          break;
+        case '单均收益':
+          valA = a.avgProfit;
+          valB = b.avgProfit;
+          break;
+        case '卖出参数':
+          valA = a.sellX;
+          valB = b.sellX;
+          break;
+        case '卖出胜率':
+          valA = a.sellWinRate;
+          valB = b.sellWinRate;
+          break;
+        case '数据时长':
+          valA = a.dataDurationDays;
+          valB = b.dataDurationDays;
+          break;
+        default:
+          return a.originalIndex.compareTo(b.originalIndex);
+      }
 
-        return _sortAscending ? cmp : -cmp;
-      });
+      if (valA == null && valB == null) {
+        return a.originalIndex.compareTo(b.originalIndex);
+      }
+      if (valA == null) return 1;
+      if (valB == null) return -1;
+
+      int cmp;
+      if (valA is String && valB is String) {
+        cmp = valA.compareTo(valB);
+      } else if (valA is num && valB is num) {
+        cmp = valA.compareTo(valB);
+      } else {
+        cmp = valA.toString().compareTo(valB.toString());
+      }
+
+      if (cmp == 0) {
+        return a.originalIndex.compareTo(b.originalIndex);
+      }
+
+      return _sortAscending ? cmp : -cmp;
     });
   }
 
   Widget _buildSingleReportTable(bool isDark) {
     // 定义每列的配置宽度与标题，和批量寻优完全一样
     final List<_BatchColConfig> columns = [
-      _BatchColConfig(title: '代码', width: 70),
+      _BatchColConfig(title: '序号', width: 45),
+      _BatchColConfig(title: '代码', width: 75),
       _BatchColConfig(title: '基金名称', width: 140, alignLeft: true),
       _BatchColConfig(title: '板块', width: 90, alignLeft: true),
       _BatchColConfig(title: '寻优状态', width: 85),
-      _BatchColConfig(title: '买入天数', width: 65),
-      _BatchColConfig(title: '买入下跌', width: 65),
-      _BatchColConfig(title: '止盈年化', width: 65),
-      _BatchColConfig(title: '最优胜率', width: 75),
+      _BatchColConfig(title: '买入天数', width: 70),
+      _BatchColConfig(title: '买入下跌', width: 70),
+      _BatchColConfig(title: '止盈年化', width: 70),
+      _BatchColConfig(title: '最优胜率', width: 80),
       _BatchColConfig(title: '交易次数', width: 70),
-      _BatchColConfig(title: '单均收益', width: 75),
-      _BatchColConfig(title: '卖出参数', width: 90),
-      _BatchColConfig(title: '卖出胜率', width: 75),
+      _BatchColConfig(title: '单均收益', width: 80),
+      _BatchColConfig(title: '卖出参数', width: 95),
+      _BatchColConfig(title: '卖出胜率', width: 80),
       _BatchColConfig(title: '数据时长', width: 100),
     ];
 
@@ -2261,7 +2391,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                       ),
                     ),
                     // 数据行 (直接复用 _buildBatchRow)
-                    _buildBatchRow(context, _singleOptResult!, isDark),
+                    _buildBatchRow(context, _singleOptResult!, 0, isDark),
                     // 底部预留滚动条空间以防遮挡
                     const SizedBox(height: 14),
                   ],

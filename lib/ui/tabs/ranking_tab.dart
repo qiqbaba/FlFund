@@ -1506,6 +1506,7 @@ class _RankingTabState extends State<RankingTab> {
         children: [
           if (fundProvider.isRefreshing)
             const SizedBox(
+              width: double.infinity,
               height: 4.5,
               child: fluent.ProgressBar(),
             ),

@@ -2115,6 +2115,7 @@ class _ValuationTabState extends State<ValuationTab> {
         children: [
           if (fundProvider.isRefreshing)
             const SizedBox(
+              width: double.infinity,
               height: 4.5,
               child: fluent.ProgressBar(),
             ),

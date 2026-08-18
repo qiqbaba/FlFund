@@ -507,42 +507,42 @@ class AppConfig extends ChangeNotifier {
   }
 
   /// 动态更新/校准全库基金波动率分数标准
-  Future<Map<String, dynamic>> recalibrateVolatilityThresholds() async {
+  Future<Map<String, dynamic>> recalibrateVolatilityThresholds({
+    Function(int current, int total)? onProgress,
+  }) async {
     final db = FundHistoryDB();
     final gateway = FundDataGateway();
 
-    // 1. 全市场代表性样本基金的代号（用于计算分位数标准）
-    final Set<String> targetCodes = Set<String>.from(marketRepresentativeCodes);
-
-    // 2. 检查代表性样本基金哪些没有历史数据或者历史数据已过期（超过 24 小时未更新）
-    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    // 1. 全市场代表性样本基金的代号（共 75 只）
+    const targetCodes = marketRepresentativeCodes;
+    final Map<String, List<double>> navsMemoryMap = {};
     final List<String> codesToFetch = [];
+    final double nowTime = DateTime.now().millisecondsSinceEpoch / 1000.0;
 
-    for (final code in targetCodes) {
+    // 2. 并发轻量初检本地数据（同时将有效净值序列载入内存）
+    await Future.wait(targetCodes.map((code) async {
       final history = await db.getHistory(code);
-      bool needUpdate = false;
-      if (history == null ||
-          history['dates'] == null ||
-          history['navs'] == null) {
-        needUpdate = true;
-      } else {
-        final String dMax = history['jzrq'] ?? '';
-        final double updateTime =
-            (history['update_time'] as num?)?.toDouble() ?? 0.0;
-        final double nowTime = DateTime.now().millisecondsSinceEpoch / 1000.0;
-        // 增量刷新条件：最新净值日期不是今天，且上次网络获取时间超过了 24 小时
-        if (dMax != todayStr && nowTime - updateTime > 86400) {
-          needUpdate = true;
+      if (history != null && history['navs'] != null) {
+        final List<double> navs = List<double>.from(history['navs']);
+        final double updateTime = (history['update_time'] as num?)?.toDouble() ?? 0.0;
+        // 增量刷新策略：本地历史数据充足(>=500条)且 3 天内更新过，直接复用内存数据
+        if (navs.length >= 500 && (nowTime - updateTime) < 86400 * 3) {
+          navsMemoryMap[code] = navs;
+          return;
+        }
+        if (navs.isNotEmpty) {
+          navsMemoryMap[code] = navs; // 暂存作为网络拉取失败时的安全回退
         }
       }
-      if (needUpdate) {
-        codesToFetch.add(code);
-      }
-    }
+      codesToFetch.add(code);
+    }));
 
-    // 3. 多线程/异步限流并发抓取数据（并发度为 10）
+    // 3. 多线程异步限流并发抓取数据（并发度为 16，保持原有 2000 条历史拉取不变）
     if (codesToFetch.isNotEmpty) {
       int nextIndex = 0;
+      int completed = 0;
+      final List<Future<void>> backgroundSaves = [];
+
       Future<void> worker() async {
         while (nextIndex < codesToFetch.length) {
           final current = nextIndex++;
@@ -552,25 +552,36 @@ class AppConfig extends ChangeNotifier {
             if (onlineHis != null) {
               final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
               final List<String> dates = List<String>.from(onlineHis['dates'] ?? []);
-              await db.saveHistory(code, onlineHis['jzrq'], navs, dates);
+              if (navs.isNotEmpty) {
+                // 【核心提速】：直接注入内存供计算使用，无需等待写库完成后再次读库
+                navsMemoryMap[code] = navs;
+                // 【核心提速】：异步后台入库，不阻塞前台计算与响应
+                backgroundSaves.add(db.saveHistory(code, onlineHis['jzrq'], navs, dates));
+              }
             }
           } catch (e) {
             debugPrint('校准自动补全历史数据拉取失败 ($code): $e');
+          } finally {
+            completed++;
+            onProgress?.call(completed, codesToFetch.length);
           }
         }
       }
 
-      final workers = List.generate(10, (_) => worker());
+      final workers = List.generate(16, (_) => worker());
       await Future.wait(workers);
+
+      // 后台静默执行 SQLite 持久化写入，完全不占用前台用户等待时间
+      if (backgroundSaves.isNotEmpty) {
+        unawaited(Future.wait(backgroundSaves));
+      }
     }
 
-    // 4. 统一计算代表性基金的波动得分 (仅使用固定的代表性基金池参与标准计算)
+    // 4. 纯内存极速计算代表性基金波动得分 (耗时 < 1ms，无需二次查询数据库)
     final List<double> scores = [];
-    for (final code in marketRepresentativeCodes) {
-      final history = await db.getHistory(code);
-      if (history == null) continue;
-      final List<double> allNavs = List<double>.from(history['navs'] ?? []);
-      if (allNavs.length < 250) continue; // 成立时间不足 250 个交易日的不参与标准计算
+    for (final code in targetCodes) {
+      final List<double>? allNavs = navsMemoryMap[code];
+      if (allNavs == null || allNavs.length < 250) continue; // 成立时间不足 250 个交易日的不参与标准计算
 
       // 4.0 统一时间窗口为最近 500 个交易日 (约 2 年)，并反转为升序（时间从远到近，以便正确计算最大回撤）
       const int limit = 500;
