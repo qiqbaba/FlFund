@@ -38,11 +38,13 @@ class Sparkline extends StatelessWidget {
     }
 
     // 优化：直接传入原始数据和采样参数给 Painter，避免在 build 中创建临时列表
-    // navList 是从新到旧（倒序），Painter 内部按从旧到新的方向绘制
-    return SizedBox(
-      height: 30,
-      child: CustomPaint(
-        painter: _SparklinePainter(data, lineColor, strokeWidth),
+    // navList 是从新到旧（倒序），Painter 内部按从旧到新的方向绘制，外层用 RepaintBoundary 隔离重绘
+    return RepaintBoundary(
+      child: SizedBox(
+        height: 30,
+        child: CustomPaint(
+          painter: _SparklinePainter(data, lineColor, strokeWidth),
+        ),
       ),
     );
   }

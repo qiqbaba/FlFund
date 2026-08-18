@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart' show Colors;
@@ -1885,7 +1886,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           .toList();
     });
 
-    const int maxConcurrency = 4;
+    final int maxConcurrency =
+        math.max(2, math.min(12, Platform.numberOfProcessors - 1));
     int index = 0;
     final List<Map<String, dynamic>> strategiesToSave = [];
 

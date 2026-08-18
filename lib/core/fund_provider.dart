@@ -78,6 +78,50 @@ class FundUIModel {
   final Map<int, bool> _buySignalCache = {};
   int? _lastCacheSignatureHash;
 
+  // 预计算缓存字段（供 UI 快速 O(1) 访问，避免在 build/ListView 滚动时反复跑循环算法）
+  bool cachedIsBuySignal = false;
+  bool cachedIsSellSignal = false;
+  double cachedCurrentDrop = 0.0;
+  double cachedCurrentRise = 0.0;
+  int? cachedRecentBuyIdx;
+  int? cachedLastSystemBuyIndex;
+  bool _signalsCalculated = false;
+  int? _lastCalculatedDataHash;
+
+  int _computeDataSignature() {
+    return Object.hash(
+      optimalStrategy != null ? optimalStrategy!['sell_x'] : null,
+      optimalStrategy != null ? optimalStrategy!['buy_days'] : null,
+      navs.length,
+      navs.isNotEmpty ? navs.first : 0.0,
+      navs.length > 5 ? navs[5] : 0.0,
+      dates.length,
+      gsz,
+      gztime,
+      isTodayValuation,
+    );
+  }
+
+  void updateCalculatedSignals() {
+    _buySignalCache.clear();
+    _lastCacheSignatureHash = null;
+    cachedIsBuySignal = isBuySignalAt(0);
+    cachedIsSellSignal = isSellSignalAt(0);
+    cachedCurrentDrop = getDropAt(0);
+    cachedCurrentRise = _calculateCurrentRise();
+    cachedRecentBuyIdx = _calculateRecentBuyTriggerIndex(maxDays: 3);
+    cachedLastSystemBuyIndex = _calculateLastSystemBuyIndex();
+    _lastCalculatedDataHash = _computeDataSignature();
+    _signalsCalculated = true;
+  }
+
+  void _ensureSignalsUpToDate() {
+    final currentHash = _computeDataSignature();
+    if (!_signalsCalculated || _lastCalculatedDataHash != currentHash) {
+      updateCalculatedSignals();
+    }
+  }
+
   FundUIModel({
     required this.code,
     required this.name,
@@ -349,8 +393,11 @@ class FundUIModel {
     return true;
   }
 
-  // 判断是否触发买入警报
-  bool get isBuySignal => isBuySignalAt(0);
+  // 判断是否触发买入警报 (优先使用 O(1) 预计算缓存)
+  bool get isBuySignal {
+    _ensureSignalsUpToDate();
+    return cachedIsBuySignal;
+  }
 
   // 计算历史特定索引处的回撤
   double getDropAt(int index) {
@@ -372,10 +419,18 @@ class FundUIModel {
     return 0.0;
   }
 
-  double get currentDrop => getDropAt(0);
+  double get currentDrop {
+    _ensureSignalsUpToDate();
+    return cachedCurrentDrop;
+  }
 
   // 寻找系统最近一次的最佳买入时点索引
   int? get lastSystemBuyIndex {
+    _ensureSignalsUpToDate();
+    return cachedLastSystemBuyIndex;
+  }
+
+  int? _calculateLastSystemBuyIndex() {
     final navList = fullNavs;
     final int searchRange = math.min(60, navList.length);
     for (int i = 0; i < searchRange; i++) {
@@ -388,6 +443,14 @@ class FundUIModel {
 
   // 查找在最近 N 个交易日内是否有触发买入信号（不含今天），且在此期间（包含今天）未触发卖出信号
   int? getRecentBuyTriggerIndex({int maxDays = 3}) {
+    if (maxDays == 3) {
+      _ensureSignalsUpToDate();
+      return cachedRecentBuyIdx;
+    }
+    return _calculateRecentBuyTriggerIndex(maxDays: maxDays);
+  }
+
+  int? _calculateRecentBuyTriggerIndex({int maxDays = 3}) {
     final navList = fullNavs;
     if (navList.length <= 1) return null;
 
@@ -479,10 +542,18 @@ class FundUIModel {
     return false;
   }
 
-  // 判断是否触发卖出警报
-  bool get isSellSignal => isSellSignalAt(0);
+  // 判断是否触发卖出警报 (优先使用 O(1) 预计算缓存)
+  bool get isSellSignal {
+    _ensureSignalsUpToDate();
+    return cachedIsSellSignal;
+  }
 
   double get currentRise {
+    _ensureSignalsUpToDate();
+    return cachedCurrentRise;
+  }
+
+  double _calculateCurrentRise() {
     if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
       final int encodedVal = optimalStrategy!['sell_x'];
       int sellX;
@@ -1094,6 +1165,9 @@ class FundProvider extends ChangeNotifier {
       if (opt != null) {
         model.optimalStrategy = opt;
       }
+
+      // 预计算买卖信号与技术指标，实现 UI 渲染 O(1) 秒取
+      model.updateCalculatedSignals();
     } catch (e) {
       final msg = '加载历史数据并计算失败 (${model.code}): $e';
       debugPrint(msg);
@@ -1113,10 +1187,10 @@ class FundProvider extends ChangeNotifier {
 
     // 2. 检查交易时间段：09:30 - 11:30 和 13:00 - 15:00
     final currentMinutes = now.hour * 60 + now.minute;
-    const range1Start = 9 * 60 + 30; // 09:30
-    const range1End = 11 * 60 + 30; // 11:30
-    const range2Start = 13 * 60; // 13:00
-    const range2End = 15 * 60; // 15:00
+    const range1Start = 9 * 60 + 30;
+    const range1End = 11 * 60 + 30;
+    const range2Start = 13 * 60;
+    const range2End = 15 * 60;
 
     final inTradeHours =
         (currentMinutes >= range1Start && currentMinutes <= range1End) ||
@@ -1169,13 +1243,10 @@ class FundProvider extends ChangeNotifier {
   // 简单的同步辅助方法（Dart 单线程，实际不需要锁）
   static T? synchronized<T>(T? Function() fn) => fn();
 
-  // 2. 批量刷新自选基金实时估值与历史跌幅百分位
+  // 2. 批量刷新自选基金实时估值与历史跌幅百分位 (采用新浪极速批量接口 + 并行计算)
   Future<void> refreshAll({bool isForce = false}) async {
     if (isRefreshing) return;
 
-    // 如果不是强制刷新，且不符合自动刷新条件，则直接跳过
-    // 优化：如果是首次进入（_lastRefreshTime 为 null），则必须刷新一次
-    // 此外，如果自选或持仓列表里有未初始化过的基金（gztime 为 '暂无数据'），为了避免一直显示0，也应该允许刷新
     final hasUninitialized =
         myFunds.values.any((model) => model.gztime == '暂无数据');
     if (!isForce &&
@@ -1197,7 +1268,16 @@ class FundProvider extends ChangeNotifier {
       ...cycleFunds.values.where((m) => !myFunds.containsKey(m.code)),
     ];
 
-    // 2. 并行限流刷新：将任务组装为闭包，由并发调度器执行以控制网络并发数
+    // 2. 优先利用新浪极速批量接口 (50 只/批次) 一次性拉取所有估值
+    final allCodes = fundList.map((f) => f.code).toList();
+    Map<String, Map<String, dynamic>> batchVals = {};
+    try {
+      batchVals = await gateway.fetchValuationBatch(allCodes);
+    } catch (e) {
+      debugPrint('批量估值拉取异常，将自动降级为单只拉取: $e');
+    }
+
+    // 3. 并行限流刷新：将任务组装为闭包，由并发调度器执行以控制网络并发数
     final List<Future<List<String>> Function()> tasks = [];
 
     for (int i = 0; i < fundList.length; i++) {
@@ -1208,45 +1288,55 @@ class FundProvider extends ChangeNotifier {
         final localErrors = <String>[];
         model.errorMsg = null; // 每次刷新前重置
         try {
-          // A. 抓取实时估值 (均匀轮询所有可用估值 API)
-          final val = await gateway.fetchValuation(model.code,
-              name: model.name,
-              sector: model.sector,
-              preferredSourceIndex: preferredSourceIndex);
-
-          if (val != null) {
+          // A. 优先应用新浪极速批量估值结果
+          if (batchVals.containsKey(model.code)) {
+            final val = batchVals[model.code]!;
             model.gsz = val['gsz']?.toString() ?? model.gsz;
             model.gszzl =
                 (val['gszzl']?.toString() ?? model.gszzl).replaceAll('%', '');
             model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
-            String srcName = val['source']?.toString() ?? '';
-            if (srcName == 'EastMoneyGz') {
-              srcName = '天天基金(网页)';
-            } else if (srcName == 'EastMoneyMobileGz' ||
-                srcName == 'EastMoneyMobile') {
-              srcName = '天天基金(手机)';
-            } else if (srcName == 'EastMoneyWeb') {
-              srcName = '天天基金(历史)';
-            } else if (srcName == 'TencentGz') {
-              srcName = '腾讯财经';
-            } else if (srcName == 'SinaGz') {
-              srcName = '新浪财经';
-            } else if (srcName == 'DanjuanGz') {
-              srcName = '蛋卷基金';
-            } else if (srcName == 'HowbuyGz') {
-              srcName = '好买基金';
-            } else if (srcName == '10JqkaGz') {
-              srcName = '同花顺';
-            } else if (srcName == 'ShadowETF') {
-              srcName = '场内影子估值';
+            model.gztime = '${val['gztime']} [新浪极速批量]';
+          } else {
+            // 未在批量接口中覆盖的个基（如特殊场内影子ETF），走单源精准抓取
+            final val = await gateway.fetchValuation(model.code,
+                name: model.name,
+                sector: model.sector,
+                preferredSourceIndex: preferredSourceIndex);
+
+            if (val != null) {
+              model.gsz = val['gsz']?.toString() ?? model.gsz;
+              model.gszzl =
+                  (val['gszzl']?.toString() ?? model.gszzl).replaceAll('%', '');
+              model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
+              String srcName = val['source']?.toString() ?? '';
+              if (srcName == 'EastMoneyGz') {
+                srcName = '天天基金(网页)';
+              } else if (srcName == 'EastMoneyMobileGz' ||
+                  srcName == 'EastMoneyMobile') {
+                srcName = '天天基金(手机)';
+              } else if (srcName == 'EastMoneyWeb') {
+                srcName = '天天基金(历史)';
+              } else if (srcName == 'TencentGz') {
+                srcName = '腾讯财经';
+              } else if (srcName == 'SinaGz' || srcName == 'SinaGzBatch') {
+                srcName = '新浪财经';
+              } else if (srcName == 'DanjuanGz') {
+                srcName = '蛋卷基金';
+              } else if (srcName == 'HowbuyGz') {
+                srcName = '好买基金';
+              } else if (srcName == '10JqkaGz') {
+                srcName = '同花顺';
+              } else if (srcName == 'ShadowETF') {
+                srcName = '场内影子估值';
+              }
+              if (val['is_proxy'] == true) {
+                srcName = '$srcName(代理)';
+              }
+              model.gztime = '${val['gztime']} [$srcName]';
             }
-            if (val['is_proxy'] == true) {
-              srcName = '$srcName(代理)';
-            }
-            model.gztime = '${val['gztime']} [$srcName]';
           }
 
-          // B. 加载历史与百分位计算 (包含三源降级逻辑)
+          // B. 加载历史与百分位计算 (包含三源降级逻辑与 L1 内存缓存)
           await loadHistoryAndCalculateForModel(model, isForce: isForce);
         } catch (e) {
           final msg = '刷新自选 ${model.code} 失败: $e';
@@ -1258,8 +1348,8 @@ class FundProvider extends ChangeNotifier {
       });
     }
 
-    // 限制最大并发数为 5 并发执行所有基金的刷新任务，避免冲击天天基金 SSL 握手与请求速率
-    final results = await _runWithConcurrencyLimit(tasks, 5);
+    // 限制最大并发数为 8 并发执行
+    final results = await _runWithConcurrencyLimit(tasks, 8);
 
     // 合并所有局部错误列表
     _refreshErrors = results.expand((e) => e).toList();
@@ -1282,39 +1372,75 @@ class FundProvider extends ChangeNotifier {
       };
 
       // 天天基金官方全市场开放式基金盘中实时估值排行榜接口 (GSZZL 估算日涨跌幅排序)
-      // 服务器单页硬编码限制最多返回30只，通过顺序拉取前7页（间隔100ms防并发拒绝）获取真正全市场前210只基金
-      Future<List<Map<String, dynamic>>> fetchPagedValuations(
-          String sort) async {
+      // 使用微并发（3页/批）快速拉取
+      Future<List<Map<String, dynamic>>?> fetchPagedValuations(
+          String sort, int fromPage, int toPage) async {
+        final List<Map<String, dynamic>> combined = [];
         try {
-          final List<Map<String, dynamic>> combined = [];
-          for (int p = 1; p <= 7; p++) {
-            if (p > 1) {
-              await Future.delayed(const Duration(milliseconds: 100));
+          const int batchSize = 3;
+          for (int p = fromPage; p <= toPage; p += batchSize) {
+            final int currentEnd = math.min(p + batchSize - 1, toPage);
+            final pageFutures = <Future<List<Map<String, dynamic>>>>[];
+            for (int curr = p; curr <= currentEnd; curr++) {
+              pageFutures.add(() async {
+                try {
+                  final res = await dio.get(
+                    'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationList?pageIndex=$curr&pageSize=30&sortColumn=GSZZL&sort=$sort&deviceid=12345678901234567890123456789012&plat=Iphone&product=EFund&version=6.5.5',
+                    options: Options(headers: headers),
+                  );
+                  if (res.statusCode == 200) {
+                    return _parseOfficialValuationResponse(res.data);
+                  }
+                } catch (_) {}
+                return <Map<String, dynamic>>[];
+              }());
             }
-            final res = await dio.get(
-              'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNValuationList?pageIndex=$p&pageSize=30&sortColumn=GSZZL&sort=$sort&deviceid=12345678901234567890123456789012&plat=Iphone&product=EFund&version=6.5.5',
-              options: Options(headers: headers),
-            );
-            if (res.statusCode == 200) {
-              final pageItems = _parseOfficialValuationResponse(res.data);
+            final batchResults = await Future.wait(pageFutures);
+            for (final pageItems in batchResults) {
               combined.addAll(pageItems);
-              if (pageItems.isEmpty) break;
             }
+            if (batchResults.any((items) => items.isEmpty)) break;
           }
-          if (combined.isNotEmpty) return combined;
+          return combined;
         } catch (e) {
           final errDetail = e is DioException
               ? (e.error?.toString() ?? e.message ?? e.toString())
               : e.toString();
-          debugPrint('天天基金排行榜主接口异常 ($sort)，将启用东方财富降级备用源: $errDetail');
+          debugPrint(
+              '天天基金排行榜主接口异常 ($sort 第$fromPage-$toPage页)，将启用东方财富降级备用源: $errDetail');
+          return null;
         }
-        // 降级备用源：尝试东方财富全市场基金排行榜接口
-        return _fetchRankingsFallbackEastMoney(sort);
       }
 
-      final rawTop = await fetchPagedValuations('desc');
+      // 只展示 ETF 联接基金（名称含 ETF 的场外基金）：默认拉10页，
+      // 板块同质化去重不足10只时每次追加2页，直到凑满10只或翻完无更多数据
+      Future<List<Map<String, dynamic>>> fetchEtfRankingCandidates(
+          String sort) async {
+        final List<Map<String, dynamic>> combined = [];
+        int nextPage = 1;
+        int batch = 10;
+        const int maxPages = 60;
+        while (nextPage <= maxPages) {
+          final chunk = await fetchPagedValuations(
+              sort, nextPage, nextPage + batch - 1);
+          if (chunk == null) {
+            // 主接口失败：已有数据则直接使用，否则启用降级备用源
+            if (combined.isEmpty) return _fetchRankingsFallbackEastMoney(sort);
+            break;
+          }
+          combined.addAll(chunk.where((e) =>
+              (e['jjjc']?.toString() ?? '').contains('ETF')));
+          nextPage += batch;
+          batch = 2;
+          if (chunk.isEmpty) break;
+          if (_filterDistinctSectors(combined).length >= 10) break;
+        }
+        return combined;
+      }
+
+      final rawTop = await fetchEtfRankingCandidates('desc');
       await Future.delayed(const Duration(milliseconds: 200));
-      final rawBot = await fetchPagedValuations('asc');
+      final rawBot = await fetchEtfRankingCandidates('asc');
 
       final topMaps = _filterDistinctSectors(rawTop);
       final botMaps = _filterDistinctSectors(rawBot);
@@ -1322,7 +1448,7 @@ class FundProvider extends ChangeNotifier {
       topFunds = _convertToUIModels(topMaps);
       botFunds = _convertToUIModels(botMaps);
 
-      // 异步并发加载这 20 个排行基金的历史数据
+      // 异步并发加载这些排行基金的历史数据
       final List<Future<void>> detailTasks = [];
       for (final model in [...topFunds, ...botFunds]) {
         detailTasks.add(loadHistoryAndCalculateForModel(model));

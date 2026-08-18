@@ -294,10 +294,20 @@ class FundHistoryDB {
     );
   }
 
-  // ---------------- 历史净值操作 ----------------
+  // ---------------- 历史净值操作与 L1 内存缓存 ----------------
+  final Map<String, Map<String, dynamic>> _historyCache = {};
+  static const int _maxCacheSize = 300;
 
-  // 获取单只基金历史净值（返回复权净值序列，消除分红除息跳空）
+  void clearMemoryCache() {
+    _historyCache.clear();
+  }
+
+  // 获取单只基金历史净值（返回复权净值序列，消除分红除息跳空；优先命中 L1 内存缓存）
   Future<Map<String, dynamic>?> getHistory(String fundCode) async {
+    if (_historyCache.containsKey(fundCode)) {
+      return _historyCache[fundCode];
+    }
+
     if (_executor == null) return null;
     final List<String> dates = [];
     final List<double> dwjzs = [];
@@ -333,13 +343,20 @@ class FundHistoryDB {
       ma120 = (histRows.first['ma120'] as num?)?.toDouble();
     }
 
-    return {
+    final result = {
       'jzrq': dates.first,
       'navs': navs,
       'dates': dates,
       'update_time': updateTime,
       'ma120': ma120,
     };
+
+    if (_historyCache.length >= _maxCacheSize) {
+      _historyCache.remove(_historyCache.keys.first);
+    }
+    _historyCache[fundCode] = result;
+
+    return result;
   }
 
   // 由单位净值 + 累计净值重建前复权净值序列（列表均为从新到旧排列）。
@@ -408,6 +425,8 @@ class FundHistoryDB {
         [fundCode, actualJzrq, nowTime, ma120]
       );
     });
+
+    _historyCache.remove(fundCode);
   }
 
   // 增量更新已算好的 MA120
@@ -417,6 +436,9 @@ class FundHistoryDB {
       'UPDATE fund_history SET ma120 = ? WHERE fund_code = ?',
       [ma120, fundCode]
     );
+    if (_historyCache.containsKey(fundCode)) {
+      _historyCache[fundCode]!['ma120'] = ma120;
+    }
   }
 
   // 保存策略参数寻优结果
@@ -590,6 +612,7 @@ class FundHistoryDB {
   // 关闭释放数据库连接
   Future<void> close() async {
     try {
+      clearMemoryCache();
       if (_executor != null) {
         _executor!.dispose();
       }

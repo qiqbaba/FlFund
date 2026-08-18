@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/config.dart';
 import '../../core/db_manager.dart';
@@ -17,8 +18,8 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  double _progress = 0.05;
-  String _statusText = '正在加载组件库及核心引擎...';
+  double _progress = 0.15;
+  String _statusText = '正在并行建立数据库与预解析字典...';
 
   @override
   void initState() {
@@ -28,41 +29,30 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _startInitialization() async {
     try {
-      // 1. 初始化数据库
+      // 1. 并发执行数据库安全链接建立、配置读取与全市场基金字典预解析
       setState(() {
-        _progress = 0.25;
-        _statusText = '正在建立数据库安全链接...';
+        _progress = 0.35;
+        _statusText = '正在并行初始化核心引擎与基金字典...';
       });
-      await FundHistoryDB().init();
 
-      // 2. 加载自选配置
-      setState(() {
-        _progress = 0.40;
-        _statusText = '正在读取自选基金及参数配置...';
-      });
-      await AppConfig().loadConfig();
+      await Future.wait([
+        FundHistoryDB().init(),
+        AppConfig().loadConfig(),
+        PinyinSearch().init(),
+      ]);
 
-      // 新增：如果已登录 Supabase，执行云端同步合并
+      // 2. 如果已登录 Supabase，将云端同步作为后台静默任务运行，不阻塞首屏显示
       if (SupabaseManager().isLoggedIn) {
-        setState(() {
-          _progress = 0.60;
-          _statusText = '正在从云端同步持仓与自选数据...';
-        });
-        try {
-          await AppConfig().syncWithSupabase();
-        } catch (e) {
-          debugPrint('启动时云同步失败: $e');
-        }
+        unawaited(() async {
+          try {
+            await AppConfig().syncWithSupabase();
+          } catch (e) {
+            debugPrint('启动时后台云同步失败: $e');
+          }
+        }());
       }
 
-      // 3. 静默加载基金字典，实现主界面秒开
-      setState(() {
-        _progress = 0.80;
-        _statusText = '正在预解析 4 万条全市场基金字典...';
-      });
-      await PinyinSearch().init();
-
-      // 4. 装载自选 UI 数据
+      // 3. 快速装载自选 UI 数据
       setState(() {
         _progress = 0.95;
         _statusText = '初始化完成，准备进入主看板...';
@@ -71,12 +61,14 @@ class _SplashScreenState extends State<SplashScreen> {
         Provider.of<FundProvider>(context, listen: false).loadMyFunds();
       }
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      // 4. 立即进入主看板（无需人工硬等待）
       widget.onInitComplete();
     } catch (e) {
-      setState(() {
-        _statusText = '初始化失败，请重启应用: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _statusText = '初始化失败，请重启应用: $e';
+        });
+      }
     }
   }
 

@@ -939,12 +939,9 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                     },
                                                     child: ListView.builder(
                                                       padding: EdgeInsets.zero,
+                                                      itemExtent: 55.0,
                                                       controller:
                                                           _leftVerticalScrollController,
-                                                       physics:
-                                                           const AlwaysScrollableScrollPhysics(
-                                                               parent:
-                                                                   BouncingScrollPhysics()),
                                                       itemCount:
                                                           displayList.length,
                                                       itemBuilder:
@@ -999,51 +996,53 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                       Expanded(
                                         child: fluent.Scrollbar(
                                           thumbVisibility: true,
-                                          notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+                                          notificationPredicate: (n) =>
+                                              n.metrics.axis == Axis.vertical,
                                           controller:
                                               _rightVerticalScrollController,
                                           child: fluent.Scrollbar(
                                             thumbVisibility: true,
-                                            notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+                                            notificationPredicate: (n) =>
+                                                n.metrics.axis == Axis.horizontal,
                                             controller:
                                                 _horizontalScrollController,
                                             child: SingleChildScrollView(
-                                            controller:
-                                                _horizontalScrollController,
-                                            scrollDirection: Axis.horizontal,
-                                            child: SizedBox(
-                                              width: rightTableWidth,
-                                              child: Column(
-                                                children: [
-                                                  Container(
-                                                    height: 40,
-                                                    decoration: BoxDecoration(
-                                                      color: isDark
-                                                          ? Colors.white
-                                                              .withValues(
-                                                                  alpha: 0.06)
-                                                          : Colors.black
-                                                              .withValues(
-                                                                  alpha: 0.04),
-                                                      border: Border(
-                                                        bottom: BorderSide(
-                                                            color: isDark
-                                                                ? Colors.white10
-                                                                : Colors
-                                                                    .black12),
+                                              controller:
+                                                  _horizontalScrollController,
+                                              scrollDirection: Axis.horizontal,
+                                              child: SizedBox(
+                                                width: rightTableWidth,
+                                                child: Column(
+                                                  children: [
+                                                    Container(
+                                                      height: 40,
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? Colors.white
+                                                                .withValues(
+                                                                    alpha: 0.06)
+                                                            : Colors.black
+                                                                .withValues(
+                                                                    alpha: 0.04),
+                                                        border: Border(
+                                                          bottom: BorderSide(
+                                                              color: isDark
+                                                                  ? Colors.white10
+                                                                  : Colors
+                                                                      .black12),
+                                                        ),
+                                                      ),
+                                                      padding: EdgeInsets.zero,
+                                                      child: Row(
+                                                        children: rightColumns
+                                                            .map((col) =>
+                                                                buildHeaderCell(
+                                                                    col))
+                                                            .toList(),
                                                       ),
                                                     ),
-                                                    padding: EdgeInsets.zero,
-                                                    child: Row(
-                                                      children: rightColumns
-                                                          .map((col) =>
-                                                              buildHeaderCell(
-                                                                  col))
-                                                          .toList(),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    child: RefreshIndicator(
+                                                    Expanded(
+                                                      child: RefreshIndicator(
                                                         onRefresh: () async {
                                                           await appConfig
                                                               .syncWithSupabase();
@@ -1055,12 +1054,13 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                         child: ListView.builder(
                                                           padding:
                                                               EdgeInsets.zero,
+                                                          itemExtent: 55.0,
                                                           controller:
                                                               _rightVerticalScrollController,
                                                           physics:
-                                                               const AlwaysScrollableScrollPhysics(
-                                                                   parent:
-                                                                       BouncingScrollPhysics()),
+                                                              const AlwaysScrollableScrollPhysics(
+                                                                  parent:
+                                                                      BouncingScrollPhysics()),
                                                           itemCount: displayList
                                                               .length,
                                                           itemBuilder:
@@ -1080,56 +1080,58 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                         ),
                                                       ),
                                                     ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
                                     ],
                                   );
                                 } else {
                                   return fluent.Scrollbar(
                                     thumbVisibility: true,
-                                    notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+                                    notificationPredicate: (n) =>
+                                        n.metrics.axis == Axis.vertical,
                                     controller: _rightVerticalScrollController,
                                     child: fluent.Scrollbar(
                                       thumbVisibility: true,
-                                      notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+                                      notificationPredicate: (n) =>
+                                          n.metrics.axis == Axis.horizontal,
                                       controller: _horizontalScrollController,
                                       child: SingleChildScrollView(
-                                      controller: _horizontalScrollController,
-                                      scrollDirection: Axis.horizontal,
-                                      child: SizedBox(
-                                        width: totalTableWidth,
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: isDark
-                                                    ? Colors.white
-                                                        .withValues(alpha: 0.06)
-                                                    : Colors.black.withValues(
-                                                        alpha: 0.04),
-                                                border: Border(
-                                                  bottom: BorderSide(
-                                                      color: isDark
-                                                          ? Colors.white10
-                                                          : Colors.black12),
+                                        controller: _horizontalScrollController,
+                                        scrollDirection: Axis.horizontal,
+                                        child: SizedBox(
+                                          width: totalTableWidth,
+                                          child: Column(
+                                            children: [
+                                              Container(
+                                                height: 40,
+                                                decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.06)
+                                                      : Colors.black.withValues(
+                                                          alpha: 0.04),
+                                                  border: Border(
+                                                    bottom: BorderSide(
+                                                        color: isDark
+                                                            ? Colors.white10
+                                                            : Colors.black12),
+                                                  ),
+                                                ),
+                                                padding: EdgeInsets.zero,
+                                                child: Row(
+                                                  children: columns
+                                                      .map((col) =>
+                                                          buildHeaderCell(col))
+                                                      .toList(),
                                                 ),
                                               ),
-                                              padding: EdgeInsets.zero,
-                                              child: Row(
-                                                children: columns
-                                                    .map((col) =>
-                                                        buildHeaderCell(col))
-                                                    .toList(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: RefreshIndicator(
+                                              Expanded(
+                                                child: RefreshIndicator(
                                                   onRefresh: () async {
                                                     await appConfig
                                                         .syncWithSupabase();
@@ -1139,12 +1141,13 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                                                   },
                                                   child: ListView.builder(
                                                     padding: EdgeInsets.zero,
+                                                    itemExtent: 55.0,
                                                     controller:
                                                         _rightVerticalScrollController,
                                                     physics:
-                                                         const AlwaysScrollableScrollPhysics(
-                                                             parent:
-                                                                 BouncingScrollPhysics()),
+                                                        const AlwaysScrollableScrollPhysics(
+                                                            parent:
+                                                                BouncingScrollPhysics()),
                                                     itemCount:
                                                         displayList.length,
                                                     itemBuilder:
@@ -1237,10 +1240,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
           context, details.globalPosition, model, appConfig, fundProvider);
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onSecondaryTapDown: secondaryTapCallback,
-      onLongPressStart: longPressCallback,
+    return RepaintBoundary(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: secondaryTapCallback,
+        onLongPressStart: longPressCallback,
       child: Container(
         height: 55,
         decoration: BoxDecoration(
@@ -1810,6 +1814,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
           }).toList(),
         ),
       ),
+    ),
     );
   }
 }

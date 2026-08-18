@@ -1,17 +1,17 @@
 {
-  "version": "1.8.19",
-  "buildNumber": 101,
+  "version": "1.8.20",
+  "buildNumber": 102,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-14",
-  "releaseNotes": "1. 优化指数基金映射：新增 800医卫(000933) 到中信保诚中证800医药指数(LOF)A(165519) 的映射",
+  "releaseDate": "2026-08-18",
+  "releaseNotes": "1. 启动流程并行化加速：开屏阶段并发建立数据库、加载配置与基金字典预解析，实现秒开\n2. 渲染性能优化：列表项与迷你折线图增加重绘隔离与固定高度，大幅提升滑动流畅度\n3. 数据调度与并发升级：优化自选刷新与排行榜抓取并发机制，策略寻优自适应匹配多核算力",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.19/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.20/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.19/FlFund-v1.8.19.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.20/FlFund-v1.8.20.apk",
       "sha256": "",
       "fileSize": 0
     }

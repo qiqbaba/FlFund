@@ -55,7 +55,7 @@ class FundDataGateway {
     _dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
-        client.idleTimeout = const Duration(seconds: 3);
+        client.idleTimeout = const Duration(seconds: 60);
         client.findProxy = (uri) => 'DIRECT';
         client.badCertificateCallback =
             (X509Certificate cert, String host, int port) {

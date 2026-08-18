@@ -982,6 +982,7 @@ class _MyFundsTabState extends State<MyFundsTab> {
                                                     },
                                                     child: ListView.builder(
                                                       padding: EdgeInsets.zero,
+                                                      itemExtent: 55.0,
                                                       controller:
                                                           _leftVerticalScrollController,
                                                       physics:
@@ -1098,6 +1099,7 @@ class _MyFundsTabState extends State<MyFundsTab> {
                                                         child: ListView.builder(
                                                           padding:
                                                               EdgeInsets.zero,
+                                                          itemExtent: 55.0,
                                                           controller:
                                                               _rightVerticalScrollController,
                                                           physics:
@@ -1182,6 +1184,7 @@ class _MyFundsTabState extends State<MyFundsTab> {
                                                   },
                                                   child: ListView.builder(
                                                     padding: EdgeInsets.zero,
+                                                    itemExtent: 55.0,
                                                     controller:
                                                         _rightVerticalScrollController,
                                                     physics:
@@ -1280,10 +1283,11 @@ class _MyFundsTabState extends State<MyFundsTab> {
           context, details.globalPosition, model, appConfig, fundProvider);
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onSecondaryTapDown: secondaryTapCallback,
-      onLongPressStart: longPressCallback,
+    return RepaintBoundary(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: secondaryTapCallback,
+        onLongPressStart: longPressCallback,
       child: Container(
         height: 55,
         decoration: BoxDecoration(
@@ -1856,6 +1860,7 @@ class _MyFundsTabState extends State<MyFundsTab> {
           }).toList(),
         ),
       ),
+    ),
     );
   }
 }
