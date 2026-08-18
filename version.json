@@ -1,17 +1,17 @@
 {
-  "version": "1.8.25",
-  "buildNumber": 107,
+  "version": "1.8.26",
+  "buildNumber": 108,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-18",
-  "releaseNotes": "1. 修复当日同时满足买入与卖出条件时，卖出信号研判被吞掉的问题\n2. 优化持仓卖出信号买点回溯逻辑，优先精确锚定实际持仓买入日\n3. 补充买卖信号并发场景专项单元测试",
+  "releaseNotes": "1. 修复 currentRise 涨幅计算与卖出基准日对齐问题，统一提取 getRiseAt 方法\n2. 统一买入信号缓存签名算法，完善均线与盘中估值缓存失效机制\n3. 补充卖出涨幅对齐与缓存失效专项单元测试",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.25/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.26/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.25/FlFund-v1.8.25.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.26/FlFund-v1.8.26.apk",
       "sha256": "",
       "fileSize": 0
     }

@@ -89,6 +89,7 @@ class FundUIModel {
   int? _lastCalculatedDataHash;
 
   int _computeDataSignature() {
+    final currentFullNavs = fullNavs;
     return Object.hash(
       optimalStrategy != null ? optimalStrategy!['sell_x'] : null,
       optimalStrategy != null ? optimalStrategy!['buy_days'] : null,
@@ -101,13 +102,14 @@ class FundUIModel {
       optimalStrategy != null ? optimalStrategy!['pb_percentile_limit'] : null,
       pePercentile,
       pbPercentile,
-      navs.length,
-      navs.isNotEmpty ? navs.first : 0.0,
-      navs.length > 5 ? navs[5] : 0.0,
-      dates.length,
-      gsz,
+      sumOf119,
+      closedMa120,
       gztime,
-      isTodayValuation,
+      _cachedToday,
+      currentFullNavs.length,
+      currentFullNavs.isNotEmpty ? currentFullNavs.first : 0.0,
+      currentFullNavs.length > 5 ? currentFullNavs[5] : 0.0,
+      dates.length,
     );
   }
 
@@ -304,25 +306,7 @@ class FundUIModel {
 
   // 判断历史某天是否触发买入警报（包含网格加仓步进过滤）
   bool isBuySignalAt(int index) {
-    final int currentSignatureHash = Object.hash(
-      optimalStrategy?['buy_days'],
-      optimalStrategy?['buy_drop'],
-      optimalStrategy?['sell_x'],
-      optimalStrategy?['ma_period'],
-      optimalStrategy?['ma_envelope_pct'],
-      optimalStrategy?['rsi_filter_limit'],
-      optimalStrategy?['macd_filter_enabled'],
-      optimalStrategy?['pe_percentile_limit'],
-      optimalStrategy?['pb_percentile_limit'],
-      pePercentile,
-      pbPercentile,
-      sumOf119,
-      closedMa120,
-      gztime,
-      _cachedToday,
-      fullNavs.length,
-      fullNavs.isEmpty ? 0.0 : fullNavs.first,
-    );
+    final int currentSignatureHash = _computeDataSignature();
     if (_lastCacheSignatureHash != currentSignatureHash) {
       _buySignalCache.clear();
       _lastCacheSignatureHash = currentSignatureHash;
@@ -347,7 +331,7 @@ class FundUIModel {
     if (gridSpacingPct > 0.0) {
       final navList = fullNavs;
       int? prevBuyIdx;
-      // 往更早的历史搜索最近一次触发"基础买入"的索引，最长回溯60个交易日
+      // 往更早的历史搜索最近一次触发"买入信号(含网格)"的索引，作为加仓参考基准，最长回溯60个交易日
       final int searchLimit = math.min(index + 60, navList.length);
       for (int k = index + 1; k < searchLimit; k++) {
         if (isBuySignalAt(k)) {
@@ -488,23 +472,13 @@ class FundUIModel {
     return recentBuyIdx;
   }
 
-  // 判断历史特定索引处是否触发卖出警报
+  // 计算历史特定索引处的卖出涨幅
   // buyDateStr：持仓的实际买入核算净值日期（模拟盘传参）。
-  // 修复：当 60 天内找不到系统买点时，将对比基准锚定到实际买入日；
-  // 若仍无法定位买入点则视为无卖出信号，避免基准与持仓脱钩导致的过早无条件卖出。
-  bool isSellSignalAt(int index, {String? buyDateStr = ''}) {
+  // 对比基准最远回溯至持仓买入点（或至多 sellX 个交易日），保证与卖出触发判定基准一致
+  double getRiseAt(int index, {String? buyDateStr = ''}) {
     if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
       final int encodedVal = optimalStrategy!['sell_x'];
-      int sellX;
-      double sellPct;
-      if (encodedVal >= 100) {
-        sellX = encodedVal ~/ 1000;
-        sellPct = (encodedVal % 1000).toDouble();
-      } else {
-        // 兼容旧格式：encodedVal 直接表示天数，涨幅阈值默认 5.0%
-        sellX = encodedVal;
-        sellPct = 5.0;
-      }
+      final int sellX = encodedVal >= 100 ? encodedVal ~/ 1000 : encodedVal;
 
       // 确定持仓买入点 buyIdx：
       // 1. 若模拟盘传入了具体持仓的 buyDateStr，优先精确锚定到该持仓的实际买入日
@@ -521,9 +495,9 @@ class FundUIModel {
             buyIdx = actualBuyIdx;
           }
         }
-        // 模拟盘传入了实际买入日却无法在历史中定位（或买入日不早于当前研判日）：基准脱钩，保守不触发卖出
+        // 模拟盘传入了实际买入日却无法在历史中定位（或买入日不早于当前研判日）：基准脱钩，保守返回 0.0
         if (buyIdx == null) {
-          return false;
+          return 0.0;
         }
       } else {
         final int searchLimit = math.min(index + 60, navList.length);
@@ -543,12 +517,25 @@ class FundUIModel {
         final double currentNav = navList[index];
         final double baseNav = navList[index + effectiveSellX];
         if (baseNav > 0) {
-          final double rise = ((currentNav - baseNav) / baseNav) * 100.0;
-          if (rise >= sellPct) {
-            return true;
-          }
+          return ((currentNav - baseNav) / baseNav) * 100.0;
         }
       }
+    }
+    return 0.0;
+  }
+
+  // 判断历史特定索引处是否触发卖出警报
+  // buyDateStr：持仓的实际买入核算净值日期（模拟盘传参）。
+  // 修复：当 60 天内找不到系统买点时，将对比基准锚定到实际买入日；
+  // 若仍无法定位买入点则视为无卖出信号，避免基准与持仓脱钩导致的过早无条件卖出。
+  bool isSellSignalAt(int index, {String? buyDateStr = ''}) {
+    if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
+      final int encodedVal = optimalStrategy!['sell_x'];
+      final double sellPct =
+          encodedVal >= 100 ? (encodedVal % 1000).toDouble() : 5.0;
+
+      final double rise = getRiseAt(index, buyDateStr: buyDateStr);
+      return rise >= sellPct;
     }
     return false;
   }
@@ -565,17 +552,7 @@ class FundUIModel {
   }
 
   double _calculateCurrentRise() {
-    if (optimalStrategy != null && optimalStrategy!['sell_x'] != null) {
-      final int encodedVal = optimalStrategy!['sell_x'];
-      int sellX;
-      if (encodedVal >= 100) {
-        sellX = encodedVal ~/ 1000;
-      } else {
-        sellX = encodedVal;
-      }
-      return getRiseOrDrop(sellX);
-    }
-    return 0.0;
+    return getRiseAt(0);
   }
 
   // 估算的当日净值：东方财富接口的 gsz 字段即估算净值（如 '1.06'），

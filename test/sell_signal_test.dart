@@ -118,6 +118,47 @@ void main() {
       expect(model.currentRise, closeTo(7.0, 0.001));
       expect(model.isSellSignal, false);
     });
+
+    test('currentRise should align with effectiveSellX when position buy point is more recent than sell_x', () {
+      final model = FundUIModel(code: '000004', name: 'Test Alignment Fund', sector: 'Tech');
+      
+      // 策略：5天跌5%买入，20天涨5%卖出 (sell_x = 20005)
+      model.optimalStrategy = {
+        'buy_days': 5,
+        'buy_drop': 5.0,
+        'sell_x': 20005,
+        'ma_period': 0,
+        'rsi_filter_limit': 0.0,
+        'macd_filter_enabled': 0,
+      };
+
+      // 构造净值数据（从近到远，总共 30 天）：
+      // index 0 (今日): 1.06
+      // index 1: 1.04
+      // index 2: 1.02
+      // index 3 (3天前买入日): 1.00 (相比更早高点 1.08 跌 7.4% 触发买入)
+      // index 8 (8天前高点): 1.08
+      // index 20 (20天前高位): 1.20
+      model.navs = List.generate(30, (index) {
+        if (index == 0) return 1.06;
+        if (index == 1) return 1.04;
+        if (index == 2) return 1.02;
+        if (index == 3) return 1.00;
+        if (index <= 8) return 1.08;
+        if (index == 20) return 1.20;
+        return 1.10;
+      });
+
+      // 验证第 3 天确实触发了买入信号
+      expect(model.isBuySignalAt(3), true);
+
+      // 验证今日触发卖出（相对于 3 天前 1.00 涨了 6% >= 5%）
+      expect(model.isSellSignal, true);
+      expect(model.isSellSignalAt(0), true);
+
+      // 验证 currentRise 准确对齐有效买入日（+6.0%），而不是原始 20 天前的 -11.67%
+      expect(model.currentRise, closeTo(6.0, 0.001));
+    });
   });
 
   group('FundUIModel Buy Signal Grid Spacing Tests', () {

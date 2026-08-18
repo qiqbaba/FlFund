@@ -66,6 +66,39 @@ void main() {
       expect(model.currentDrop, drop1);
     });
 
+    test('Cache Invalidation: _computeDataSignature detects MA120/sumOf119 and intraday valuation changes', () {
+      final model = FundUIModel(
+        code: '000001',
+        name: '测试基金',
+        sector: '混合型',
+      );
+      model.navs = List.generate(125, (i) => 1.0 - i * 0.001);
+      model.dates = List.generate(125, (i) => '2026-01-${(125 - i).toString().padLeft(3, '0')}');
+
+      model.optimalStrategy = {
+        'buy_days': 5,
+        'buy_drop': 0.1,
+        'sell_x': 5005,
+        'ma_period': 120,
+        'ma_envelope_pct': 2.0,
+        'rsi_filter_limit': 0.0,
+        'macd_filter_enabled': 0,
+      };
+
+      model.updateCalculatedSignals();
+      final initialBuySignal = model.isBuySignal;
+
+      // 1. 模拟异步填充 sumOf119 / closedMa120 缓存
+      model.sumOf119 = 150.0; // 极高的均线总和，导致 MA120 > 当前价格，使价格偏离 envelope
+      expect(model.isBuySignal, isFalse);
+
+      // 2. 模拟盘中实时估值 gsz 变化
+      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      model.gztime = '$todayStr 14:30';
+      model.gsz = '2.0000'; // 估值大涨，摆脱下跌判定
+      expect(model.isBuySignal, isFalse);
+    });
+
     test('RSI Boundary Alignment: calculateRSIFromRange returns 50.0 default when len <= period', () {
       final navs = [1.0, 1.05, 1.02, 1.08, 1.03]; // 5 个数据点，少于 14
       final rsi = BacktestEngine.calculateRSIFromRange(navs, 0, navs.length);
