@@ -519,17 +519,29 @@ class SimulationProvider extends ChangeNotifier {
             }
           }
 
-          // III. 到期平仓
+          // III. 到期平仓（按交易日计算持仓天数，与回测引擎对齐）
           if (sellReason == null && pos.buyDateStr.isNotEmpty) {
             final int holdMax =
                 fund.optimalStrategy?['hold_max'] ?? defaultHoldMax;
             try {
-              final buyDate = DateTime.parse(pos.buyDateStr);
-              final tradeDate = DateTime.parse(tradeDateStr);
-              final int holdDays = tradeDate.difference(buyDate).inDays;
+              int holdDays = 0;
+              final int buyDateIdx = fund.dates.indexOf(pos.buyDateStr);
+              final int curDateIdx = fund.dates.indexOf(tradeDateStr);
+              if (buyDateIdx >= 0 && curDateIdx >= 0 && buyDateIdx >= curDateIdx) {
+                holdDays = buyDateIdx - curDateIdx;
+              } else if (buyDateIdx >= 0 && curDateIdx == -1 && fund.isTodayValuation) {
+                // 当日为盘中估值时，比昨日收盘多 1 个交易日
+                holdDays = buyDateIdx + 1;
+              } else {
+                // 兜底：若未在历史净值中找到对应日期，按自然日的工作日比例（5/7）折算为交易日
+                final buyDate = DateTime.parse(pos.buyDateStr);
+                final tradeDate = DateTime.parse(tradeDateStr);
+                final int calendarDays = tradeDate.difference(buyDate).inDays;
+                holdDays = (calendarDays * 5 / 7).round();
+              }
               if (holdDays >= holdMax) {
                 sellReason =
-                    '到期平仓(持仓$holdDays天≥$holdMax天)$signalReasonSuffix';
+                    '到期平仓(持仓$holdDays交易日≥$holdMax交易日)$signalReasonSuffix';
               }
             } catch (_) {/* 日期解析失败则跳过到期判断 */}
           }

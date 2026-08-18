@@ -1014,11 +1014,9 @@ Map<String, dynamic> _calcSellStats(
           final double pct = ((followNav - signalNav) / signalNav) * 100.0;
           if (pct >= 5.0) {
             hasMissedRally = true;
-            break;
           }
           if (pct <= -2.5) {
             hasDrop = true;
-            break;
           }
         }
       }

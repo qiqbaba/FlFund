@@ -353,9 +353,13 @@ class FundDataGateway {
     if (validCodes.isEmpty) return results;
 
     const chunkSize = 50;
+    final List<List<String>> chunks = [];
     for (int i = 0; i < validCodes.length; i += chunkSize) {
-      final chunk = validCodes.sublist(
-          i, i + chunkSize > validCodes.length ? validCodes.length : i + chunkSize);
+      chunks.add(validCodes.sublist(
+          i, i + chunkSize > validCodes.length ? validCodes.length : i + chunkSize));
+    }
+
+    final futures = chunks.map((chunk) async {
       final listParam = chunk.map((c) => 'fu_$c').join(',');
       final url = 'https://hq.sinajs.cn/list=$listParam';
 
@@ -408,7 +412,9 @@ class FundDataGateway {
       } catch (e) {
         debugPrint('新浪批量估值抓取失败 chunk [${chunk.first}..]: $e');
       }
-    }
+    });
+
+    await Future.wait(futures);
     return results;
   }
 

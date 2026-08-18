@@ -1620,7 +1620,7 @@ class _ValuationTabState extends State<ValuationTab> {
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: () async {
-                          await fundProvider.fetchValuations();
+                          await fundProvider.fetchValuations(isForce: true);
                         },
                         child: ListView.builder(
                           padding: EdgeInsets.zero,
@@ -1678,7 +1678,7 @@ class _ValuationTabState extends State<ValuationTab> {
                           Expanded(
                             child: RefreshIndicator(
                                 onRefresh: () async {
-                                  await fundProvider.fetchValuations();
+                                  await fundProvider.fetchValuations(isForce: true);
                                 },
                                 child: ListView.builder(
                                   padding: EdgeInsets.zero,
@@ -1760,7 +1760,7 @@ class _ValuationTabState extends State<ValuationTab> {
                     Expanded(
                       child: RefreshIndicator(
                           onRefresh: () async {
-                            await fundProvider.fetchValuations();
+                            await fundProvider.fetchValuations(isForce: true);
                           },
                           child: ListView.builder(
                             padding: EdgeInsets.zero,

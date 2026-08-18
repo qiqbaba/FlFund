@@ -975,11 +975,13 @@ class _MyFundsTabState extends State<MyFundsTab> {
                                                 Expanded(
                                                   child: RefreshIndicator(
                                                     onRefresh: () async {
-                                                      await appConfig
-                                                          .syncWithSupabase();
-                                                      await fundProvider
-                                                          .refreshAll(
-                                                              isForce: true);
+                                                      await Future.wait([
+                                                        appConfig
+                                                            .syncWithSupabase(),
+                                                        fundProvider
+                                                            .refreshAll(
+                                                                isForce: true),
+                                                      ]);
                                                     },
                                                     child: ListView.builder(
                                                       padding: EdgeInsets.zero,
@@ -1090,12 +1092,14 @@ class _MyFundsTabState extends State<MyFundsTab> {
                                                   Expanded(
                                                     child: RefreshIndicator(
                                                         onRefresh: () async {
-                                                          await appConfig
-                                                              .syncWithSupabase();
-                                                          await fundProvider
-                                                              .refreshAll(
-                                                                  isForce:
-                                                                      true);
+                                                          await Future.wait([
+                                                            appConfig
+                                                                .syncWithSupabase(),
+                                                            fundProvider
+                                                                .refreshAll(
+                                                                    isForce:
+                                                                        true),
+                                                          ]);
                                                         },
                                                         child: ListView.builder(
                                                           padding:
@@ -1177,11 +1181,13 @@ class _MyFundsTabState extends State<MyFundsTab> {
                                             Expanded(
                                               child: RefreshIndicator(
                                                   onRefresh: () async {
-                                                    await appConfig
-                                                        .syncWithSupabase();
-                                                    await fundProvider
-                                                        .refreshAll(
-                                                            isForce: true);
+                                                    await Future.wait([
+                                                      appConfig
+                                                          .syncWithSupabase(),
+                                                      fundProvider
+                                                          .refreshAll(
+                                                              isForce: true),
+                                                    ]);
                                                   },
                                                   child: ListView.builder(
                                                     padding: EdgeInsets.zero,

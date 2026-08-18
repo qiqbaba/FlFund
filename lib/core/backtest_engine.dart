@@ -90,10 +90,9 @@ class BacktestEngine {
   static List<double> calculateRSIFromRange(
       List<double> navList, int startIndex, int len,
       {int period = 14}) {
-    if (len <= period) return [];
-
-    // 从 navList 中按从旧到新的顺序读取（navList 是从新到旧，所以从 startIndex+len-1 往回读）
+    if (len <= 0) return [];
     final rsi = List<double>.filled(len, 50.0);
+    if (len <= period) return rsi;
 
     double avgGain = 0.0;
     double avgLoss = 0.0;

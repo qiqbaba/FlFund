@@ -92,6 +92,15 @@ class FundUIModel {
     return Object.hash(
       optimalStrategy != null ? optimalStrategy!['sell_x'] : null,
       optimalStrategy != null ? optimalStrategy!['buy_days'] : null,
+      optimalStrategy != null ? optimalStrategy!['buy_drop'] : null,
+      optimalStrategy != null ? optimalStrategy!['ma_period'] : null,
+      optimalStrategy != null ? optimalStrategy!['ma_envelope_pct'] : null,
+      optimalStrategy != null ? optimalStrategy!['rsi_filter_limit'] : null,
+      optimalStrategy != null ? optimalStrategy!['macd_filter_enabled'] : null,
+      optimalStrategy != null ? optimalStrategy!['pe_percentile_limit'] : null,
+      optimalStrategy != null ? optimalStrategy!['pb_percentile_limit'] : null,
+      pePercentile,
+      pbPercentile,
       navs.length,
       navs.isNotEmpty ? navs.first : 0.0,
       navs.length > 5 ? navs[5] : 0.0,
@@ -149,7 +158,7 @@ class FundUIModel {
     return '';
   }
 
-  // 计算日历史净值序列（由新到旧）中，指定位置往前的收益率标准差（波动率）
+  // 计算日历史净值序列（由新到旧）中，指定位置往前的收益率标准差（波动率，使用无偏样本标准差 N-1）
   double _calculateVolatility(int startIndex, int days, List<double> navList) {
     int effectiveDays = days;
     if (navList.length <= startIndex + effectiveDays + 1) {
@@ -167,13 +176,14 @@ class FundUIModel {
         sum += r;
       }
     }
-    if (returns.isEmpty) return 0.01;
+    if (returns.length < 2) return 0.01;
     final double mean = sum / returns.length;
     double variance = 0.0;
     for (final r in returns) {
       variance += (r - mean) * (r - mean);
     }
-    return math.sqrt(variance / returns.length);
+    // 使用无偏样本标准差 (N-1)，与回测引擎完全对齐
+    return math.sqrt(variance / (returns.length - 1));
   }
 
   // 判断历史某天是否触发买入警报（核心指标校验，无网格限制）
@@ -205,7 +215,7 @@ class FundUIModel {
     if (rsiLimit > 0.0) {
       // 从 index 到末尾，按时间从旧到新（navList 是从新到旧，所以需要反转读取）
       final int len = navList.length - index;
-      if (len >= 14) {
+      if (len > 0) {
         final rsiSeries =
             BacktestEngine.calculateRSIFromRange(navList, index, len);
         if (rsiSeries.isNotEmpty && rsiSeries.last >= rsiLimit) {
@@ -361,8 +371,8 @@ class FundUIModel {
             sellPct = 5.0;
           }
 
-          // 检查从 index 到 prevBuyIdx 之间（不含 prevBuyIdx 本身）是否有某天触发了卖出条件
-          for (int j = index; j < prevBuyIdx; j++) {
+          // 检查从 index + 1 到 prevBuyIdx 之间（不含 prevBuyIdx 本身及当前研判日 index）是否有某天触发了卖出条件
+          for (int j = index + 1; j < prevBuyIdx; j++) {
             final int effectiveSellX = math.min(prevBuyIdx - j, sellX);
             if (effectiveSellX > 0) {
               final double currentNav = navList[j];
@@ -571,6 +581,10 @@ class FundUIModel {
   // 与净值序列基准一致，可直接用于当日交易核算；无今日估值时返回 null
   double? get estimatedNav {
     if (!isTodayValuation) return null;
+    // 如果历史净值序列 dates 中已经包含了今日官方收盘净值（收盘后已更新），则不再向前追加估算值，避免数据双重叠加
+    if (dates.isNotEmpty && dates.first == _cachedToday) {
+      return null;
+    }
     final double? gszVal = double.tryParse(gsz.trim());
     if (gszVal == null || gszVal <= 0.0 || !gszVal.isFinite) return null;
     return gszVal;
@@ -1348,8 +1362,8 @@ class FundProvider extends ChangeNotifier {
             // B. 加载历史与百分位计算：常规估值刷新使用 onlyIfMissing: true，避免白天重复向天天基金抓取 2000 天历史数据导致卡死
             await loadHistoryAndCalculateForModel(
               model,
-              isForce: isForce,
-              onlyIfMissing: !isForce,
+              isForce: false,
+              onlyIfMissing: true,
             );
           } catch (e) {
             final msg = '刷新自选 ${model.code} 失败: $e';
@@ -1470,8 +1484,8 @@ class FundProvider extends ChangeNotifier {
       for (final model in [...topFunds, ...botFunds]) {
         detailTasks.add(loadHistoryAndCalculateForModel(
           model,
-          isForce: isForce,
-          onlyIfMissing: !isForce,
+          isForce: false,
+          onlyIfMissing: true,
         ));
       }
       await Future.wait(detailTasks);
@@ -1669,8 +1683,8 @@ class FundProvider extends ChangeNotifier {
   }
 
   // 4. 指数估值榜与场外映射抓取
-  Future<void> fetchValuations() async {
-    if (valuationLoaded) return;
+  Future<void> fetchValuations({bool isForce = false}) async {
+    if (valuationLoaded && !isForce) return;
     try {
       final dio = FundDataGateway().dio;
       final headers = {
