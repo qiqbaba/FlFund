@@ -95,6 +95,38 @@ void main() {
       );
 
       expect(optResult, isNotNull);
+      expect(optResult!['win_rate'], greaterThan(50.0));
+      expect(optResult['total_trades'], greaterThanOrEqualTo(3));
+    });
+
+    test('GAOptimizer should find robust strategy with walk-forward and deduplicated pool', () {
+      final List<double> navs = List.generate(300, (index) => 1.0);
+      final List<String> dates = List.generate(300, (index) => '2026-01-${(index + 1).toString().padLeft(3, '0')}');
+
+      for (int i = 0; i < 300; i++) {
+        final mod = i % 12;
+        if (mod >= 3 && mod <= 5) {
+          navs[i] = 0.92;
+        } else if (mod >= 9 && mod <= 11) {
+          navs[i] = 1.06;
+        } else {
+          navs[i] = 1.0;
+        }
+      }
+
+      final optResult = GAOptimizer.optimize(
+        allNavs: navs,
+        allDates: dates,
+        useMaFilter: true,
+        useMacdFilter: false,
+        rsiFilterLimit: 100.0,
+        stopLossPct: 15.0,
+        maxGridAdds: 3,
+      );
+
+      expect(optResult, isNotNull);
+      expect(optResult!['total_trades'], greaterThanOrEqualTo(5));
+      expect(optResult['win_rate'], greaterThan(60.0));
     });
 
     test('Should respect custom maPeriod and allow trades after that period', () {

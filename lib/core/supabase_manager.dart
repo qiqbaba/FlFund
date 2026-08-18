@@ -227,10 +227,15 @@ class SupabaseManager {
               } else {
                 // 云端较新，更新到本地。如果有融合本地偏离默认值的信息，也需回传云端
                 localToUpdate[code] = merged;
-                bool needsUploadBack = merged.isPinned != cloudFund.isPinned ||
+                bool needsUploadBack = merged.name != cloudFund.name ||
+                    merged.sector != cloudFund.sector ||
+                    merged.isHeld != cloudFund.isHeld ||
                     merged.isSpecial != cloudFund.isSpecial ||
-                    merged.isHeld != cloudFund.isHeld;
+                    merged.isPinned != cloudFund.isPinned ||
+                    merged.amount != cloudFund.amount ||
+                    merged.yieldRate != cloudFund.yieldRate;
                 if (needsUploadBack) {
+                  merged.updatedAt = DateTime.now();
                   localOnlyToUpload.add(merged);
                 }
               }
@@ -360,7 +365,7 @@ class SupabaseManager {
         'is_pinned': fund.isPinned,
         'amount': fund.amount,
         'yield_rate': fund.yieldRate,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': fund.updatedAt.toIso8601String(),
       });
       debugPrint('实时同步 -> 云端已保存基金: ${fund.code}');
     } catch (e) {
@@ -402,7 +407,7 @@ class SupabaseManager {
         'is_pinned': fund.isPinned,
         'amount': fund.amount,
         'yield_rate': fund.yieldRate,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': fund.updatedAt.toIso8601String(),
       }).toList();
       await client.from('user_funds').upsert(data);
       debugPrint('实时同步 -> 云端批量保存基金数: ${funds.length}');

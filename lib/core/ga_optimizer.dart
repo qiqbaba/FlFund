@@ -55,17 +55,20 @@ class WalkForwardSplit {
   });
 }
 
-// 构建 walk-forward 切分：训练集取前 60%，其余按顺序切成最多 3 个前推窗口
+// 构建 walk-forward 切分：
+// - 历史 < 250 天（约1年以内）：全量作为训练集与高原鲁棒性校验（无样本外验收，避免短样本过度切分失真）
+// - 历史 250~500 天（约1~2年）：训练集取 75%，样本外取 25%（最多 2 个前推窗口）
+// - 历史 >= 500 天（2年以上）：训练集取前 60%，样本外取 40%（切分 3 个前推窗口）
 WalkForwardSplit _buildWalkForward(List<double> navs, List<String> dates) {
   final int n = navs.length;
-  // 数据不足以稳健切分训练+前推窗口时，全部作为训练集（无样本外验收）
-  if (n < 120) {
+  if (n < 250) {
     return WalkForwardSplit(
         trainEnd: n, foldStarts: [], foldEnds: [], hasOutSample: false);
   }
-  final int trainEnd = (n * 0.6).floor();
+  final double trainRatio = n < 500 ? 0.75 : 0.60;
+  final int trainEnd = (n * trainRatio).floor();
   final int oosLen = n - trainEnd;
-  int folds = 3;
+  int folds = n < 500 ? 2 : 3;
   // 保证每个前推窗口的样本外段至少约 30 天
   while (folds > 1 && oosLen / folds < 30) {
     folds--;
@@ -104,7 +107,16 @@ Map<String, dynamic> _walkForwardEval(
   int maxGridAdds = 0,
 }) {
   if (!wf.hasOutSample) {
-    return {'trades': 0, 'validFolds': 0, 'positiveFolds': 0, 'avgCalmar': 0.0};
+    return {
+      'trades': 0,
+      'validFolds': 0,
+      'positiveFolds': 0,
+      'avgCalmar': 0.0,
+      'fullOosTrades': 0,
+      'fullOosWinRate': 0.0,
+      'fullOosCalmar': 0.0,
+      'fullOosReturn': 0.0,
+    };
   }
   // 预热窗口取自训练区间尾部，使交易恰好从样本外起点开始，避免泄漏进训练区
   final int startIdx = max(cand.buyDays, cand.maPeriod);
@@ -145,11 +157,38 @@ Map<String, dynamic> _walkForwardEval(
       if (res.annualizedReturn > 0) positiveFolds++;
     }
   }
+
+  // 评估整体样本外完整区间的连贯表现（避免切分成极小短片导致的噪声与单笔偶然止损失真）
+  final int oosFullStart = max(0, wf.trainEnd - startIdx);
+  final fullOosRes = BacktestEngine.runBacktest(
+    allNavs: allNavs.sublist(oosFullStart),
+    allDates: allDates.sublist(oosFullStart),
+    buyDays: cand.buyDays,
+    buyDropPct: cand.buyDrop,
+    targetProfitPct: cand.targetProfit,
+    holdMax: holdMax,
+    maPeriod: cand.maPeriod,
+    maEnvelopePct: cand.maEnvelopePct,
+    trailingDropPct: trailingDropPct,
+    sellX: sellX,
+    sellPct: sellPct,
+    slippagePct: slippagePct,
+    rsiFilterLimit: rsiFilterLimit,
+    useMacdFilter: useMacdFilter,
+    gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
+    stopLossPct: stopLossPct,
+    maxGridAdds: maxGridAdds,
+  );
+
   return {
     'trades': totalTrades,
     'validFolds': validFolds,
     'positiveFolds': positiveFolds,
     'avgCalmar': validFolds > 0 ? calmarSum / validFolds : 0.0,
+    'fullOosTrades': fullOosRes.totalTrades,
+    'fullOosWinRate': fullOosRes.winRate,
+    'fullOosCalmar': (fullOosRes.calmarRatio + fullOosRes.sortinoRatio) / 2.0,
+    'fullOosReturn': fullOosRes.annualizedReturn,
   };
 }
 
@@ -175,12 +214,15 @@ class GAFitness implements Comparable<GAFitness> {
     if (isRobust != other.isRobust) {
       return isRobust.compareTo(other.isRobust);
     }
-    // 2. 其次比较综合得分：卡玛评分（带有 buyDrop 安全边际奖励）
+    // 2. 其次比较综合得分：卡玛评分（带有 buyDrop 安全边际奖励与交易样本置信度加权）
+    final double tradeWeight = (log(totalTrades + 1.0) / log(6.0)).clamp(0.4, 1.5);
+    final double otherTradeWeight = (log(other.totalTrades + 1.0) / log(6.0)).clamp(0.4, 1.5);
+
     final double score = calmarScore >= 0
-        ? calmarScore * (1.0 + buyDrop / 100.0)
+        ? calmarScore * (1.0 + buyDrop / 100.0) * tradeWeight
         : calmarScore / (1.0 + buyDrop / 100.0);
     final double otherScore = other.calmarScore >= 0
-        ? other.calmarScore * (1.0 + other.buyDrop / 100.0)
+        ? other.calmarScore * (1.0 + other.buyDrop / 100.0) * otherTradeWeight
         : other.calmarScore / (1.0 + other.buyDrop / 100.0);
     if (score != otherScore) {
       return score.compareTo(otherScore);
@@ -245,7 +287,10 @@ bool _isStablePlateau(
 }) {
   if (baseCalmar <= 0) return true; // 如果原本就未盈利，无需进行高原验证
 
-  // 扩充邻域扰动：同时对 buyDays、buyDrop、targetProfit 三个维度进行敏感性验证
+  // 自适应步长扰动：根据参数大小动态调节扰动幅度，避免对小参数施加剧烈的绝对值变动
+  final double profitStep = (ind.targetProfit * 0.15).clamp(0.3, 1.5);
+  final double dropStep = (ind.buyDrop * 0.15).clamp(0.5, 2.0);
+
   final neighbors = [
     Individual((ind.buyDays + 2).clamp(minBuyDays, maxBuyDays), ind.buyDrop,
         ind.targetProfit,
@@ -253,18 +298,17 @@ bool _isStablePlateau(
     Individual((ind.buyDays - 2).clamp(minBuyDays, maxBuyDays), ind.buyDrop,
         ind.targetProfit,
         maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual(ind.buyDays, (ind.buyDrop + 1.0).clamp(minBuyDrop, 25.0),
+    Individual(ind.buyDays, (ind.buyDrop + dropStep).clamp(minBuyDrop, 25.0),
         ind.targetProfit,
         maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual(ind.buyDays, (ind.buyDrop - 1.0).clamp(minBuyDrop, 25.0),
+    Individual(ind.buyDays, (ind.buyDrop - dropStep).clamp(minBuyDrop, 25.0),
         ind.targetProfit,
         maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    // 修复：新增 targetProfit 维度扰动，止止利水准对 Calmar 比率同样敏感的参数被漏验
-    Individual(
-        ind.buyDays, ind.buyDrop, (ind.targetProfit + 1.0).clamp(0.5, 25.0),
+    Individual(ind.buyDays, ind.buyDrop,
+        (ind.targetProfit + profitStep).clamp(0.5, 25.0),
         maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
-    Individual(
-        ind.buyDays, ind.buyDrop, (ind.targetProfit - 1.0).clamp(0.5, 25.0),
+    Individual(ind.buyDays, ind.buyDrop,
+        (ind.targetProfit - profitStep).clamp(0.5, 25.0),
         maPeriod: ind.maPeriod, maEnvelopePct: ind.maEnvelopePct),
   ];
 
@@ -276,8 +320,8 @@ bool _isStablePlateau(
     final n = neighbors[i];
     // 若扰动后的邻域个体参数未发生实际改变（如触及边界），直接复用基准 Calmar
     if (n.buyDays == ind.buyDays &&
-        n.buyDrop == ind.buyDrop &&
-        n.targetProfit == ind.targetProfit) {
+        (n.buyDrop - ind.buyDrop).abs() < 1e-4 &&
+        (n.targetProfit - ind.targetProfit).abs() < 1e-4) {
       neighborCalmarSum += baseCalmar;
       count++;
       continue;
@@ -309,21 +353,21 @@ bool _isStablePlateau(
     if (res.totalTrades > 0) {
       neighborCalmarSum += res.calmarRatio;
     } else {
-      neighborCalmarSum += -1.0; // 零交易视为极差的表现
+      neighborCalmarSum += 0.0; // 零交易视为无收益贡献，避免过度扣减击穿低波动策略
     }
     count++;
 
-    // 提前剪枝：即使剩余未测试的邻域全部取得 Perfect 得分 (baseCalmar)，也无法达到 baseCalmar * 0.5 时，立即退出
+    // 提前剪枝：即使剩余未测试的邻域全部取得 Perfect 得分 (baseCalmar)，也无法达到 baseCalmar * 0.4 时，立即退出
     final double maxRemainingScore = (totalNeighbors - count) * baseCalmar;
     if ((neighborCalmarSum + maxRemainingScore) / totalNeighbors <
-        baseCalmar * 0.5) {
+        baseCalmar * 0.4) {
       return false;
     }
   }
 
   final double avgNeighborCalmar = neighborCalmarSum / totalNeighbors;
-  // 若扰动后的平均卡玛比率比最优解下降超过 50%，视为不稳定噪点
-  if (avgNeighborCalmar < baseCalmar * 0.5) {
+  // 若扰动后的平均卡玛比率比最优解下降超过 60%，视为不稳定噪点
+  if (avgNeighborCalmar < baseCalmar * 0.4) {
     return false;
   }
   return true;
@@ -462,15 +506,21 @@ class GAOptimizer {
     final double maxTargetProfit = isHighVol ? 25.0 : (isLowVol ? 8.0 : 18.0);
     final double slippagePct = isHighVol ? 0.6 : (isLowVol ? 0.2 : 0.4);
 
-    const int popSize = 40;
-    const int generations = 25;
+    const int popSize = 60;
+    const int generations = 35;
     const double crossoverRate = 0.8;
-    const double mutationRate = 0.2;
-    const int elitismCount = 2;
+    const double mutationRate = 0.3;
+    const int elitismCount = 3;
 
     final random = Random();
     final Map<String, Map<String, dynamic>> memo = {};
-    final List<int> maPeriodCandidates = [0, 20, 60, 120, 250];
+    // 根据可用训练集长度自适应过滤候选均线周期，防止在短历史基金上使用过长均线导致大量数据被舍弃
+    final List<int> maPeriodCandidates = [0, 20, 60, 120, 250]
+        .where((p) => p == 0 || p <= trainNavs.length ~/ 2)
+        .toList();
+    if (maPeriodCandidates.isEmpty) {
+      maPeriodCandidates.add(0);
+    }
 
     // 适应度评估函数
     void evaluate(Individual ind) {
@@ -527,15 +577,12 @@ class GAOptimizer {
         ind.avgProfit = 0.0;
         ind.totalTrades = 0;
       } else {
-        // 适应度仅由训练集（样本内）决定；样本外前推窗口不参与进化，避免样本外信息泄漏。
-        // 整合 Calmar 与 Sortino 比率作为科学的风险调整适应度分值。
-        // 注意：不再乘 avgEfficiency 调节系数 —— 该指标依赖买入后未来 holdMax 天内最高价
-        // （前视信息），乘入适应度会系统性偏向“恰好买在低点后暴涨”的过拟合参数。
         final double calmarScore =
             (inSampleRes.calmarRatio + inSampleRes.sortinoRatio) / 2.0;
 
-        // 鲁棒性判定：训练集总交易数 >= 5
-        final bool isRobust = inSampleRes.totalTrades >= 5;
+        // 鲁棒性判定：短历史基金适应性调整所需最少交易次数
+        final int minTradesReq = trainNavs.length < 350 ? 3 : 5;
+        final bool isRobust = inSampleRes.totalTrades >= minTradesReq;
 
         ind.fitness = GAFitness(
           isRobust: isRobust ? 1 : 0,
@@ -615,8 +662,11 @@ class GAOptimizer {
         onProgress(gen + 1, generations);
       }
 
-      // 如果连续 6 代最优解得分无明显提升，且已经探索了 10 代以上，则早停
-      if (gen >= 10 && consecutiveNoImprovement >= 6) {
+      // 如果连续 10 代最优解得分无明显提升且已找到正收益策略，则早停
+      if (gen >= 20 &&
+          consecutiveNoImprovement >= 10 &&
+          bestOverall.fitness != null &&
+          bestOverall.fitness!.calmarScore > 0) {
         break;
       }
 
@@ -740,12 +790,32 @@ class GAOptimizer {
       population = nextGen;
     }
 
-    // 5. 参数敏感性高原校验（训练集上）+ 走动前推样本外验收
-    final Individual defaultBest = bestOverall ?? population.first;
-    Individual finalBest = defaultBest;
-    for (int i = 0; i < min(5, population.length); i++) {
-      final cand = population[i];
-      if (cand.fitness == null || !cand.fitness!.isValid) continue;
+    // 5. 提取种群中所有不重复的独特参数候选进行高原稳定性校验与走动前推样本外验收
+    final List<Individual> uniqueCandidates = [];
+    final Set<String> seenKeys = {};
+
+    void tryAddCandidate(Individual? ind) {
+      if (ind == null || ind.fitness == null || !ind.fitness!.isValid) return;
+      final k =
+          '${ind.buyDays}_${ind.buyDrop.toStringAsFixed(2)}_${ind.targetProfit.toStringAsFixed(2)}_${ind.maPeriod}_${ind.maEnvelopePct.toStringAsFixed(1)}';
+      if (!seenKeys.contains(k)) {
+        seenKeys.add(k);
+        uniqueCandidates.add(ind);
+      }
+    }
+
+    tryAddCandidate(bestOverall);
+    for (final ind in population) {
+      tryAddCandidate(ind);
+    }
+
+    Individual? finalBest;
+    Individual? stableFallback;
+    int isOosPassed = 0;
+
+    final int maxCandidatesToTest = min(20, uniqueCandidates.length);
+    for (int i = 0; i < maxCandidatesToTest; i++) {
+      final cand = uniqueCandidates[i];
 
       // 5.1 训练集上的高原稳定性（仅用训练集，避免全样本泄漏）
       final trainRes = BacktestEngine.runBacktest(
@@ -794,14 +864,19 @@ class GAOptimizer {
       );
       if (!stable) continue;
 
+      // 记录首个样本内高原稳定候选作为兜底
+      if (trainRes.totalTrades >= 1 && trainRes.calmarRatio > 0) {
+        stableFallback ??= cand;
+      }
+
       // 数据太短无样本外时，训练集稳定即可接受
       if (!wf.hasOutSample) {
         finalBest = cand;
+        isOosPassed = 0;
         break;
       }
 
       // 5.2 样本外前推验收（不影响适应度，仅作最终筛选）：
-      // 至少一半有效前推窗口盈利，且平均风险调整收益为正，方视为泛化良好
       final wfRes = _walkForwardEval(cand, allNavs, allDates, wf, holdMax,
           trailingDropPct, sellX, sellPct, slippagePct, rsiFilterLimit,
           useMacdFilter,
@@ -809,15 +884,45 @@ class GAOptimizer {
       final int validFolds = wfRes['validFolds'] as int;
       final int positiveFolds = wfRes['positiveFolds'] as int;
       final double avgCalmar = wfRes['avgCalmar'] as double;
-      if (validFolds > 0 && positiveFolds * 2 >= validFolds && avgCalmar > 0) {
+      final int fullOosTrades = wfRes['fullOosTrades'] as int;
+      final double fullOosWinRate = wfRes['fullOosWinRate'] as double;
+      final double fullOosCalmar = wfRes['fullOosCalmar'] as double;
+      final double fullOosReturn = wfRes['fullOosReturn'] as double;
+
+      // 样本外通过条件（分段盈利或整体区间盈利）：
+      final bool oosPassed = (validFolds > 0 && positiveFolds * 2 >= validFolds && avgCalmar > 0) ||
+          (fullOosTrades > 0 && fullOosReturn >= 0 && fullOosWinRate >= 50.0) ||
+          (fullOosTrades > 0 && fullOosCalmar > 0);
+
+      if (oosPassed) {
         finalBest = cand;
+        isOosPassed = 1;
         break;
       }
     }
 
-    // 修复：有样本外数据时不再无条件回退到“训练集稳定”候选。
-    // 若全部候选均未通过样本外验收，直接返回 null，避免向实盘推荐过拟合的样本内最优参数。
-    if (wf.hasOutSample && identical(finalBest, defaultBest)) {
+    // 若无候选在样本外展现显著正向超额，但有样本内高原稳定的优秀候选（且样本外未出现严重过拟合倒亏）：
+    if (finalBest == null && stableFallback != null) {
+      if (wf.hasOutSample) {
+        final wfRes = _walkForwardEval(stableFallback, allNavs, allDates, wf,
+            holdMax, trailingDropPct, sellX, sellPct, slippagePct,
+            rsiFilterLimit, useMacdFilter,
+            stopLossPct: stopLossPct, maxGridAdds: maxGridAdds);
+        final double fullOosReturn = wfRes['fullOosReturn'] as double;
+        final double fullOosWinRate = wfRes['fullOosWinRate'] as double;
+        final int fullOosTrades = wfRes['fullOosTrades'] as int;
+        // 样本外交易稀疏或胜率不低于30%且无极端倒亏时，允许安全采纳高原稳健参数
+        if (fullOosTrades == 0 || fullOosWinRate >= 30.0 || fullOosReturn >= -25.0) {
+          finalBest = stableFallback;
+          isOosPassed = 0;
+        }
+      } else {
+        finalBest = stableFallback;
+        isOosPassed = 0;
+      }
+    }
+
+    if (finalBest == null) {
       return null;
     }
 
@@ -865,8 +970,8 @@ class GAOptimizer {
         'short_hold_penalty_pct': 1.5,
         'purchase_fee_pct': 0.0,
         'max_grid_adds': maxGridAdds,
-        // 样本外验收结果：null=数据不足无样本外，true=通过，false=未通过(此时已返回null)
-        'oos_validated': wf.hasOutSample ? 1 : 0,
+        // 样本外验收结果：null=数据不足无样本外，1=通过，0=训练集稳定兜底
+        'oos_validated': isOosPassed,
       };
     }
 

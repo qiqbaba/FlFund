@@ -743,6 +743,9 @@ class AppConfig extends ChangeNotifier {
           info.sector = cleanSector;
           info.updatedAt = DateTime.now();
           await saveConfig();
+          if (SupabaseManager().isLoggedIn) {
+            unawaited(SupabaseManager().uploadFund(info));
+          }
           notifyListeners();
           debugPrint(
               '基金 $code ($name) 板块分类已从 $currentSector 自动修正为 $cleanSector (根据跟踪标的/业绩基准: $targetText)');

@@ -1,17 +1,17 @@
 {
-  "version": "1.8.21",
-  "buildNumber": 103,
+  "version": "1.8.22",
+  "buildNumber": 104,
   "minSupportedVersion": "1.8.0",
   "releaseDate": "2026-08-18",
-  "releaseNotes": "1. 策略中心寻优表格增强：新增序号列与全字段三态点击排序\n2. 波动率校准加速：并发轻量初检与内存纯算，后台异步落库\n3. 界面与更新优化：修复 Tab 进度条布局，更新服务增加镜像与解析容错",
+  "releaseNotes": "1. 遗传算法寻优升级：优化早停、走动前推验收与高原稳健兜底机制\n2. 云同步回传机制修复：完善持仓金额与收益率字段变动回传，解决重复同步问题\n3. 策略中心进度与体验优化：进度条增加完成数计数展示与自适应宽度",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.21/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.22/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.21/FlFund-v1.8.21.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.22/FlFund-v1.8.22.apk",
       "sha256": "",
       "fileSize": 0
     }

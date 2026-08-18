@@ -18,10 +18,10 @@ import '../../core/data_gateway.dart';
 import '../widgets/mobile_header.dart';
 
 Map<String, dynamic> getDefaultStrategyFilters(String name, String sector) {
-  double defaultRsi = 35.0;
+  double defaultRsi = 45.0;
   bool defaultMacd = true;
-  double defaultPe = 40.0;
-  double defaultPb = 40.0;
+  double defaultPe = 50.0;
+  double defaultPb = 50.0;
 
   final bool isLow = name.contains('债') ||
       name.contains('固收') ||
@@ -31,44 +31,11 @@ Map<String, dynamic> getDefaultStrategyFilters(String name, String sector) {
       sector.contains('债') ||
       sector.contains('货币') ||
       sector.contains('固收');
-  final bool isHigh = name.contains('科技') ||
-      name.contains('半导体') ||
-      name.contains('芯片') ||
-      name.contains('医药') ||
-      name.contains('医疗') ||
-      name.contains('白酒') ||
-      name.contains('消费') ||
-      name.contains('新能源') ||
-      name.contains('科创') ||
-      name.contains('创业') ||
-      name.contains('军工') ||
-      name.contains('光伏') ||
-      name.contains('黄金') ||
-      name.contains('白银') ||
-      name.contains('纳斯达克') ||
-      name.contains('标普') ||
-      name.contains('恒生科技') ||
-      name.contains('软件') ||
-      name.contains('成长') ||
-      name.contains('QDII') ||
-      name.contains('证券') ||
-      name.contains('券商') ||
-      sector.contains('科技') ||
-      sector.contains('医药') ||
-      sector.contains('医疗') ||
-      sector.contains('消费') ||
-      sector.contains('新能源') ||
-      sector.contains('军工') ||
-      sector.contains('半导体');
 
   if (isLow) {
     defaultRsi = 30.0;
     defaultPe = 30.0;
     defaultPb = 30.0;
-  } else if (isHigh) {
-    defaultRsi = 40.0;
-    defaultPe = 50.0;
-    defaultPb = 50.0;
   }
 
   return {
@@ -1404,13 +1371,16 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     }
 
     final double progressPct;
+    final int completedCount;
+    final int totalCount = _batchResults.length;
     if (_batchResults.isEmpty) {
       progressPct = 0.0;
+      completedCount = 0;
     } else {
-      final completed = _batchResults
+      completedCount = _batchResults
           .where((r) => r.status != '等待中' && r.status != '计算中')
           .length;
-      progressPct = (completed / _batchResults.length) * 100.0;
+      progressPct = (completedCount / _batchResults.length) * 100.0;
     }
 
     // 定义每列的配置宽度与标题
@@ -1581,37 +1551,60 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                      Text(
-                        '${progressPct.toThousand(precision: 1)}%',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                            fontSize: 13),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${progressPct.toThousand(precision: 1)}%',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                  fontSize: 13),
+                            ),
+                            if (totalCount > 0)
+                              TextSpan(
+                                text: ' ($completedCount/$totalCount)',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.white60
+                                        : Colors.black54,
+                                    fontWeight: FontWeight.normal),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: fluent.ProgressBar(
-                      value: progressPct,
-                      backgroundColor: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Colors.black.withValues(alpha: 0.08),
-                      activeColor: Colors.blue,
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(5),
+                      child: fluent.ProgressBar(
+                        value: progressPct,
+                        backgroundColor: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.08),
+                        activeColor: Colors.blue,
+                      ),
                     ),
                   ),
                   if (_isBatchOptimizing && _batchProgress.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Text(
                       _batchProgress,
-                      style: const TextStyle(color: Colors.grey, fontSize: 11),
+                      style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black87,
+                          fontSize: 11),
                     ),
                   ],
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     '💡 寻优数据区间说明：最优方案基于各只基金在本地缓存的全部历史净值数据（默认最多抓取最近 2000 个交易日，最长约 8.2 年）通过遗传算法计算得出。',
-                    style: TextStyle(color: Colors.grey, fontSize: 11),
+                    style: TextStyle(
+                        color: isDark ? Colors.white38 : Colors.black45,
+                        fontSize: 11),
                   ),
                 ],
               ),
@@ -2044,10 +2037,21 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           final double defaultPe = defaults['pe'];
           final double defaultPb = defaults['pb'];
 
-          final double oldRsi = optStrategy?['rsi_filter_limit'] ?? defaultRsi;
-          final bool oldMacd = optStrategy?['macd_filter_enabled'] != null
+          final double targetRsi = math.max(
+              defaultRsi,
+              (optStrategy?['rsi_filter_limit'] as num?)?.toDouble() ??
+                  defaultRsi);
+          final bool targetMacd = optStrategy?['macd_filter_enabled'] != null
               ? (optStrategy!['macd_filter_enabled'] == 1)
               : defaultMacd;
+          final double targetPe = math.max(
+              defaultPe,
+              (optStrategy?['pe_percentile_limit'] as num?)?.toDouble() ??
+                  defaultPe);
+          final double targetPb = math.max(
+              defaultPb,
+              (optStrategy?['pb_percentile_limit'] as num?)?.toDouble() ??
+                  defaultPb);
           final double stopLossPct =
               (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
 
@@ -2061,8 +2065,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             'sellPct': sPct,
             'lowThreshold': appConfig.volatilityLowThreshold,
             'highThreshold': appConfig.volatilityHighThreshold,
-            'rsiFilterLimit': oldRsi,
-            'useMacdFilter': oldMacd,
+            'rsiFilterLimit': targetRsi,
+            'useMacdFilter': targetMacd,
             'stopLossPct': stopLossPct,
             'maxGridAdds': 3,
           });
@@ -2094,9 +2098,6 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               }
             });
 
-            final oldPe = optStrategy?['pe_percentile_limit'] ?? defaultPe;
-            final oldPb = optStrategy?['pb_percentile_limit'] ?? defaultPb;
-
             strategiesToSave.add({
               'fund_code': fund.code,
               'fund_name': fund.name,
@@ -2113,10 +2114,10 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               'sell_trades': sellTrades,
               'ma_period': opt['ma_period'],
               'ma_envelope_pct': opt['ma_envelope_pct'],
-              'rsi_filter_limit': oldRsi,
-              'macd_filter_enabled': oldMacd ? 1 : 0,
-              'pe_percentile_limit': oldPe,
-              'pb_percentile_limit': oldPb,
+              'rsi_filter_limit': targetRsi,
+              'macd_filter_enabled': targetMacd ? 1 : 0,
+              'pe_percentile_limit': targetPe,
+              'pb_percentile_limit': targetPb,
               'stop_loss_pct': opt['stop_loss_pct'],
               'trailing_drop_pct': opt['trailing_drop_pct'],
               'short_hold_days': opt['short_hold_days'],
