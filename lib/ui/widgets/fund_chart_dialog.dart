@@ -30,8 +30,8 @@ class FundChartDialog extends StatefulWidget {
 
 class _FundChartDialogState extends State<FundChartDialog> {
   // 周期选项
-  String _selectedPeriod = '近1年';
-  int _visiblePoints = 252;
+  String _selectedPeriod = '近1月';
+  int _visiblePoints = 21;
 
   // 量化指标选项
   String _selectedIndicator = '🌡️ 估值百分位温度带';

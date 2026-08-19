@@ -965,10 +965,15 @@ class FundProvider extends ChangeNotifier {
           final double gszzlVal = double.tryParse(model.gszzl) ?? 0.0;
 
           if (dwjzVal > 0) {
-            if ((gszVal <= 0 || (gszVal - dwjzVal).abs() < 1e-5) && gszzlVal != 0.0) {
-              model.gsz = (dwjzVal * (1.0 + gszzlVal / 100.0)).toStringAsFixed(4);
-            } else if (gszVal > 0 && (gszVal - dwjzVal).abs() >= 1e-5 && gszzlVal == 0.0) {
-              model.gszzl = ((gszVal - dwjzVal) / dwjzVal * 100.0).toStringAsFixed(2);
+            if ((gszVal <= 0 || (gszVal - dwjzVal).abs() < 1e-5) &&
+                gszzlVal != 0.0) {
+              model.gsz =
+                  (dwjzVal * (1.0 + gszzlVal / 100.0)).toStringAsFixed(4);
+            } else if (gszVal > 0 &&
+                (gszVal - dwjzVal).abs() >= 1e-5 &&
+                gszzlVal == 0.0) {
+              model.gszzl =
+                  ((gszVal - dwjzVal) / dwjzVal * 100.0).toStringAsFixed(2);
             } else if (model.gsz == '0.00' || model.gsz == '0') {
               model.gsz = model.dwjz;
             }
@@ -1306,8 +1311,8 @@ class FundProvider extends ChangeNotifier {
 
               if (val != null) {
                 model.gsz = val['gsz']?.toString() ?? model.gsz;
-                model.gszzl =
-                    (val['gszzl']?.toString() ?? model.gszzl).replaceAll('%', '');
+                model.gszzl = (val['gszzl']?.toString() ?? model.gszzl)
+                    .replaceAll('%', '');
                 model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
                 String srcName = val['source']?.toString() ?? '';
                 if (srcName == 'EastMoneyGz') {
@@ -1428,17 +1433,17 @@ class FundProvider extends ChangeNotifier {
         final List<Map<String, dynamic>> combined = [];
         int nextPage = 1;
         int batch = 5;
-        const int maxPages = 15;
+        const int maxPages = 35;
         while (nextPage <= maxPages) {
-          final chunk = await fetchPagedValuations(
-              sort, nextPage, nextPage + batch - 1);
+          final chunk =
+              await fetchPagedValuations(sort, nextPage, nextPage + batch - 1);
           if (chunk == null) {
             // 主接口失败：已有数据则直接使用，否则启用降级备用源
             if (combined.isEmpty) return _fetchRankingsFallbackEastMoney(sort);
             break;
           }
-          combined.addAll(chunk.where((e) =>
-              (e['jjjc']?.toString() ?? '').contains('ETF')));
+          combined.addAll(chunk
+              .where((e) => (e['jjjc']?.toString() ?? '').contains('ETF')));
           nextPage += batch;
           batch = 2;
           if (chunk.isEmpty) break;

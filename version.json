@@ -1,17 +1,17 @@
 {
-  "version": "1.8.28",
-  "buildNumber": 110,
+  "version": "1.8.29",
+  "buildNumber": 111,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-18",
-  "releaseNotes": "1. CI/CD 自动打包：修复 Android 构建流程中的 Gradle 依赖版本校验拦截问题\n2. 估值过滤优化：修复自由现金流 ETF 联接基金被误判为货币理财品种的问题\n3. 补充自由现金流估值与构建配置专项测试",
+  "releaseDate": "2026-08-19",
+  "releaseNotes": "1. 趋势图默认周期调整：默认展示区间优化为近1月，提升加载速度与近期行情关注体验\n2. 估值排行数据覆盖：扩大排行榜 ETF 估值最大分页上限至 35 页，增强场内基金覆盖完整度\n3. 工程与依赖维护：升级 image 依赖组件，优化代码分析器目录忽略规则",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.28/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.29/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.28/FlFund-v1.8.28.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.29/FlFund-v1.8.29.apk",
       "sha256": "",
       "fileSize": 0
     }
