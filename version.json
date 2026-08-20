@@ -1,17 +1,17 @@
 {
-  "version": "1.8.29",
-  "buildNumber": 111,
+  "version": "1.8.30",
+  "buildNumber": 112,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-19",
-  "releaseNotes": "1. 趋势图默认周期调整：默认展示区间优化为近1月，提升加载速度与近期行情关注体验\n2. 估值排行数据覆盖：扩大排行榜 ETF 估值最大分页上限至 35 页，增强场内基金覆盖完整度\n3. 工程与依赖维护：升级 image 依赖组件，优化代码分析器目录忽略规则",
+  "releaseDate": "2026-08-20",
+  "releaseNotes": "1. 依赖版本覆盖与升级：配置 material_color_utilities 与 test_api 依赖重载，更新多项底层依赖库至最新版本",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.29/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.30/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.29/FlFund-v1.8.29.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.30/FlFund-v1.8.30.apk",
       "sha256": "",
       "fileSize": 0
     }

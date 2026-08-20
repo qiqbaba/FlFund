@@ -1,5 +1,10 @@
 # 更新日志
 
+## 1.8.30
+
+### 依赖与构建
+- 依赖版本重载与升级：添加 `material_color_utilities` 与 `test_api` 的 `dependency_overrides`，升级 `dbus`、`path_provider_foundation`、`sqlite3`、`xml` 等间接依赖组件
+
 ## 1.8.29
 
 ### 优化
