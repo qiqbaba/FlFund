@@ -204,9 +204,14 @@ class AppConfig extends ChangeNotifier {
               final fund =
                   FundInfo.fromJson(code, value as Map<String, dynamic>);
               if (!fund.isHeld &&
-                  (fund.amount != 0.0 || fund.yieldRate != 0.0)) {
+                  (fund.amount != 0.0 ||
+                      fund.yieldRate != 0.0 ||
+                      fund.shares != 0.0 ||
+                      fund.costPrice != 0.0)) {
                 fund.amount = 0.0;
                 fund.yieldRate = 0.0;
+                fund.shares = 0.0;
+                fund.costPrice = 0.0;
                 dirty = true;
                 debugPrint('清理未持有基金的持仓脏数据: $code');
               }
@@ -663,7 +668,17 @@ class AppConfig extends ChangeNotifier {
   }
 
   // 添加自选
-  void addFund(String code, String name, String sector) {
+  void addFund(
+    String code,
+    String name,
+    String sector, {
+    FundType? fundType,
+    double shares = 0.0,
+    double costPrice = 0.0,
+    bool isHeld = false,
+    double amount = 0.0,
+    double yieldRate = 0.0,
+  }) {
     if (!_fundCodeRegex.hasMatch(code)) {
       debugPrint('拒绝添加非法基金代码: $code');
       return;
@@ -671,10 +686,17 @@ class AppConfig extends ChangeNotifier {
     final cleanSector = PinyinSearch().getCleanSector(name, sector);
     if (!fundsInfo.containsKey(code)) {
       final newFund = FundInfo(
-          code: code,
-          name: name,
-          sector: cleanSector,
-          updatedAt: DateTime.now());
+        code: code,
+        name: name,
+        sector: cleanSector,
+        updatedAt: DateTime.now(),
+        fundType: fundType,
+        shares: shares,
+        costPrice: costPrice,
+        isHeld: isHeld,
+        amount: amount,
+        yieldRate: yieldRate,
+      );
       fundsInfo[code] = newFund;
       deletedFunds.remove(code);
       unawaited(saveConfig());
@@ -850,12 +872,22 @@ class AppConfig extends ChangeNotifier {
 
   // 修改持有信息
   void updateHoldInfo(
-      String code, bool isHeld, double amount, double yieldRate) {
+    String code,
+    bool isHeld,
+    double amount,
+    double yieldRate, {
+    FundType? fundType,
+    double? shares,
+    double? costPrice,
+  }) {
     if (fundsInfo.containsKey(code)) {
       final fund = fundsInfo[code]!;
       fund.isHeld = isHeld;
       fund.amount = amount;
       fund.yieldRate = yieldRate;
+      if (fundType != null) fund.fundType = fundType;
+      if (shares != null) fund.shares = shares;
+      if (costPrice != null) fund.costPrice = costPrice;
       fund.updatedAt = DateTime.now();
       unawaited(saveConfig());
       if (SupabaseManager().isLoggedIn) {
@@ -875,6 +907,8 @@ class AppConfig extends ChangeNotifier {
         fund.isHeld = false;
         fund.amount = 0.0;
         fund.yieldRate = 0.0;
+        fund.shares = 0.0;
+        fund.costPrice = 0.0;
         fund.updatedAt = DateTime.now();
         updatedFunds.add(fund);
         changed = true;
@@ -905,14 +939,23 @@ class AppConfig extends ChangeNotifier {
       final double amount = f['amount'] ?? 0.0;
       final double yieldRate = f['yield_rate'] ?? 0.0;
       final bool isHeld = f['is_held'] ?? true;
+      final FundType? fundType = f['fund_type'];
+      final double shares =
+          double.tryParse(f['shares']?.toString() ?? '') ?? 0.0;
+      final double costPrice =
+          double.tryParse(f['cost_price']?.toString() ?? '') ?? 0.0;
 
       final cleanSector = PinyinSearch().getCleanSector(name, sector);
       if (!fundsInfo.containsKey(code)) {
         fundsInfo[code] = FundInfo(
-            code: code,
-            name: name,
-            sector: cleanSector,
-            updatedAt: DateTime.now());
+          code: code,
+          name: name,
+          sector: cleanSector,
+          fundType: fundType,
+          shares: shares,
+          costPrice: costPrice,
+          updatedAt: DateTime.now(),
+        );
         deletedFunds.remove(code);
         changed = true;
         // 异步网络修正板块
@@ -923,6 +966,9 @@ class AppConfig extends ChangeNotifier {
       fund.isHeld = isHeld;
       fund.amount = amount;
       fund.yieldRate = yieldRate;
+      if (fundType != null) fund.fundType = fundType;
+      if (shares > 0.0) fund.shares = shares;
+      if (costPrice > 0.0) fund.costPrice = costPrice;
       fund.updatedAt = DateTime.now();
       updatedFunds.add(fund);
       changed = true;

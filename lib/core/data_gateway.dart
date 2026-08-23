@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:fast_gbk/fast_gbk.dart' show gbk;
 import 'package:flutter/foundation.dart';
+import 'models/fund_info.dart';
 import 'utils/pinyin_search.dart';
 import 'utils/safe_compute.dart';
 
@@ -17,6 +21,21 @@ String _formatFundLabel(String code, [String? name]) {
     return '${fundName.trim()} ($code)';
   }
   return '($code)';
+}
+
+/// 解码国内行情接口响应：新浪等接口返回 GBK 编码文本，
+/// 先按 UTF-8 尝试，出现替换符（U+FFFD）时回退 GBK 解码
+String _decodeCnResponse(dynamic data) {
+  if (data is List<int>) {
+    final utf8Text = utf8.decode(data, allowMalformed: true);
+    if (!utf8Text.contains('\uFFFD')) return utf8Text;
+    try {
+      return gbk.decode(data);
+    } catch (_) {
+      return utf8Text;
+    }
+  }
+  return data?.toString() ?? '';
 }
 
 class FundDataGateway {
@@ -367,7 +386,7 @@ class FundDataGateway {
         final response = await _dio.get(
           url,
           options: Options(
-            responseType: ResponseType.plain,
+            responseType: ResponseType.bytes,
             headers: {
               'Referer': 'https://finance.sina.com.cn',
               'User-Agent':
@@ -377,7 +396,7 @@ class FundDataGateway {
         );
 
         if (response.statusCode == 200) {
-          final text = response.data.toString();
+          final text = _decodeCnResponse(response.data);
           final matches =
               RegExp(r'var hq_str_fu_(\d+)="([^"]+)"').allMatches(text);
           for (final m in matches) {
@@ -586,7 +605,7 @@ class FundDataGateway {
         final response = await _dio.get(
           url,
           options: Options(
-            responseType: ResponseType.plain,
+            responseType: ResponseType.bytes,
             headers: {
               'Referer': 'https://finance.sina.com.cn',
               'User-Agent':
@@ -595,7 +614,7 @@ class FundDataGateway {
           ),
         );
         if (response.statusCode == 200) {
-          final text = response.data.toString();
+          final text = _decodeCnResponse(response.data);
           final match = RegExp(r'var hq_str_fu_\d+="([^"]+)"').firstMatch(text);
           if (match != null) {
             final parts = match.group(1)!.split(',');
@@ -696,6 +715,218 @@ class FundDataGateway {
   }
 
 
+
+  // ---------------- 场内 ETF / LOF 数据支持 ----------------
+
+  /// 批量抓取场内 ETF / LOF 实时行情（腾讯财经 / 新浪财经）
+  Future<Map<String, Map<String, dynamic>>> fetchEtfRealtimeQuotes(
+      List<String> codes) async {
+    if (codes.isEmpty) return {};
+    final Map<String, Map<String, dynamic>> results = {};
+
+    // 格式化代码带上 sh / sz / bj 前缀
+    final List<String> formattedCodes = [];
+    final Map<String, String> cleanCodeMap = {}; // formatted -> clean
+    for (final c in codes) {
+      final clean = c.replaceAll(RegExp(r'\D'), '');
+      if (clean.isEmpty) continue;
+      String prefix = FundInfo.getMarketPrefix(clean);
+      final key = '$prefix$clean';
+      formattedCodes.add(key);
+      cleanCodeMap[key] = clean;
+    }
+
+    if (formattedCodes.isEmpty) return {};
+
+    // 分批请求，每批最多 60 只
+    const batchSize = 60;
+    for (int i = 0; i < formattedCodes.length; i += batchSize) {
+      final subList = formattedCodes.sublist(
+          i, math.min(i + batchSize, formattedCodes.length));
+      final qParam = subList.join(',');
+
+      try {
+        final url = 'https://qt.gtimg.cn/q=$qParam';
+        final response = await _dio.get(
+          url,
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {'Referer': 'https://gu.qq.com/'},
+          ),
+        );
+
+        if (response.statusCode == 200) {
+          final text = response.data.toString();
+          final lines = text.split(';');
+          for (final line in lines) {
+            final trimmed = line.trim();
+            if (trimmed.isEmpty) continue;
+            // 格式: v_sh510300="51~华泰柏瑞沪深300ETF~510300~3.950~3.930~3.935~...";
+            final eqIdx = trimmed.indexOf('=');
+            if (eqIdx == -1) continue;
+            final fullKey = trimmed.substring(0, eqIdx).replaceAll('v_', '');
+            final rawVal = trimmed.substring(eqIdx + 1).replaceAll('"', '');
+            final parts = rawVal.split('~');
+            if (parts.length > 35) {
+              final cleanCode = cleanCodeMap[fullKey] ?? parts[2];
+              final name = parts[1];
+              final currentPrice = double.tryParse(parts[3]) ?? 0.0;
+              final lastClose = double.tryParse(parts[4]) ?? 0.0;
+              final openPrice = double.tryParse(parts[5]) ?? 0.0;
+              final volume = double.tryParse(parts[6]) ?? 0.0; // 手
+              final turnover = double.tryParse(parts[37]) ?? 0.0; // 万元
+              final turnoverRate = double.tryParse(parts[38]) ?? 0.0; // %
+              final change = double.tryParse(parts[31]) ?? 0.0;
+              final changePercent = double.tryParse(parts[32]) ?? 0.0; // %
+              final highPrice = double.tryParse(parts[33]) ?? 0.0;
+              final lowPrice = double.tryParse(parts[34]) ?? 0.0;
+              String formattedTime = '';
+              if (parts.length > 30) {
+                final rawTime = parts[30].trim();
+                if (rawTime.length == 14 && RegExp(r'^\d{14}$').hasMatch(rawTime)) {
+                  // 格式如: 20260823150000 -> 2026-08-23 15:00:00
+                  final y = rawTime.substring(0, 4);
+                  final m = rawTime.substring(4, 6);
+                  final d = rawTime.substring(6, 8);
+                  final hh = rawTime.substring(8, 10);
+                  final mm = rawTime.substring(10, 12);
+                  final ss = rawTime.substring(12, 14);
+                  formattedTime = '$y-$m-$d $hh:$mm:$ss';
+                } else {
+                  formattedTime = rawTime;
+                }
+              }
+
+              // IOPV (实时参考净值) 通常在特定扩展字段，若缺失则通过估值逻辑或昨收近似计算
+              double? iopv;
+              if (parts.length > 48) {
+                final v48 = double.tryParse(parts[48]);
+                if (v48 != null && v48 > 0) iopv = v48;
+              }
+              if (iopv == null && parts.length > 46) {
+                final v46 = double.tryParse(parts[46]);
+                if (v46 != null && v46 > 0) iopv = v46;
+              }
+
+              // 计算折溢价率: (现价 - IOPV) / IOPV * 100%
+              double? discountRate;
+              if (iopv != null && iopv > 0 && currentPrice > 0) {
+                discountRate = ((currentPrice - iopv) / iopv) * 100.0;
+              }
+
+              results[cleanCode] = {
+                'code': cleanCode,
+                'name': name,
+                'currentPrice': currentPrice,
+                'lastClose': lastClose,
+                'openPrice': openPrice,
+                'highPrice': highPrice,
+                'lowPrice': lowPrice,
+                'change': change,
+                'changePercent': changePercent,
+                'volume': volume,
+                'turnover': turnover,
+                'turnoverRate': turnoverRate,
+                'iopv': iopv,
+                'discountRate': discountRate,
+                'time': formattedTime,
+              };
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('批量拉取场内行情失败 [$qParam]: $e');
+      }
+    }
+
+    return results;
+  }
+
+
+
+  /// 抓取全市场 ETF 分类排行榜（东财 ETF 市场行情 API）
+  Future<List<Map<String, dynamic>>> fetchEtfRankings({
+    String category = 'all',
+  }) async {
+    // fs 筛选条件:
+    // MK0021: 股票型ETF, MK0022: 债券型ETF, MK0023: 商品型ETF, MK0024: 跨境型ETF
+    String fs = 'b:MK0021,b:MK0022,b:MK0023,b:MK0024';
+    if (category == 'stock') {
+      fs = 'b:MK0021';
+    } else if (category == 'bond') {
+      fs = 'b:MK0022';
+    } else if (category == 'commodity') {
+      fs = 'b:MK0023';
+    } else if (category == 'cross') {
+      fs = 'b:MK0024';
+    }
+
+    final url =
+        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=1&np=1&ut=bd1d9dfb07e1e8f60937c3e7ed7e87a3&fltt=2&invt=2&fid=f3&fs=$fs&fields=f1,f2,f3,f4,f5,f6,f7,f8,f12,f13,f14,f23,f128';
+
+    try {
+      final response = await _dio.get(url);
+      if (response.statusCode == 200 && response.data is Map) {
+        final List diff = response.data['data']?['diff'] ?? [];
+        final List<Map<String, dynamic>> items = [];
+
+        for (final row in diff) {
+          if (row is Map) {
+            final code = row['f12']?.toString() ?? '';
+            final name = row['f14']?.toString() ?? '';
+            final price = double.tryParse(row['f2']?.toString() ?? '') ?? 0.0;
+            final changePct =
+                double.tryParse(row['f3']?.toString() ?? '') ?? 0.0;
+            final changeAmt =
+                double.tryParse(row['f4']?.toString() ?? '') ?? 0.0;
+            final volume = double.tryParse(row['f5']?.toString() ?? '') ?? 0.0;
+            final turnover =
+                double.tryParse(row['f6']?.toString() ?? '') ?? 0.0;
+            final turnoverRate =
+                double.tryParse(row['f8']?.toString() ?? '') ?? 0.0;
+            final iopv = double.tryParse(row['f23']?.toString() ?? '');
+
+            double? discountRate;
+            if (iopv != null && iopv > 0 && price > 0) {
+              discountRate = ((price - iopv) / iopv) * 100.0;
+            }
+
+            if (code.isNotEmpty && name.isNotEmpty) {
+              items.add({
+                'code': code,
+                'name': name,
+                'type': FundInfo.autoDetectFundType(code).label,
+                'price': price,
+                'changePercent': changePct,
+                'changeAmount': changeAmt,
+                'volume': volume,
+                'turnover': turnover,
+                'turnoverRate': turnoverRate,
+                'iopv': iopv,
+                'discountRate': discountRate,
+              });
+            }
+          }
+        }
+        return items;
+      }
+    } catch (e) {
+      debugPrint('抓取 ETF 排行榜失败: $e');
+    }
+    return [];
+  }
+
+  /// 抓取 ETF / LOF 实时折溢价列表（用于折溢价套利雷达）
+  Future<List<Map<String, dynamic>>> fetchEtfDiscountList() async {
+    // 直接获取全量 ETF 列表并计算折溢价率排序
+    final allEtfs = await fetchEtfRankings(category: 'all');
+    // 过滤出有有效 IOPV 的标的
+    final list = allEtfs.where((e) => e['discountRate'] != null).toList();
+    // 默认按溢价率从高到低排序
+    list.sort((a, b) =>
+        (b['discountRate'] as double).compareTo(a['discountRate'] as double));
+    return list;
+  }
 
   Future<Map<String, dynamic>> testApiConnectivity(
       String apiName, String testUrl,

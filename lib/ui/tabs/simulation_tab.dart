@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../../core/simulation_provider.dart';
 import '../../core/fund_provider.dart';
+import '../../core/models/fund_info.dart';
 import '../../core/utils/theme_colors.dart';
 import '../widgets/fund_chart_dialog.dart';
 import '../widgets/mobile_header.dart';
@@ -690,12 +691,55 @@ class _SimulationTabState extends State<SimulationTab> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            pos.name,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14),
-                                            overflow: TextOverflow.ellipsis,
+                                          Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  pos.name,
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              if (FundInfo.autoDetectFundType(
+                                                      pos.code)
+                                                  .isExchangeTraded) ...[
+                                                const SizedBox(width: 4),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue
+                                                        .withValues(
+                                                            alpha: isDark
+                                                                ? 0.25
+                                                                : 0.15),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            3),
+                                                  ),
+                                                  child: Text(
+                                                    FundInfo.autoDetectFundType(
+                                                            pos.code)
+                                                        .label,
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: isDark
+                                                          ? Colors.blue.shade200
+                                                          : Colors
+                                                              .blue.shade800,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
@@ -831,12 +875,57 @@ class _SimulationTabState extends State<SimulationTab> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            CopyableText(
-                                              pos.name,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 14),
-                                              overflow: TextOverflow.ellipsis,
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: CopyableText(
+                                                    pos.name,
+                                                    style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 14),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                if (FundInfo.autoDetectFundType(
+                                                        pos.code)
+                                                    .isExchangeTraded) ...[
+                                                  const SizedBox(width: 4),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 4,
+                                                        vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue
+                                                          .withValues(
+                                                              alpha: isDark
+                                                                  ? 0.25
+                                                                  : 0.15),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              3),
+                                                    ),
+                                                    child: Text(
+                                                      FundInfo
+                                                              .autoDetectFundType(
+                                                                  pos.code)
+                                                          .label,
+                                                      style: TextStyle(
+                                                        fontSize: 9,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: isDark
+                                                            ? Colors
+                                                                .blue.shade200
+                                                            : Colors
+                                                                .blue.shade800,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                             const SizedBox(height: 4),
                                             CopyableText(

@@ -29,8 +29,11 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
   final TextEditingController _manualSearchController = TextEditingController();
   List<FundRegistryItem> _searchResults = [];
   FundRegistryItem? _selectedFund;
+  FundType _manualFundType = FundType.otc;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _yieldController = TextEditingController();
+  final TextEditingController _sharesController = TextEditingController();
+  final TextEditingController _costPriceController = TextEditingController();
 
   // 截图识别相关状态
   String? _selectedImagePath;
@@ -221,6 +224,7 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
         type: FileType.custom,
         allowedExtensions: ['jpg', 'jpeg', 'png', 'bmp'],
       );
+      if (!mounted) return;
       if (file != null && file.path != null) {
         setState(() {
           _selectedImagePath = file.path;
@@ -283,6 +287,9 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
         prompt: prompt,
         autoSliceLongImage: _autoSliceLongImage,
       );
+
+      // 识别期间对话框可能已被用户关闭，此时 State 已 dispose，直接放弃本次结果
+      if (!mounted) return;
 
       final List<Map<String, dynamic>> processedResults = [];
       final pinyinSearch = PinyinSearch();
@@ -394,6 +401,7 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
       });
     } catch (e) {
       debugPrint('图片识别失败: $e');
+      if (!mounted) return;
       final errorMsg = OcrService.parseApiError(e);
       _showError('识别失败: $errorMsg');
       setState(() {
@@ -411,13 +419,44 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
     final name = _selectedFund!.name;
     final sector = _selectedFund!.type;
 
-    final amount =
-        double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
-    final yieldRate =
-        double.tryParse(_yieldController.text.replaceAll(',', '')) ?? 0.0;
+    double amount = 0.0;
+    double yieldRate = 0.0;
+    double shares = 0.0;
+    double costPrice = 0.0;
 
-    appConfig.addFund(code, name, sector);
-    appConfig.updateHoldInfo(code, true, amount, yieldRate);
+    if (_manualFundType.isExchangeTraded) {
+      shares =
+          double.tryParse(_sharesController.text.replaceAll(',', '')) ?? 0.0;
+      costPrice =
+          double.tryParse(_costPriceController.text.replaceAll(',', '')) ?? 0.0;
+      amount = shares * costPrice;
+    } else {
+      amount =
+          double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+      yieldRate =
+          double.tryParse(_yieldController.text.replaceAll(',', '')) ?? 0.0;
+    }
+
+    appConfig.addFund(
+      code,
+      name,
+      sector,
+      fundType: _manualFundType,
+      shares: shares,
+      costPrice: costPrice,
+      isHeld: true,
+      amount: amount,
+      yieldRate: yieldRate,
+    );
+    appConfig.updateHoldInfo(
+      code,
+      true,
+      amount,
+      yieldRate,
+      fundType: _manualFundType,
+      shares: shares,
+      costPrice: costPrice,
+    );
 
     // 重新加载并更新数据
     fundProvider.loadMyFunds();
@@ -716,6 +755,8 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                           onSelected: () {
                             setState(() {
                               _selectedFund = item;
+                              _manualFundType =
+                                  FundInfo.autoDetectFundType(item.code);
                               _manualSearchController.clear();
                               _searchResults = [];
                             });
@@ -786,35 +827,88 @@ class _AddHoldingDialogState extends State<AddHoldingDialog> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Text('标的类型: ',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(width: 8),
+                      fluent.ComboBox<FundType>(
+                        value: _manualFundType,
+                        items: FundType.values.map((t) {
+                          return fluent.ComboBoxItem<FundType>(
+                            value: t,
+                            child: Text(t.label),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _manualFundType = val;
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
                   const Text('2. 填写持仓数据',
                       style:
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 12),
-                  const Text('持有金额 (元)', style: TextStyle(fontSize: 11)),
-                  const SizedBox(height: 6),
-                  fluent.TextBox(
-                    controller: _amountController,
-                    placeholder: '输入持有本金，例如: 10,000.00',
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^[0-9,]*\.?[0-9]{0,2}')),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('持有收益率 (%)', style: TextStyle(fontSize: 11)),
-                  const SizedBox(height: 6),
-                  fluent.TextBox(
-                    controller: _yieldController,
-                    placeholder: '输入持仓收益率，例如: 5.5 (代表 5.5%)',
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true, signed: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^-?[0-9,]*\.?[0-9]{0,4}')),
-                    ],
-                  ),
+                  if (_manualFundType.isExchangeTraded) ...[
+                    const Text('持仓数量 (股/份/手)', style: TextStyle(fontSize: 11)),
+                    const SizedBox(height: 6),
+                    fluent.TextBox(
+                      controller: _sharesController,
+                      placeholder: '输入持仓数量，例如: 10000 (100手)',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: false),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^[0-9,]*')),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('持仓均价 / 成本价 (元)',
+                        style: TextStyle(fontSize: 11)),
+                    const SizedBox(height: 6),
+                    fluent.TextBox(
+                      controller: _costPriceController,
+                      placeholder: '输入买入均价，例如: 1.250',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^[0-9,]*\.?[0-9]{0,4}')),
+                      ],
+                    ),
+                  ] else ...[
+                    const Text('持有金额 (元)', style: TextStyle(fontSize: 11)),
+                    const SizedBox(height: 6),
+                    fluent.TextBox(
+                      controller: _amountController,
+                      placeholder: '输入持有本金，例如: 10,000.00',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^[0-9,]*\.?[0-9]{0,2}')),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('持有收益率 (%)', style: TextStyle(fontSize: 11)),
+                    const SizedBox(height: 6),
+                    fluent.TextBox(
+                      controller: _yieldController,
+                      placeholder: '输入持仓收益率，例如: 5.5 (代表 5.5%)',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true, signed: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^-?[0-9,]*\.?[0-9]{0,4}')),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 20),
                 ],
               ],

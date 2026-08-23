@@ -49,6 +49,7 @@ class _HoldingTabState extends State<HoldingTab> {
   bool _sortAscending = false;
   final Set<String> _selectedCodes = {};
   bool _isMultiSelectMode = false;
+  int _holdingFilterIndex = 0; // 0: 全部, 1: 场外基金, 2: 场内 ETF/LOF
 
   bool _isSyncing = false; // 防止 ScrollController 互相触发无限递归
   ScrollController? _activeScrollController;
@@ -163,12 +164,24 @@ class _HoldingTabState extends State<HoldingTab> {
         initialIsHeld: model.isHeld,
         initialAmount: model.amount,
         initialYieldRate: model.yieldRate,
-        onSave: (isHeld, amount, yieldRate) {
-          appConfig.updateHoldInfo(model.code, isHeld, amount, yieldRate);
+        initialFundType: model.fundType,
+        initialShares: model.shares,
+        initialCostPrice: model.costPrice,
+        onSave: (isHeld, amount, yieldRate, {fundType, shares, costPrice}) {
+          appConfig.updateHoldInfo(
+            model.code,
+            isHeld,
+            amount,
+            yieldRate,
+            fundType: fundType,
+            shares: shares,
+            costPrice: costPrice,
+          );
           // 重新更新 provider 的内存缓存
           final fundProvider =
               Provider.of<FundProvider>(context, listen: false);
           fundProvider.loadMyFunds();
+          fundProvider.refreshAll(isForce: true);
         },
       ),
     );
@@ -644,14 +657,56 @@ class _HoldingTabState extends State<HoldingTab> {
     );
   }
 
+  Widget _buildFilterChip(String label, int index, bool isDark) {
+    final bool isSelected = _holdingFilterIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _holdingFilterIndex = index;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.blue.withValues(alpha: isDark ? 0.35 : 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected
+                ? Colors.blue.withValues(alpha: isDark ? 0.8 : 0.6)
+                : Colors.transparent,
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected
+                ? (isDark ? Colors.blue.shade200 : Colors.blue.shade800)
+                : (isDark ? Colors.white60 : Colors.black54),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final fundProvider = Provider.of<FundProvider>(context);
     final appConfig = Provider.of<AppConfig>(context);
 
     // 过滤出已持有的基金
-    final List<FundUIModel> list =
+    final List<FundUIModel> allHeldList =
         fundProvider.myFunds.values.where((model) => model.isHeld).toList();
+
+    final List<FundUIModel> list = allHeldList.where((model) {
+      if (_holdingFilterIndex == 1) return !model.isExchangeTraded;
+      if (_holdingFilterIndex == 2) return model.isExchangeTraded;
+      return true;
+    }).toList();
 
     // 模糊搜索过滤当前列表
     final filteredList = list.where((model) {
@@ -684,7 +739,7 @@ class _HoldingTabState extends State<HoldingTab> {
 
     // 小屏冻结模式下，基金名称列宽缩小以节省冻结区域空间
     final double fundNameColWidth =
-        (isSmallScreen && appConfig.freezeColumns) ? 100.0 : 160.0;
+        (isSmallScreen && appConfig.freezeColumns) ? 110.0 : 170.0;
 
     // 计算触发买入信号的持有基金
     final List<FundUIModel> buySignalFunds =
@@ -719,8 +774,8 @@ class _HoldingTabState extends State<HoldingTab> {
       ColConfig(title: '板块分类', width: 70, alignLeft: true, sortKey: 'sector'),
       ColConfig(title: '买入信号', width: 100, sortKey: 'optimal'),
       ColConfig(title: '卖出信号', width: 100, sortKey: 'sell_optimal'),
-      ColConfig(title: '持有金额\n/收益率', width: 78, sortKey: 'holdAmount'),
-      ColConfig(title: '今日收益\n/收益率', width: 78, sortKey: 'todayProfit'),
+      ColConfig(title: '持有金额\n/收益率', width: 90, sortKey: 'holdAmount'),
+      ColConfig(title: '今日收益\n/收益率', width: 80, sortKey: 'todayProfit'),
       ColConfig(title: '估算收益率', width: 78, sortKey: 'totalYield'),
       ColConfig(title: '昨日', width: 60, sortKey: 'yestZdf'),
       // 动态生成的天数涨跌列
@@ -738,18 +793,26 @@ class _HoldingTabState extends State<HoldingTab> {
     final double totalTableWidth =
         columns.map((c) => c.width).reduce((a, b) => a + b);
 
-    // 计算总持仓本金和今日总收益
+    // 计算总持仓市值、今日总收益与累计浮盈
     double totalHoldAmount = 0.0;
     double todayTotalProfit = 0.0;
-    for (var model in list) {
-      totalHoldAmount += model.amount;
-      final double change =
-          model.isTodayValuation ? (double.tryParse(model.gszzl) ?? 0.0) : 0.0;
-      todayTotalProfit += (model.amount * change) / 100.0;
+    double totalFloatingProfit = 0.0;
+    int otcCount = 0;
+    int etfCount = 0;
+
+    for (var model in allHeldList) {
+      if (model.isExchangeTraded) {
+        etfCount++;
+      } else {
+        otcCount++;
+      }
+      totalHoldAmount += model.holdingMarketValue;
+      todayTotalProfit += model.todayProfitAmount;
+      totalFloatingProfit += model.floatingProfitAmount;
     }
 
     final Widget summaryPanel = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.05)
@@ -760,25 +823,51 @@ class _HoldingTabState extends State<HoldingTab> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            '持仓：${totalHoldAmount.toThousand(precision: 1)}元',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          // 资产分类快速筛选药丸
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildFilterChip('全部(${allHeldList.length})', 0, isDark),
+              const SizedBox(width: 4),
+              _buildFilterChip('场外($otcCount)', 1, isDark),
+              const SizedBox(width: 4),
+              _buildFilterChip('场内($etfCount)', 2, isDark),
+            ],
           ),
-          const SizedBox(width: 16),
-          const Text(
-            '今日：',
-            style: TextStyle(fontSize: 12),
-          ),
+          const SizedBox(width: 10),
+          Container(
+              height: 14,
+              width: 1,
+              color: isDark ? Colors.white24 : Colors.black26),
+          const SizedBox(width: 10),
           Text(
-            '${todayTotalProfit.toThousand(precision: 2, showSign: true)}元',
+            '总市值：${totalHoldAmount.toThousand(precision: 1)}元',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '今日：${todayTotalProfit.toThousand(precision: 2, showSign: true)}元',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               color: todayTotalProfit >= 0
                   ? ThemeColors.getRedText(isDark)
                   : ThemeColors.getGreenText(isDark),
             ),
           ),
+          if (totalFloatingProfit != 0.0) ...[
+            const SizedBox(width: 10),
+            Text(
+              '浮盈：${totalFloatingProfit.toThousand(precision: 1, showSign: true)}元',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: totalFloatingProfit >= 0
+                    ? ThemeColors.getRedText(isDark)
+                    : ThemeColors.getGreenText(isDark),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1547,10 +1636,7 @@ class _HoldingTabState extends State<HoldingTab> {
                 : ThemeColors.getNormalText(isDark)))
         : ThemeColors.getNormalText(isDark);
 
-    double todayProfit = 0.0;
-    if (model.isHeld && model.amount > 0) {
-      todayProfit = (model.amount * change) / 100.0;
-    }
+
 
     // 提取长按/右键回调，传递给 CopyableText 确保手势统一处理
     void longPressCallback(LongPressStartDetails details) {
@@ -1657,20 +1743,40 @@ class _HoldingTabState extends State<HoldingTab> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
-                        color: Colors.amber
-                            .withValues(alpha: isDark ? 0.15 : 0.12),
+                        color: model.isExchangeTraded
+                            ? (model.fundType == FundType.etf
+                                ? Colors.blue
+                                    .withValues(alpha: isDark ? 0.25 : 0.15)
+                                : Colors.purple
+                                    .withValues(alpha: isDark ? 0.25 : 0.15))
+                            : Colors.amber
+                                .withValues(alpha: isDark ? 0.15 : 0.12),
                         border: Border.all(
-                            color: Colors.amber
-                                .withValues(alpha: isDark ? 0.4 : 0.6),
+                            color: model.isExchangeTraded
+                                ? (model.fundType == FundType.etf
+                                    ? Colors.blue
+                                        .withValues(alpha: isDark ? 0.6 : 0.7)
+                                    : Colors.purple
+                                        .withValues(alpha: isDark ? 0.6 : 0.7))
+                                : Colors.amber
+                                    .withValues(alpha: isDark ? 0.4 : 0.6),
                             width: 0.5),
                         borderRadius: BorderRadius.circular(3),
                       ),
                       child: Text(
-                        '持',
+                        model.fundType.label,
                         style: TextStyle(
-                          color: isDark
-                              ? const Color(0xFFFFD54F)
-                              : const Color(0xFFE65100),
+                          color: model.isExchangeTraded
+                              ? (model.fundType == FundType.etf
+                                  ? (isDark
+                                      ? Colors.blue.shade200
+                                      : Colors.blue.shade800)
+                                  : (isDark
+                                      ? Colors.purple.shade200
+                                      : Colors.purple.shade800))
+                              : (isDark
+                                  ? const Color(0xFFFFD54F)
+                                  : const Color(0xFFE65100)),
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1933,26 +2039,61 @@ class _HoldingTabState extends State<HoldingTab> {
                 }
                 break;
               case '持有金额/收益率':
-                cellContent = fluent.Tooltip(
-                  message: '点击编辑持仓信息',
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: () => _editHoldingInfo(context, model, appConfig),
-                      child: Text(
-                        '${model.amount.toThousand(precision: 1)}元\n${model.yieldRate.toThousand(precision: 1)}%',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.9)
-                              : Colors.black87,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                if (model.isExchangeTraded) {
+                  final double marketVal = model.holdingMarketValue;
+                  final String line1 = marketVal > 0
+                      ? '${marketVal.toThousand(precision: 1)}元'
+                      : (model.shares > 0
+                          ? '${model.shares.toInt()}股'
+                          : '未填持仓');
+                  final String line2 = model.costPrice > 0
+                      ? '成本:${model.costPrice.toStringAsFixed(3)}'
+                      : (model.shares > 0 ? '${model.shares.toInt()}股' : '--');
+                  cellContent = fluent.Tooltip(
+                    message:
+                        '点击编辑持仓信息\n持仓: ${model.shares.toInt()}股\n成本: ${model.costPrice.toStringAsFixed(3)}元\n现价: ${model.currentPrice > 0 ? model.currentPrice.toStringAsFixed(3) : model.gsz}元\n浮动盈亏: ${model.floatingProfitAmount.toThousand(precision: 2, showSign: true)}元 (${model.floatingYieldRate.toThousand(precision: 2, showSign: true)}%)',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () =>
+                            _editHoldingInfo(context, model, appConfig),
+                        child: Text(
+                          '$line1\n$line2',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.9)
+                                : Colors.black87,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
+                  );
+                } else {
+                  cellContent = fluent.Tooltip(
+                    message: '点击编辑持仓信息',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () =>
+                            _editHoldingInfo(context, model, appConfig),
+                        child: Text(
+                          '${model.amount.toThousand(precision: 1)}元\n${model.yieldRate.toThousand(precision: 1)}%',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.9)
+                                : Colors.black87,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 break;
               case '昨日':
                 final yestChange = double.tryParse(model.yestZdf) ?? 0.0;
@@ -1973,8 +2114,12 @@ class _HoldingTabState extends State<HoldingTab> {
                 );
                 break;
               case '今日收益/收益率':
+                final profit = model.todayProfitAmount;
+                final bool hasHeld = model.isExchangeTraded
+                    ? (model.shares > 0)
+                    : (model.amount > 0);
                 cellContent = fluent.Tooltip(
-                  message: '双击编辑持仓信息',
+                  message: '双击编辑持仓信息\n今日预估盈亏: ${profit.toThousand(precision: 2, showSign: true)}元',
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
@@ -1982,8 +2127,8 @@ class _HoldingTabState extends State<HoldingTab> {
                       onDoubleTap: () =>
                           _editHoldingInfo(context, model, appConfig),
                       child: Text(
-                        model.amount > 0
-                            ? '${todayProfit.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
+                        hasHeld
+                            ? '${profit.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
                             : '-\n${change.toThousand(precision: 2, showSign: true)}%',
                         textAlign: TextAlign.center,
                         style: TextStyle(

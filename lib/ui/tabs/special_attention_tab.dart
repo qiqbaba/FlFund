@@ -12,6 +12,7 @@ import 'package:flutter/material.dart'
         RefreshIndicator,
         AlwaysScrollableScrollPhysics,
         BouncingScrollPhysics;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import '../../core/fund_provider.dart';
@@ -46,8 +47,10 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
   bool _sortAscending = false;
   final Set<String> _selectedCodes = {};
   bool _isMultiSelectMode = false;
+  int _categoryFilterIndex = 0; // 0: 全部, 1: 场外基金, 2: 场内 ETF/LOF
 
   bool _isSyncing = false; // 防止 ScrollController 互相触发无限递归
+  ScrollController? _activeScrollController;
   double _horizontalOffset = 0.0;
   final FocusNode _searchFocusNode = FocusNode();
   StreamSubscription<void>? _searchFocusSub;
@@ -66,35 +69,51 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
   void _onLeftVerticalScroll() {
     if (_isSyncing) return;
     if (_leftVerticalScrollController.hasClients &&
-        _rightVerticalScrollController.hasClients) {
-      if (_leftVerticalScrollController.offset == 0 &&
-          _rightVerticalScrollController.offset == 0) {
-        return;
-      }
-      if (_leftVerticalScrollController.offset !=
-          _rightVerticalScrollController.offset) {
-        _isSyncing = true;
-        _rightVerticalScrollController
-            .jumpTo(_leftVerticalScrollController.offset);
-        _isSyncing = false;
+        _leftVerticalScrollController.position.userScrollDirection !=
+            ScrollDirection.idle) {
+      _activeScrollController = _leftVerticalScrollController;
+    }
+
+    if (_activeScrollController == _leftVerticalScrollController) {
+      if (_leftVerticalScrollController.hasClients &&
+          _rightVerticalScrollController.hasClients) {
+        if (_leftVerticalScrollController.offset == 0 &&
+            _rightVerticalScrollController.offset == 0) {
+          return;
+        }
+        if (_leftVerticalScrollController.offset !=
+            _rightVerticalScrollController.offset) {
+          _isSyncing = true;
+          _rightVerticalScrollController
+              .jumpTo(_leftVerticalScrollController.offset);
+          _isSyncing = false;
+        }
       }
     }
   }
 
   void _onRightVerticalScroll() {
     if (_isSyncing) return;
-    if (_leftVerticalScrollController.hasClients &&
-        _rightVerticalScrollController.hasClients) {
-      if (_leftVerticalScrollController.offset == 0 &&
-          _rightVerticalScrollController.offset == 0) {
-        return;
-      }
-      if (_rightVerticalScrollController.offset !=
-          _leftVerticalScrollController.offset) {
-        _isSyncing = true;
-        _leftVerticalScrollController
-            .jumpTo(_rightVerticalScrollController.offset);
-        _isSyncing = false;
+    if (_rightVerticalScrollController.hasClients &&
+        _rightVerticalScrollController.position.userScrollDirection !=
+            ScrollDirection.idle) {
+      _activeScrollController = _rightVerticalScrollController;
+    }
+
+    if (_activeScrollController == _rightVerticalScrollController) {
+      if (_leftVerticalScrollController.hasClients &&
+          _rightVerticalScrollController.hasClients) {
+        if (_leftVerticalScrollController.offset == 0 &&
+            _rightVerticalScrollController.offset == 0) {
+          return;
+        }
+        if (_rightVerticalScrollController.offset !=
+            _leftVerticalScrollController.offset) {
+          _isSyncing = true;
+          _leftVerticalScrollController
+              .jumpTo(_rightVerticalScrollController.offset);
+          _isSyncing = false;
+        }
       }
     }
   }
@@ -164,6 +183,42 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     super.dispose();
   }
 
+  Widget _buildFilterChip(String label, int index, bool isDark) {
+    final bool isSelected = _categoryFilterIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _categoryFilterIndex = index;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.blue.withValues(alpha: isDark ? 0.35 : 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected
+                ? Colors.blue.withValues(alpha: isDark ? 0.8 : 0.6)
+                : Colors.transparent,
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected
+                ? (isDark ? Colors.blue.shade200 : Colors.blue.shade800)
+                : (isDark ? Colors.white60 : Colors.black54),
+          ),
+        ),
+      ),
+    );
+  }
+
   // 弹出编辑持有信息的对话框
   void _editHoldingInfo(
       BuildContext context, FundUIModel model, AppConfig appConfig) {
@@ -175,14 +230,24 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
         initialIsHeld: model.isHeld,
         initialAmount: model.amount,
         initialYieldRate: model.yieldRate,
-        onSave: (isHeld, amount, yieldRate) {
-          appConfig.updateHoldInfo(model.code, isHeld, amount, yieldRate);
+        initialFundType: model.fundType,
+        initialShares: model.shares,
+        initialCostPrice: model.costPrice,
+        onSave: (isHeld, amount, yieldRate, {fundType, shares, costPrice}) {
+          appConfig.updateHoldInfo(
+            model.code,
+            isHeld,
+            amount,
+            yieldRate,
+            fundType: fundType,
+            shares: shares,
+            costPrice: costPrice,
+          );
           // 重新更新 provider 的内存缓存
           final fundProvider =
               Provider.of<FundProvider>(context, listen: false);
           fundProvider.loadMyFunds();
-          // 更新持仓后，静默触发一次刷新以重新计算今日盈亏
-          fundProvider.refreshAll();
+          fundProvider.refreshAll(isForce: true);
         },
       ),
     );
@@ -427,8 +492,18 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
     final appConfig = Provider.of<AppConfig>(context);
 
     // 过滤出特别关注的基金
-    final List<FundUIModel> list =
+    final List<FundUIModel> allSpecialList =
         fundProvider.myFunds.values.where((model) => model.isSpecial).toList();
+    final int otcCount =
+        allSpecialList.where((m) => !m.isExchangeTraded).length;
+    final int etfCount =
+        allSpecialList.where((m) => m.isExchangeTraded).length;
+
+    final List<FundUIModel> list = allSpecialList.where((model) {
+      if (_categoryFilterIndex == 1) return !model.isExchangeTraded;
+      if (_categoryFilterIndex == 2) return model.isExchangeTraded;
+      return true;
+    }).toList();
 
     // 模糊搜索过滤当前列表
     final filteredList = list.where((model) {
@@ -664,8 +739,19 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
         : Padding(
             padding: const EdgeInsets.only(bottom: 4.0),
             child: Row(
-              mainAxisAlignment: fluent.MainAxisAlignment.end,
+              mainAxisAlignment: fluent.MainAxisAlignment.spaceBetween,
               children: [
+                // 快速分类过滤药丸
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFilterChip('全部(${allSpecialList.length})', 0, isDark),
+                    const SizedBox(width: 4),
+                    _buildFilterChip('场外($otcCount)', 1, isDark),
+                    const SizedBox(width: 4),
+                    _buildFilterChip('场内($etfCount)', 2, isDark),
+                  ],
+                ),
                 Wrap(
                   spacing: 12,
                   runSpacing: 8,
@@ -1230,11 +1316,7 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                 : ThemeColors.getNormalText(isDark)))
         : ThemeColors.getNormalText(isDark);
 
-    // 计算今日实际盈亏
-    double todayProfit = 0.0;
-    if (model.isHeld && model.amount > 0) {
-      todayProfit = (model.amount * change) / 100.0;
-    }
+
 
     // 提取长按/右键回调，传递给 CopyableText 确保手势统一处理
     void longPressCallback(LongPressStartDetails details) {
@@ -1333,6 +1415,42 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                           Icons.warning_amber_rounded,
                           color: ThemeColors.getRedText(isDark),
                           size: 14,
+                        ),
+                      ),
+                    ],
+                    if (model.isExchangeTraded) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: model.fundType == FundType.etf
+                              ? Colors.blue
+                                  .withValues(alpha: isDark ? 0.25 : 0.15)
+                              : Colors.purple
+                                  .withValues(alpha: isDark ? 0.25 : 0.15),
+                          border: Border.all(
+                              color: model.fundType == FundType.etf
+                                  ? Colors.blue
+                                      .withValues(alpha: isDark ? 0.6 : 0.7)
+                                  : Colors.purple
+                                      .withValues(alpha: isDark ? 0.6 : 0.7),
+                              width: 0.5),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          model.fundType.label,
+                          style: TextStyle(
+                            color: model.fundType == FundType.etf
+                                ? (isDark
+                                    ? Colors.blue.shade200
+                                    : Colors.blue.shade800)
+                                : (isDark
+                                    ? Colors.purple.shade200
+                                    : Colors.purple.shade800),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -1637,8 +1755,23 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                 );
                 break;
               case '今日收益/收益率':
+                String tooltipText = '双击编辑持仓信息';
+                if (model.isExchangeTraded) {
+                  final curP = model.currentPrice > 0
+                      ? model.currentPrice.toStringAsFixed(3)
+                      : model.gsz;
+                  final iopvStr = model.iopv != null
+                      ? model.iopv!.toStringAsFixed(4)
+                      : '--';
+                  final discStr = model.discountRate != null
+                      ? '${model.discountRate! > 0 ? '+' : ''}${model.discountRate!.toStringAsFixed(2)}%'
+                      : '--';
+                  tooltipText =
+                      '双击编辑持仓信息\n场内现价: $curP 元\nIOPV估值: $iopvStr\n实时折溢价: $discStr';
+                }
+
                 cellContent = fluent.Tooltip(
-                  message: '双击编辑持仓信息',
+                  message: tooltipText,
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
@@ -1646,8 +1779,11 @@ class _SpecialAttentionTabState extends State<SpecialAttentionTab> {
                       onDoubleTap: () =>
                           _editHoldingInfo(context, model, appConfig),
                       child: Text(
-                        model.isHeld && model.amount > 0
-                            ? '${todayProfit.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
+                        model.isHeld &&
+                                ((model.isExchangeTraded && model.shares > 0) ||
+                                    (!model.isExchangeTraded &&
+                                        model.amount > 0))
+                            ? '${model.todayProfitAmount.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
                             : '-\n${change.toThousand(precision: 2, showSign: true)}%',
                         textAlign: TextAlign.center,
                         style: TextStyle(

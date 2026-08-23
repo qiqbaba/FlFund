@@ -36,9 +36,13 @@ class _RankingTabState extends State<RankingTab> {
   final ScrollController _topLeftVerticalController = ScrollController();
   final ScrollController _topRightVerticalController = ScrollController();
   int _tabIndex = 0;
+  int _etfCategoryIndex = 0; // 0: all, 1: stock, 2: bond, 3: commodity, 4: cross
   final ScrollController _botHorizontalController = ScrollController();
   final ScrollController _botLeftVerticalController = ScrollController();
   final ScrollController _botRightVerticalController = ScrollController();
+  final ScrollController _etfHorizontalController = ScrollController();
+  final ScrollController _etfLeftVerticalController = ScrollController();
+  final ScrollController _etfRightVerticalController = ScrollController();
   final TextEditingController _localSearchController = TextEditingController();
   String _searchText = '';
   bool _onlyShowBuySignals = false;
@@ -48,6 +52,8 @@ class _RankingTabState extends State<RankingTab> {
   bool _topSortAscending = false;
   String? _botSortKey;
   bool _botSortAscending = false;
+  String? _etfSortKey;
+  bool _etfSortAscending = false;
 
   @override
   void initState() {
@@ -104,6 +110,32 @@ class _RankingTabState extends State<RankingTab> {
         }
       }
     });
+    _etfLeftVerticalController.addListener(() {
+      if (_etfLeftVerticalController.hasClients &&
+          _etfRightVerticalController.hasClients) {
+        if (_etfLeftVerticalController.offset == 0 &&
+            _etfRightVerticalController.offset == 0) {
+          return;
+        }
+        if (_etfLeftVerticalController.offset !=
+            _etfRightVerticalController.offset) {
+          _etfRightVerticalController.jumpTo(_etfLeftVerticalController.offset);
+        }
+      }
+    });
+    _etfRightVerticalController.addListener(() {
+      if (_etfRightVerticalController.hasClients &&
+          _etfLeftVerticalController.hasClients) {
+        if (_etfLeftVerticalController.offset == 0 &&
+            _etfRightVerticalController.offset == 0) {
+          return;
+        }
+        if (_etfRightVerticalController.offset !=
+            _etfLeftVerticalController.offset) {
+          _etfLeftVerticalController.jumpTo(_etfRightVerticalController.offset);
+        }
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<FundProvider>(context, listen: false).fetchRankings();
     });
@@ -117,6 +149,9 @@ class _RankingTabState extends State<RankingTab> {
     _botHorizontalController.dispose();
     _botLeftVerticalController.dispose();
     _botRightVerticalController.dispose();
+    _etfHorizontalController.dispose();
+    _etfLeftVerticalController.dispose();
+    _etfRightVerticalController.dispose();
     _localSearchController.dispose();
     super.dispose();
   }
@@ -299,10 +334,21 @@ class _RankingTabState extends State<RankingTab> {
         initialIsHeld: model.isHeld,
         initialAmount: model.amount,
         initialYieldRate: model.yieldRate,
-        onSave: (isHeld, amount, yieldRate) {
-          appConfig.updateHoldInfo(model.code, isHeld, amount, yieldRate);
+        initialFundType: model.fundType,
+        initialShares: model.shares,
+        initialCostPrice: model.costPrice,
+        onSave: (isHeld, amount, yieldRate, {fundType, shares, costPrice}) {
+          appConfig.updateHoldInfo(
+            model.code,
+            isHeld,
+            amount,
+            yieldRate,
+            fundType: fundType,
+            shares: shares,
+            costPrice: costPrice,
+          );
           fundProvider.loadMyFunds();
-          fundProvider.refreshAll();
+          fundProvider.refreshAll(isForce: true);
         },
       ),
     );
@@ -478,10 +524,7 @@ class _RankingTabState extends State<RankingTab> {
                   : ThemeColors.getNormalText(isDark)))
           : ThemeColors.getNormalText(isDark);
 
-      double todayProfit = 0.0;
-      if (currentModel.isHeld && currentModel.amount > 0) {
-        todayProfit = (currentModel.amount * change) / 100.0;
-      }
+
 
       final bool isBuySignal = currentModel.isBuySignal;
       final bool isSellSignal = currentModel.isSellSignal;
@@ -600,6 +643,42 @@ class _RankingTabState extends State<RankingTab> {
                             Icons.warning_amber_rounded,
                             color: ThemeColors.getRedText(isDark),
                             size: 14,
+                          ),
+                        ),
+                      ],
+                      if (currentModel.isExchangeTraded) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: currentModel.fundType == FundType.etf
+                                ? Colors.blue
+                                    .withValues(alpha: isDark ? 0.25 : 0.15)
+                                : Colors.purple
+                                    .withValues(alpha: isDark ? 0.25 : 0.15),
+                            border: Border.all(
+                                color: currentModel.fundType == FundType.etf
+                                    ? Colors.blue
+                                        .withValues(alpha: isDark ? 0.6 : 0.7)
+                                    : Colors.purple
+                                        .withValues(alpha: isDark ? 0.6 : 0.7),
+                                width: 0.5),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            currentModel.fundType.label,
+                            style: TextStyle(
+                              color: currentModel.fundType == FundType.etf
+                                  ? (isDark
+                                      ? Colors.blue.shade200
+                                      : Colors.blue.shade800)
+                                  : (isDark
+                                      ? Colors.purple.shade200
+                                      : Colors.purple.shade800),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -895,22 +974,44 @@ class _RankingTabState extends State<RankingTab> {
                   );
                   break;
                 case '今日收益/收益率':
-                  cellContent = MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onDoubleTap: () => _editHoldingInfo(
-                          context, currentModel, appConfig, fundProvider),
-                      child: Text(
-                        currentModel.isHeld && currentModel.amount > 0
-                            ? '${todayProfit.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
-                            : '-\n${change.toThousand(precision: 2, showSign: true)}%',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: changeColor,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                  String tooltipText = '双击编辑持仓信息';
+                  if (currentModel.isExchangeTraded) {
+                    final curP = currentModel.currentPrice > 0
+                        ? currentModel.currentPrice.toStringAsFixed(3)
+                        : currentModel.gsz;
+                    final iopvStr = currentModel.iopv != null
+                        ? currentModel.iopv!.toStringAsFixed(4)
+                        : '--';
+                    final discStr = currentModel.discountRate != null
+                        ? '${currentModel.discountRate! > 0 ? '+' : ''}${currentModel.discountRate!.toStringAsFixed(2)}%'
+                        : '--';
+                    tooltipText =
+                        '双击编辑持仓信息\n场内现价: $curP 元\nIOPV估值: $iopvStr\n实时折溢价: $discStr';
+                  }
+
+                  cellContent = fluent.Tooltip(
+                    message: tooltipText,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onDoubleTap: () => _editHoldingInfo(
+                            context, currentModel, appConfig, fundProvider),
+                        child: Text(
+                          currentModel.isHeld &&
+                                  ((currentModel.isExchangeTraded &&
+                                          currentModel.shares > 0) ||
+                                      (!currentModel.isExchangeTraded &&
+                                          currentModel.amount > 0))
+                              ? '${currentModel.todayProfitAmount.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
+                              : '-\n${change.toThousand(precision: 2, showSign: true)}%',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: changeColor,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
                         ),
                       ),
                     ),
@@ -1323,20 +1424,89 @@ class _RankingTabState extends State<RankingTab> {
           right: 16.0,
           top: isSmallScreen ? 0.0 : 12.0,
           bottom: 8.0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildTabButton(0, '今日领涨', Icons.trending_up_rounded,
-              ThemeColors.getRedText(isDark), isDark),
-          const SizedBox(width: 8),
-          _buildTabButton(1, '今日领跌', Icons.trending_down_rounded,
-              ThemeColors.getGreenText(isDark), isDark),
-          if (!isSmallScreen) ...[
-            const Spacer(),
-            searchBox,
-            const SizedBox(width: 12),
-            moreBtn,
+          Row(
+            children: [
+              _buildTabButton(0, '今日领涨', Icons.trending_up_rounded,
+                  ThemeColors.getRedText(isDark), isDark),
+              const SizedBox(width: 8),
+              _buildTabButton(1, '今日领跌', Icons.trending_down_rounded,
+                  ThemeColors.getGreenText(isDark), isDark),
+              const SizedBox(width: 8),
+              _buildTabButton(2, '场内 ETF 榜', Icons.account_balance_rounded,
+                  Colors.blue, isDark),
+              const SizedBox(width: 8),
+              _buildTabButton(3, '折溢价套利榜', Icons.swap_vertical_circle_rounded,
+                  Colors.orange, isDark),
+              if (!isSmallScreen) ...[
+                const Spacer(),
+                searchBox,
+                const SizedBox(width: 12),
+                moreBtn,
+              ],
+            ],
+          ),
+          if (_tabIndex == 2) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('专题分类: ',
+                    style:
+                        TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 6),
+                _buildEtfCatChip(0, '全部 ETF', 'all', fundProvider, isDark),
+                const SizedBox(width: 6),
+                _buildEtfCatChip(1, '股票/宽基', 'stock', fundProvider, isDark),
+                const SizedBox(width: 6),
+                _buildEtfCatChip(2, '债券型', 'bond', fundProvider, isDark),
+                const SizedBox(width: 6),
+                _buildEtfCatChip(3, '商品型', 'commodity', fundProvider, isDark),
+                const SizedBox(width: 6),
+                _buildEtfCatChip(4, '跨境/海外', 'cross', fundProvider, isDark),
+              ],
+            ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildEtfCatChip(int index, String label, String catKey,
+      FundProvider fundProvider, bool isDark) {
+    final bool isSelected = _etfCategoryIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _etfCategoryIndex = index;
+        });
+        fundProvider.fetchEtfRankingsData(category: catKey);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.blue.withValues(alpha: isDark ? 0.35 : 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected
+                ? Colors.blue.withValues(alpha: isDark ? 0.8 : 0.6)
+                : (isDark ? Colors.white12 : Colors.black12),
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected
+                ? (isDark ? Colors.blue.shade200 : Colors.blue.shade800)
+                : (isDark ? Colors.white70 : Colors.black87),
+          ),
+        ),
       ),
     );
   }
@@ -1349,9 +1519,15 @@ class _RankingTabState extends State<RankingTab> {
         setState(() {
           _tabIndex = index;
         });
+        final fundProvider = Provider.of<FundProvider>(context, listen: false);
+        if (index == 2 && fundProvider.etfRankings.isEmpty) {
+          fundProvider.fetchEtfRankingsData();
+        } else if (index == 3 && fundProvider.etfDiscountList.isEmpty) {
+          fundProvider.fetchEtfDiscountData();
+        }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark
@@ -1390,6 +1566,195 @@ class _RankingTabState extends State<RankingTab> {
     );
   }
 
+  Widget _buildDiscountList(
+      FundProvider fundProvider, bool isDark, AppConfig appConfig) {
+    if (fundProvider.etfDiscountList.isEmpty) {
+      if (fundProvider.isRefreshing || fundProvider.isEtfDiscountLoading) {
+        return const Center(child: fluent.ProgressRing());
+      }
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('暂无折溢价套利数据', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 12),
+            fluent.FilledButton(
+              child: const Text('立即刷新折溢价榜'),
+              onPressed: () => fundProvider.fetchEtfDiscountData(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final items = fundProvider.etfDiscountList.where((item) {
+      if (_searchText.isEmpty) return true;
+      final q = _searchText.toLowerCase();
+      final code = (item['code'] ?? '').toString().toLowerCase();
+      final name = (item['name'] ?? '').toString().toLowerCase();
+      return code.contains(q) || name.contains(q);
+    }).toList();
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final code = item['code'] ?? '';
+        final name = item['name'] ?? '';
+        final type = item['type'] ?? 'ETF';
+        final price = item['price'] as double? ?? 0.0;
+        final iopv = item['iopv'] as double? ?? 0.0;
+        final discountRate = item['discountRate'] as double? ?? 0.0;
+        final volume = item['volume'] as double? ?? 0.0;
+        final bool isPremium = discountRate > 0;
+        final Color discColor = isPremium
+            ? ThemeColors.getRedText(isDark)
+            : ThemeColors.getGreenText(isDark);
+
+        final bool alreadyInMyFunds = fundProvider.myFunds.containsKey(code);
+
+        return Container(
+          height: 52,
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.02)
+                : Colors.black.withValues(alpha: 0.01),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.blue
+                                .withValues(alpha: isDark ? 0.25 : 0.15),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            type,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.blue.shade200
+                                  : Colors.blue.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '代码: $code  |  成交量: ${(volume / 10000).toStringAsFixed(1)}万手',
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '现价: ${price.toStringAsFixed(3)}',
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'IOPV: ${iopv.toStringAsFixed(4)}',
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 20),
+              SizedBox(
+                width: 90,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${isPremium ? '+' : ''}${discountRate.toStringAsFixed(2)}%',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: discColor,
+                      ),
+                    ),
+                    Text(
+                      isPremium ? '溢价率(套利防追)' : '折价率(安全边际)',
+                      style: TextStyle(fontSize: 9, color: discColor),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              fluent.Tooltip(
+                message: alreadyInMyFunds ? '从自选移除' : '加入自选看板',
+                child: fluent.IconButton(
+                  icon: Icon(
+                    alreadyInMyFunds
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: alreadyInMyFunds ? Colors.orange : Colors.grey,
+                    size: 18,
+                  ),
+                  onPressed: () {
+                    if (alreadyInMyFunds) {
+                      appConfig.removeFund(code);
+                    } else {
+                      appConfig.addFund(
+                        code,
+                        name,
+                        '场内$type',
+                        fundType: FundInfo.autoDetectFundType(
+                            code?.toString() ?? ''),
+                      );
+                    }
+                    fundProvider.loadMyFunds();
+                    fundProvider.refreshAll();
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final fundProvider = Provider.of<FundProvider>(context);
@@ -1423,7 +1788,13 @@ class _RankingTabState extends State<RankingTab> {
           text: Text(isSmallScreen ? '刷新排行' : '一键刷新排行',
               style: const TextStyle(fontSize: 12)),
           onPressed: () {
-            fundProvider.fetchRankings(isForce: true);
+            if (_tabIndex == 2) {
+              fundProvider.fetchEtfRankingsData();
+            } else if (_tabIndex == 3) {
+              fundProvider.fetchEtfDiscountData();
+            } else {
+              fundProvider.fetchRankings(isForce: true);
+            }
           },
         ),
         fluent.MenuFlyoutItem(
@@ -1521,47 +1892,79 @@ class _RankingTabState extends State<RankingTab> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(right: 10.0, bottom: 10.0),
-              child: !fundProvider.rankingLoaded
-                  ? const Center(child: fluent.ProgressRing())
-                  : (_tabIndex == 0
-                      ? _buildList(
-                          fundProvider.topFunds,
-                          true,
-                          isDark,
-                          appConfig,
-                          fundProvider,
-                          _topHorizontalController,
-                          _topLeftVerticalController,
-                          _topRightVerticalController,
-                          _topSortKey,
-                          _topSortAscending,
-                          (key, ascending) {
-                            setState(() {
-                              _topSortKey = key;
-                              _topSortAscending = ascending;
-                            });
-                          },
-                          isFullHeight: true,
-                        )
-                      : _buildList(
-                          fundProvider.botFunds,
-                          false,
-                          isDark,
-                          appConfig,
-                          fundProvider,
-                          _botHorizontalController,
-                          _botLeftVerticalController,
-                          _botRightVerticalController,
-                          _botSortKey,
-                          _botSortAscending,
-                          (key, ascending) {
-                            setState(() {
-                              _botSortKey = key;
-                              _botSortAscending = ascending;
-                            });
-                          },
-                          isFullHeight: true,
-                        )),
+              child: () {
+                if (_tabIndex == 3) {
+                  return _buildDiscountList(fundProvider, isDark, appConfig);
+                }
+                if (_tabIndex == 2) {
+                  if (fundProvider.etfRankings.isEmpty &&
+                      (fundProvider.isRefreshing ||
+                          fundProvider.isEtfRankingLoading)) {
+                    return const Center(child: fluent.ProgressRing());
+                  }
+                  return _buildList(
+                    fundProvider.etfRankings,
+                    true,
+                    isDark,
+                    appConfig,
+                    fundProvider,
+                    _etfHorizontalController,
+                    _etfLeftVerticalController,
+                    _etfRightVerticalController,
+                    _etfSortKey,
+                    _etfSortAscending,
+                    (key, ascending) {
+                      setState(() {
+                        _etfSortKey = key;
+                        _etfSortAscending = ascending;
+                      });
+                    },
+                    isFullHeight: true,
+                  );
+                }
+                if (!fundProvider.rankingLoaded) {
+                  return const Center(child: fluent.ProgressRing());
+                }
+                return _tabIndex == 0
+                    ? _buildList(
+                        fundProvider.topFunds,
+                        true,
+                        isDark,
+                        appConfig,
+                        fundProvider,
+                        _topHorizontalController,
+                        _topLeftVerticalController,
+                        _topRightVerticalController,
+                        _topSortKey,
+                        _topSortAscending,
+                        (key, ascending) {
+                          setState(() {
+                            _topSortKey = key;
+                            _topSortAscending = ascending;
+                          });
+                        },
+                        isFullHeight: true,
+                      )
+                    : _buildList(
+                        fundProvider.botFunds,
+                        false,
+                        isDark,
+                        appConfig,
+                        fundProvider,
+                        _botHorizontalController,
+                        _botLeftVerticalController,
+                        _botRightVerticalController,
+                        _botSortKey,
+                        _botSortAscending,
+                        (key, ascending) {
+                          setState(() {
+                            _botSortKey = key;
+                            _botSortAscending = ascending;
+                          });
+                        },
+                        isFullHeight: true,
+                      );
+              }(),
             ),
           ),
         ],

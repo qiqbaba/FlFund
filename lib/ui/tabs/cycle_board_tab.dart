@@ -8,16 +8,20 @@ import '../../core/config.dart';
 import '../../core/utils/pinyin_search.dart';
 import '../../core/utils/theme_colors.dart';
 import '../widgets/mobile_header.dart';
-import '../widgets/fund_chart_dialog.dart';
 import '../widgets/copyable_text.dart';
 
 class CycleItem {
   final String name;
-  final String code; // 代表性基金代码
+  final String code; // 代表性场外基金代码
+  final String? etfCode; // 代表性场内 ETF 代码
   final String description;
 
-  CycleItem(
-      {required this.name, required this.code, required this.description});
+  CycleItem({
+    required this.name,
+    required this.code,
+    this.etfCode,
+    required this.description,
+  });
 }
 
 class CycleBoardTab extends StatelessWidget {
@@ -27,54 +31,67 @@ class CycleBoardTab extends StatelessWidget {
     CycleItem(
         name: '🐷 畜牧养殖周期',
         code: '012725',
+        etfCode: '159865',
         description: '受猪肉价格影响大，通常有 3-4 年的强产能周期。'),
     CycleItem(
         name: '💾 半导体存储周期',
         code: '008282',
+        etfCode: '512760',
         description: '全球电子消费需求主导，硅片出货量与价格呈强周期性变化。'),
     CycleItem(
         name: '🔥 煤炭能源周期',
         code: '013275',
+        etfCode: '515220',
         description: '受火电及钢厂用煤供求限制，属于防守型周期资产。'),
     CycleItem(
         name: '🪙 有色稀金属周期',
         code: '016708',
+        etfCode: '512400',
         description: '铜、铝、稀土等工业基础原材料，受全球流动性与美元指数影响深远。'),
     CycleItem(
         name: '🍶 白酒大消费周期',
         code: '161725',
+        etfCode: '512690',
         description: '高端商务消费与节假日催化明显，高 ROE 周期性现金牛资产。'),
     CycleItem(
         name: '🏗️ 基础建设水泥周期',
         code: '005224',
+        etfCode: '516970',
         description: '受国内财政刺激和地方城建发债周期直接拉动。'),
     CycleItem(
         name: '📈 证券大金融周期',
         code: '161027',
+        etfCode: '512880',
         description: '俗称"牛市旗手"，受两市总成交量和市场流动性牛熊转换催化。'),
     CycleItem(
         name: '☀️ 新能源光伏周期',
         code: '014605',
+        etfCode: '515790',
         description: '受上游多晶硅料产能投放及光伏并网消纳率周期调节。'),
     CycleItem(
         name: '🛢️ 石油石化周期',
         code: '163208',
+        etfCode: '561360',
         description: '全球原油供需主导，OPEC+ 减产/增产周期，通常 7-10 年大周期。'),
     CycleItem(
         name: '🚢 航运海运周期',
         code: '019405',
+        etfCode: '159670',
         description: 'BDI 干散货运价指数驱动，全球贸易景气度的"温度计"，3-5 年一轮。'),
     CycleItem(
         name: '🏠 房地产周期',
         code: '160218',
+        etfCode: '512200',
         description: '18-25 年库兹涅茨长周期叠加 3-5 年政策短周期，中国经济的基石周期。'),
     CycleItem(
         name: '💊 医药生物周期',
         code: '161726',
+        etfCode: '512010',
         description: '集采政策周期 2-3 年 + 创新药研发管线周期，防御与成长双重属性。'),
     CycleItem(
         name: '📺 面板 LCD 周期',
         code: '012551',
+        etfCode: '159995',
         description: '液晶面板产能投放-过剩-涨价的经典循环，与半导体同属科技硬件周期。'),
   ];
 
@@ -156,6 +173,13 @@ class CycleBoardTab extends StatelessWidget {
                               : Colors.grey);
                     }
 
+                    final bool isEtfAdded = item.etfCode != null &&
+                        fundProvider.myFunds.containsKey(item.etfCode);
+                    final etfModel = item.etfCode != null
+                        ? (fundProvider.myFunds[item.etfCode] ??
+                            fundProvider.cycleFunds[item.etfCode])
+                        : null;
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(16),
@@ -184,7 +208,7 @@ class CycleBoardTab extends StatelessWidget {
                                 color: Colors.grey, fontSize: 11),
                           ),
                           const SizedBox(height: 12),
-                          // 代表基金的实时信息面板
+                          // 代表基金的实时信息面板（双轨：场外 + 场内 ETF）
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
@@ -201,19 +225,27 @@ class CycleBoardTab extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // 第一行：基金名称（完整显示）
+                                // 第一行：场外代表基金
                                 Row(
                                   children: [
-                                    const Text('代表基金: ',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12)),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.teal.withValues(
+                                            alpha: isDark ? 0.25 : 0.15),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: const Text('场外',
+                                          style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.teal)),
+                                    ),
+                                    const SizedBox(width: 6),
                                     Expanded(
                                       child: CopyableText(
-                                        (isAdded && model != null)
-                                            ? model.name
-                                            : PinyinSearch()
-                                                .getNameByCode(item.code),
+                                        '${item.code} ${(isAdded && model != null) ? model.name : PinyinSearch().getNameByCode(item.code)}',
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 12),
@@ -221,104 +253,130 @@ class CycleBoardTab extends StatelessWidget {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                // 第二行：描述文字 + 右侧按钮（向下对齐）
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        (isAdded && model != null)
-                                            ? '昨日净值: ${model.dwjz} 元 | 实时估值: ${model.gsz} 元'
-                                            : '关注该基金后将自动启用周期精准偏离度监控',
-                                        style: const TextStyle(
-                                            color: Colors.grey, fontSize: 10),
+                                    if (isAdded && model != null) ...[
+                                      Text(
+                                        '${change.toThousand(precision: 2, showSign: true)}%',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: changeColor),
                                       ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        if (isAdded && model != null) ...[
-                                          Text(
-                                            '${change.toThousand(precision: 2, showSign: true)}%',
-                                            style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold,
-                                                color: changeColor),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          fluent.IconButton(
-                                            icon: const Icon(
-                                                Icons.psychology_rounded,
-                                                size: 16,
-                                                color: Colors.purpleAccent),
-                                            onPressed: () {
-                                              fundProvider
-                                                  .switchToBacktest(item.code);
-                                            },
-                                          ),
-                                          const SizedBox(width: 4),
-                                          fluent.IconButton(
-                                            icon: const Icon(
-                                                Icons.show_chart_rounded,
-                                                size: 16,
-                                                color: Colors.blueAccent),
-                                            onPressed: () {
-                                              fluent.showDialog(
-                                                context: context,
-                                                builder: (context) =>
-                                                    FundChartDialog(
-                                                  fundCode: model.code,
-                                                  fundName: model.name,
-                                                  navs: model.navs,
-                                                  dates: model.dates,
-                                                  todayEstimateNav:
-                                                      double.tryParse(
-                                                          model.gsz),
-                                                  todayEstimatePct:
-                                                      double.tryParse(
-                                                          model.gszzl),
-                                                  todayEstimateTime:
-                                                      model.gztime,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ] else ...[
-                                          fluent.Button(
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.add_rounded,
-                                                    size: 12,
-                                                    color: Colors.blue),
-                                                SizedBox(width: 4),
-                                                Text('关注监控',
-                                                    style: TextStyle(
-                                                        fontSize: 11,
-                                                        color: Colors.blue)),
-                                              ],
-                                            ),
-                                            onPressed: () {
-                                              final name = PinyinSearch()
-                                                  .getNameByCode(item.code);
-                                              appConfig.addFund(
-                                                  item.code,
-                                                  name != item.code
-                                                      ? name
-                                                      : '强周期代表基金',
-                                                  '强周期监控');
-                                              fundProvider.loadMyFunds();
-                                              fundProvider.refreshAll();
-                                            },
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                      const SizedBox(width: 6),
+                                      fluent.IconButton(
+                                        icon: const Icon(
+                                            Icons.psychology_rounded,
+                                            size: 15,
+                                            color: Colors.purpleAccent),
+                                        onPressed: () {
+                                          fundProvider
+                                              .switchToBacktest(item.code);
+                                        },
+                                      ),
+                                    ] else ...[
+                                      fluent.Button(
+                                        child: const Text('+关注',
+                                            style: TextStyle(fontSize: 10)),
+                                        onPressed: () {
+                                          final name = PinyinSearch()
+                                              .getNameByCode(item.code);
+                                          appConfig.addFund(
+                                              item.code,
+                                              name != item.code
+                                                  ? name
+                                                  : '强周期代表基金',
+                                              '强周期监控');
+                                          fundProvider.loadMyFunds();
+                                          fundProvider.refreshAll();
+                                        },
+                                      ),
+                                    ],
                                   ],
                                 ),
+                                if (item.etfCode != null) ...[
+                                  const SizedBox(height: 6),
+                                  // 第二行：场内代表 ETF
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withValues(
+                                              alpha: isDark ? 0.25 : 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                        ),
+                                        child: const Text('ETF',
+                                            style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue)),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: CopyableText(
+                                          '${item.etfCode} ${(isEtfAdded && etfModel != null) ? etfModel.name : PinyinSearch().getNameByCode(item.etfCode!)}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (isEtfAdded && etfModel != null) ...[
+                                        Builder(builder: (context) {
+                                          final etfChange =
+                                              double.tryParse(etfModel.gszzl) ??
+                                                  0.0;
+                                          return Text(
+                                            '${etfChange.toThousand(precision: 2, showSign: true)}%',
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: etfChange > 0
+                                                    ? ThemeColors.getRedText(
+                                                        isDark)
+                                                    : (etfChange < 0
+                                                        ? ThemeColors
+                                                            .getGreenText(
+                                                                isDark)
+                                                        : Colors.grey)),
+                                          );
+                                        }),
+                                        const SizedBox(width: 6),
+                                        fluent.IconButton(
+                                          icon: const Icon(
+                                              Icons.psychology_rounded,
+                                              size: 15,
+                                              color: Colors.purpleAccent),
+                                          onPressed: () {
+                                            fundProvider.switchToBacktest(
+                                                item.etfCode!);
+                                          },
+                                        ),
+                                      ] else ...[
+                                        fluent.Button(
+                                          child: const Text('+关注ETF',
+                                              style: TextStyle(fontSize: 10)),
+                                          onPressed: () {
+                                            final name = PinyinSearch()
+                                                .getNameByCode(item.etfCode!);
+                                            appConfig.addFund(
+                                              item.etfCode!,
+                                              name != item.etfCode
+                                                  ? name
+                                                  : '周期ETF',
+                                              '强周期监控',
+                                              fundType: FundType.etf,
+                                            );
+                                            fundProvider.loadMyFunds();
+                                            fundProvider.refreshAll();
+                                          },
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),

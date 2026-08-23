@@ -485,13 +485,22 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     }
   }
 
+  Future<Map<String, dynamic>?> _fetchOnlineHistory(String code) async {
+    final isEtf = FundInfo.autoDetectFundType(code).isExchangeTraded;
+    if (isEtf) {
+      final etfHis = await FundDataGateway().fetchEtfHistory(code);
+      if (etfHis != null) return etfHis;
+    }
+    return await FundDataGateway().fetchHistory(code);
+  }
+
   Future<void> _loadSingleDuration() async {
     if (_selectedCode == null || _singleOptResult == null) return;
     final String targetCode = _selectedCode!;
     final proxyCode = AppConfig.indexProxyMap[targetCode] ?? targetCode;
     var history = await FundHistoryDB().getHistory(proxyCode);
     if (history == null || history['navs'] == null) {
-      final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
+      final onlineHis = await _fetchOnlineHistory(proxyCode);
       if (onlineHis != null) {
         final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
         final List<String> dates = List<String>.from(onlineHis['dates'] ?? []);
@@ -699,7 +708,10 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                     controller: _fundSearchController,
                     placeholder: '搜索基金代码 / 名称...',
                     items: list.map((fund) {
-                      final label = '${fund.code} - ${fund.name}';
+                      final typePrefix = fund.isExchangeTraded
+                          ? '[${fund.fundType.label}] '
+                          : '';
+                      final label = '$typePrefix${fund.code} - ${fund.name}';
                       return fluent.AutoSuggestBoxItem<String>(
                         value: fund.code,
                         label: label,
@@ -1971,7 +1983,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         final proxyCode = AppConfig.indexProxyMap[fund.code] ?? fund.code;
         var history = await FundHistoryDB().getHistory(proxyCode);
         if (history == null || history['navs'] == null) {
-          final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
+          final onlineHis = await _fetchOnlineHistory(proxyCode);
           if (onlineHis != null) {
             final List<double> navs =
                 List<double>.from(onlineHis['navs'] ?? []);
@@ -2455,7 +2467,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     final proxyCode = AppConfig.indexProxyMap[targetCode] ?? targetCode;
     var history = await FundHistoryDB().getHistory(proxyCode);
     if (history == null || history['navs'] == null) {
-      final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
+      final onlineHis = await _fetchOnlineHistory(proxyCode);
       if (onlineHis != null) {
         final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
         final List<String> dates = List<String>.from(onlineHis['dates'] ?? []);
@@ -2591,7 +2603,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     final proxyCode = AppConfig.indexProxyMap[targetCode] ?? targetCode;
     var history = await FundHistoryDB().getHistory(proxyCode);
     if (history == null || history['navs'] == null) {
-      final onlineHis = await FundDataGateway().fetchEtfHistory(proxyCode);
+      final onlineHis = await _fetchOnlineHistory(proxyCode);
       if (onlineHis != null) {
         final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
         final List<String> dates = List<String>.from(onlineHis['dates'] ?? []);

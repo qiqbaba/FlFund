@@ -26,6 +26,71 @@ class FundUIModel {
   double amount;
   double yieldRate;
 
+  // 场内基金专有字段
+  FundType fundType;
+  double shares; // 持股数量（股/份）
+  double costPrice; // 持仓成本均价（元）
+  double currentPrice = 0.0; // 当前实时现价
+  double? iopv; // 实时参考净值
+  double? discountRate; // 实时折溢价率%
+  double? turnover; // 成交额（万元）
+  double? volume; // 成交量（手）
+  double? turnoverRate; // 换手率%
+
+  bool get isExchangeTraded => fundType.isExchangeTraded;
+
+  /// 持仓总市值
+  double get holdingMarketValue {
+    if (isExchangeTraded && shares > 0) {
+      final p = currentPrice > 0
+          ? currentPrice
+          : (costPrice > 0
+              ? costPrice
+              : (double.tryParse(gsz) ?? double.tryParse(dwjz) ?? 0.0));
+      return shares * p;
+    }
+    return amount;
+  }
+
+  /// 持仓累计浮动盈亏（元）
+  double get floatingProfitAmount {
+    if (isExchangeTraded && shares > 0 && costPrice > 0) {
+      final p = currentPrice > 0
+          ? currentPrice
+          : (double.tryParse(gsz) ?? double.tryParse(dwjz) ?? costPrice);
+      return (p - costPrice) * shares;
+    }
+    if (amount > 0 && yieldRate != 0.0) {
+      return amount * (yieldRate / 100.0);
+    }
+    return 0.0;
+  }
+
+  /// 累计收益率%
+  double get floatingYieldRate {
+    if (isExchangeTraded && shares > 0 && costPrice > 0) {
+      final p = currentPrice > 0
+          ? currentPrice
+          : (double.tryParse(gsz) ?? double.tryParse(dwjz) ?? costPrice);
+      return ((p - costPrice) / costPrice) * 100.0;
+    }
+    return yieldRate;
+  }
+
+  /// 当日预估盈亏（元）
+  double get todayProfitAmount {
+    final double rate = double.tryParse(gszzl) ?? 0.0;
+    if (isExchangeTraded && shares > 0) {
+      final p = currentPrice > 0
+          ? currentPrice
+          : (double.tryParse(gsz) ?? double.tryParse(dwjz) ?? costPrice);
+      if (rate <= -100.0) return -p * shares;
+      final lastClose = p / (1.0 + rate / 100.0);
+      return (p - lastClose) * shares;
+    }
+    return amount * (rate / 100.0);
+  }
+
   // 估值抓取结果
   String dwjz = '0.00';
   String gsz = '0.00';
@@ -142,12 +207,16 @@ class FundUIModel {
     this.isPinned = false,
     this.amount = 0.0,
     this.yieldRate = 0.0,
-  });
+    FundType? fundType,
+    this.shares = 0.0,
+    this.costPrice = 0.0,
+  }) : fundType = fundType ?? FundInfo.autoDetectFundType(code);
 
   bool get isTodayValuation {
     if (gztime == '暂无数据' || gztime.isEmpty) return false;
-    // 使用缓存的今日日期字符串，避免在表格高频渲染时每次都 new DateTime
-    return gztime.contains(_cachedToday);
+    final today = _cachedToday;
+    final todayNoHyphen = today.replaceAll('-', '');
+    return gztime.contains(today) || gztime.contains(todayNoHyphen);
   }
 
   // 提取数据源的 getter
@@ -608,6 +677,9 @@ class FundUIModel {
       isPinned: info.isPinned,
       amount: info.amount,
       yieldRate: info.yieldRate,
+      fundType: info.fundType,
+      shares: info.shares,
+      costPrice: info.costPrice,
     );
   }
 }
@@ -656,6 +728,13 @@ class FundProvider extends ChangeNotifier {
 
   bool isRefreshing = false;
 
+  /// ETF 专题榜 / 折溢价雷达独立加载态（与 refreshAll 的全局 isRefreshing 分开，互不干扰）
+  bool isEtfRankingLoading = false;
+  bool isEtfDiscountLoading = false;
+
+  /// ETF 分类请求序号，用于丢弃快速切换分类时的过期响应
+  int _etfRankingReqId = 0;
+
   List<String> _refreshErrors = [];
   List<String> get refreshErrors => _refreshErrors;
 
@@ -698,6 +777,15 @@ class FundProvider extends ChangeNotifier {
   List<FundUIModel> botFunds = [];
   bool rankingLoaded = false;
 
+  // 场内 ETF 专题榜数据
+  List<FundUIModel> etfRankings = [];
+  bool etfRankingLoaded = false;
+  String currentEtfCategory = 'all';
+
+  // 场内 ETF / LOF 折溢价套利雷达数据
+  List<Map<String, dynamic>> etfDiscountList = [];
+  bool etfDiscountLoaded = false;
+
   // 估值榜雷达数据
   List<Map<String, dynamic>> valuationList = [];
   bool valuationLoaded = false;
@@ -728,6 +816,30 @@ class FundProvider extends ChangeNotifier {
         newModel.jzrq = oldModel.jzrq;
         newModel.gztime = oldModel.gztime;
         newModel.yestZdf = oldModel.yestZdf;
+        newModel.currentPrice = oldModel.currentPrice;
+        newModel.iopv = oldModel.iopv;
+        newModel.discountRate = oldModel.discountRate;
+        newModel.turnover = oldModel.turnover;
+        newModel.volume = oldModel.volume;
+        newModel.turnoverRate = oldModel.turnoverRate;
+        newModel.pePercentile = oldModel.pePercentile;
+        newModel.pbPercentile = oldModel.pbPercentile;
+        newModel.allHistoryPct = oldModel.allHistoryPct;
+        newModel.trendDirection = oldModel.trendDirection;
+        newModel.zScore = oldModel.zScore;
+        newModel.detrendedPct = oldModel.detrendedPct;
+        newModel.year1Pct = oldModel.year1Pct;
+        newModel.year3Pct = oldModel.year3Pct;
+        newModel.closedMa120 = oldModel.closedMa120;
+        newModel.sumOf119 = oldModel.sumOf119;
+        newModel.cachedIsBuySignal = oldModel.cachedIsBuySignal;
+        newModel.cachedIsSellSignal = oldModel.cachedIsSellSignal;
+        newModel.cachedCurrentDrop = oldModel.cachedCurrentDrop;
+        newModel.cachedCurrentRise = oldModel.cachedCurrentRise;
+        newModel.cachedRecentBuyIdx = oldModel.cachedRecentBuyIdx;
+        newModel.cachedLastSystemBuyIndex = oldModel.cachedLastSystemBuyIndex;
+        newModel._signalsCalculated = oldModel._signalsCalculated;
+        newModel._lastCalculatedDataHash = oldModel._lastCalculatedDataHash;
         newModel.drops = Map.from(oldModel.drops);
         newModel.pcts = Map.from(oldModel.pcts);
         newModel.optimalStrategy = oldModel.optimalStrategy;
@@ -887,9 +999,13 @@ class FundProvider extends ChangeNotifier {
       }
 
       if ((needApiUpdate || isForce) && !onlyLocal) {
-        // 从 API 抓取历史数据并写入数据库
-        final onlineHis =
-            await gateway.fetchHistory(model.code, name: model.name);
+        // 从 API 抓取历史数据并写入数据库（场内优先调用 ETF K线接口，场外调用常规净值接口）
+        Map<String, dynamic>? onlineHis;
+        if (model.isExchangeTraded) {
+          onlineHis = await gateway.fetchEtfHistory(model.code);
+        }
+        onlineHis ??= await gateway.fetchHistory(model.code, name: model.name);
+
         if (onlineHis != null) {
           final List<double> navs = List<double>.from(onlineHis['navs'] ?? []);
           final List<String> dates =
@@ -1274,13 +1390,28 @@ class FundProvider extends ChangeNotifier {
         ...cycleFunds.values.where((m) => !myFunds.containsKey(m.code)),
       ];
 
-      // 2. 优先利用新浪极速批量接口 (50 只/批次) 一次性拉取所有估值
-      final allCodes = fundList.map((f) => f.code).toList();
+      // 2. 区分场内 ETF 与场外开放式基金，分别采用专属极速批量行情源
+      final etfFunds = fundList.where((m) => m.isExchangeTraded).toList();
+      final otcFunds = fundList.where((m) => !m.isExchangeTraded).toList();
+
+      Map<String, Map<String, dynamic>> etfQuotes = {};
+      if (etfFunds.isNotEmpty) {
+        try {
+          etfQuotes = await gateway
+              .fetchEtfRealtimeQuotes(etfFunds.map((m) => m.code).toList());
+        } catch (e) {
+          debugPrint('批量拉取场内行情异常: $e');
+        }
+      }
+
+      final otcCodes = otcFunds.map((f) => f.code).toList();
       Map<String, Map<String, dynamic>> batchVals = {};
-      try {
-        batchVals = await gateway.fetchValuationBatch(allCodes);
-      } catch (e) {
-        debugPrint('批量估值拉取异常，将自动降级为单只拉取: $e');
+      if (otcCodes.isNotEmpty) {
+        try {
+          batchVals = await gateway.fetchValuationBatch(otcCodes);
+        } catch (e) {
+          debugPrint('批量估值拉取异常，将自动降级为单只拉取: $e');
+        }
       }
 
       // 3. 并行限流刷新：将任务组装为闭包，由并发调度器执行以控制网络并发数
@@ -1294,8 +1425,29 @@ class FundProvider extends ChangeNotifier {
           final localErrors = <String>[];
           model.errorMsg = null; // 每次刷新前重置
           try {
-            // A. 优先应用新浪极速批量估值结果
-            if (batchVals.containsKey(model.code)) {
+            // A. 场内基金优先应用场内行情
+            if (model.isExchangeTraded && etfQuotes.containsKey(model.code)) {
+              final q = etfQuotes[model.code]!;
+              model.currentPrice = q['currentPrice'] ?? 0.0;
+              model.iopv = q['iopv'];
+              model.discountRate = q['discountRate'];
+              model.turnover = q['turnover'];
+              model.turnoverRate = q['turnoverRate'];
+              model.volume = q['volume'];
+              if (model.currentPrice > 0) {
+                model.gsz = model.currentPrice.toStringAsFixed(3);
+              }
+              final changePct = q['changePercent'] as double? ?? 0.0;
+              model.gszzl = changePct.toStringAsFixed(2);
+              final timeStr = q['time']?.toString() ?? '';
+              final todayStr = FundUIModel._cachedToday;
+              model.gztime = timeStr.isNotEmpty
+                  ? (timeStr.contains('-')
+                      ? '$timeStr [场内实时]'
+                      : '$todayStr $timeStr [场内实时]')
+                  : '$todayStr ${DateTime.now().toString().substring(11, 19)} [场内实时]';
+            } else if (batchVals.containsKey(model.code)) {
+              // 场外优先应用新浪极速批量估值结果
               final val = batchVals[model.code]!;
               model.gsz = val['gsz']?.toString() ?? model.gsz;
               model.gszzl =
@@ -1303,7 +1455,7 @@ class FundProvider extends ChangeNotifier {
               model.jzrq = val['jzrq']?.toString() ?? model.jzrq;
               model.gztime = '${val['gztime']} [新浪极速批量]';
             } else {
-              // 未在批量接口中覆盖的个基（如特殊场内影子ETF），走单源精准抓取
+              // 未在批量接口中覆盖的个基，走单源精准抓取
               final val = await gateway.fetchValuation(model.code,
                   name: model.name,
                   sector: model.sector,
@@ -1589,6 +1741,80 @@ class FundProvider extends ChangeNotifier {
       }
     }
     return result;
+  }
+
+  /// 拉取场内 ETF 专题分类榜
+  Future<void> fetchEtfRankingsData(
+      {String category = 'all', bool isForce = false}) async {
+    if (etfRankingLoaded && currentEtfCategory == category && !isForce) return;
+    // 请求序号守卫：连续快速切换分类时，仅让最后一次请求的结果生效，
+    // 避免慢响应后到覆盖新数据导致选中 chip 与列表内容错位
+    final int reqId = ++_etfRankingReqId;
+    isEtfRankingLoading = true;
+    notifyListeners();
+    try {
+      final rawList =
+          await FundDataGateway().fetchEtfRankings(category: category);
+      if (reqId != _etfRankingReqId) return;
+      final List<FundUIModel> models = [];
+      for (final item in rawList) {
+        final code = item['code']?.toString() ?? '';
+        if (code.isEmpty) continue;
+        final name = item['name']?.toString() ?? '';
+        final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+        final changePct = (item['changePercent'] as num?)?.toDouble() ??
+            (item['changePct'] as num?)?.toDouble() ??
+            0.0;
+        final fType = FundInfo.autoDetectFundType(code);
+
+        final model = FundUIModel(
+          code: code,
+          name: name,
+          sector: '场内${fType.label}',
+          fundType: fType,
+        );
+        model.currentPrice = price;
+        model.iopv = (item['iopv'] as num?)?.toDouble();
+        model.discountRate = (item['discountRate'] as num?)?.toDouble();
+        model.volume = (item['volume'] as num?)?.toDouble();
+        model.turnover = (item['turnover'] as num?)?.toDouble();
+        model.turnoverRate = (item['turnoverRate'] as num?)?.toDouble();
+        model.gsz = price > 0 ? price.toStringAsFixed(3) : '0.00';
+        model.gszzl = changePct.toStringAsFixed(2);
+        model.gztime =
+            '${FundUIModel._cachedToday} ${DateTime.now().toString().substring(11, 19)} [场内行情]';
+        models.add(model);
+      }
+      etfRankings = models;
+      currentEtfCategory = category;
+      etfRankingLoaded = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('拉取 ETF 排行榜失败: $e');
+    } finally {
+      if (reqId == _etfRankingReqId) {
+        isEtfRankingLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// 拉取全市场 ETF / LOF 实时折溢价雷达数据
+  Future<void> fetchEtfDiscountData({bool isForce = false}) async {
+    if (etfDiscountLoaded && !isForce) return;
+    isEtfDiscountLoading = true;
+    notifyListeners();
+    try {
+      final list = await FundDataGateway().fetchEtfDiscountList();
+      etfDiscountList = list;
+      etfDiscountLoaded = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('拉取 ETF 折溢价套利榜失败: $e');
+    } finally {
+      isEtfDiscountLoading = false;
+      notifyListeners();
+    }
   }
 
   // 解析天天基金官方 FundMNValuationList API 响应 (全市场盘中实时估值榜)
@@ -1936,6 +2162,8 @@ class FundProvider extends ChangeNotifier {
       debugPrint('获取估值雷达失败: $e');
     }
   }
+
+
 
   // 手机端全局触发侧边栏菜单展开的回调
   VoidCallback? onOpenDrawer;

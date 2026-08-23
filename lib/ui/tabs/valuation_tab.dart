@@ -580,8 +580,9 @@ class _ValuationTabState extends State<ValuationTab> {
 
   void _editHoldingInfo(BuildContext context, String code, String name,
       AppConfig appConfig, FundProvider fundProvider) {
+    final fundType = FundInfo.autoDetectFundType(code);
     if (!appConfig.fundsInfo.containsKey(code)) {
-      appConfig.addFund(code, name, '估值雷达');
+      appConfig.addFund(code, name, '估值雷达', fundType: fundType);
       fundProvider.loadMyFunds();
     }
 
@@ -595,10 +596,21 @@ class _ValuationTabState extends State<ValuationTab> {
         initialIsHeld: assocModel.isHeld,
         initialAmount: assocModel.amount,
         initialYieldRate: assocModel.yieldRate,
-        onSave: (isHeld, amount, yieldRate) {
-          appConfig.updateHoldInfo(assocModel.code, isHeld, amount, yieldRate);
+        initialFundType: assocModel.fundType,
+        initialShares: assocModel.shares,
+        initialCostPrice: assocModel.costPrice,
+        onSave: (isHeld, amount, yieldRate, {fundType, shares, costPrice}) {
+          appConfig.updateHoldInfo(
+            assocModel.code,
+            isHeld,
+            amount,
+            yieldRate,
+            fundType: fundType,
+            shares: shares,
+            costPrice: costPrice,
+          );
           fundProvider.loadMyFunds();
-          fundProvider.refreshAll();
+          fundProvider.refreshAll(isForce: true);
         },
       ),
     );
@@ -779,12 +791,7 @@ class _ValuationTabState extends State<ValuationTab> {
                       : ThemeColors.getNormalText(isDark)))
               : ThemeColors.getNormalText(isDark);
 
-      double todayProfit = 0.0;
-      if (currentAssocFund != null &&
-          currentAssocFund.isHeld &&
-          currentAssocFund.amount > 0) {
-        todayProfit = (currentAssocFund.amount * change) / 100.0;
-      }
+
 
       final bool isPinned = currentAssocFund?.isPinned == true;
       final bool isBuySignal = currentAssocFund?.isBuySignal == true;
@@ -1035,6 +1042,44 @@ class _ValuationTabState extends State<ValuationTab> {
                                 size: 14),
                           ),
                         ],
+                        if (currentAssocFund != null &&
+                            currentAssocFund.isExchangeTraded) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: currentAssocFund.fundType == FundType.etf
+                                  ? Colors.blue
+                                      .withValues(alpha: isDark ? 0.25 : 0.15)
+                                  : Colors.purple
+                                      .withValues(alpha: isDark ? 0.25 : 0.15),
+                              border: Border.all(
+                                  color:
+                                      currentAssocFund.fundType == FundType.etf
+                                          ? Colors.blue.withValues(
+                                              alpha: isDark ? 0.6 : 0.7)
+                                          : Colors.purple.withValues(
+                                              alpha: isDark ? 0.6 : 0.7),
+                                  width: 0.5),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              currentAssocFund.fundType.label,
+                              style: TextStyle(
+                                color: currentAssocFund.fundType == FundType.etf
+                                    ? (isDark
+                                        ? Colors.blue.shade200
+                                        : Colors.blue.shade800)
+                                    : (isDark
+                                        ? Colors.purple.shade200
+                                        : Colors.purple.shade800),
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                         if (currentAssocFund?.isHeld == true) ...[
                           const SizedBox(width: 4),
                           Container(
@@ -1073,22 +1118,44 @@ class _ValuationTabState extends State<ValuationTab> {
                   break;
                 case '今日收益/收益率':
                   if (hasAssoc && currentAssocFund != null) {
-                    cellContent = MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onDoubleTap: () => _editHoldingInfo(context, assocCode,
-                            assocName, appConfig, fundProvider),
-                        child: Text(
-                          currentAssocFund.isHeld && currentAssocFund.amount > 0
-                              ? '${todayProfit.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
-                              : '-\n${change.toThousand(precision: 2, showSign: true)}%',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: changeColor,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                    String tooltipText = '双击编辑持仓信息';
+                    if (currentAssocFund.isExchangeTraded) {
+                      final curP = currentAssocFund.currentPrice > 0
+                          ? currentAssocFund.currentPrice.toStringAsFixed(3)
+                          : currentAssocFund.gsz;
+                      final iopvStr = currentAssocFund.iopv != null
+                          ? currentAssocFund.iopv!.toStringAsFixed(4)
+                          : '--';
+                      final discStr = currentAssocFund.discountRate != null
+                          ? '${currentAssocFund.discountRate! > 0 ? '+' : ''}${currentAssocFund.discountRate!.toStringAsFixed(2)}%'
+                          : '--';
+                      tooltipText =
+                          '双击编辑持仓信息\n场内现价: $curP 元\nIOPV估值: $iopvStr\n实时折溢价: $discStr';
+                    }
+
+                    cellContent = fluent.Tooltip(
+                      message: tooltipText,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onDoubleTap: () => _editHoldingInfo(context,
+                              assocCode, assocName, appConfig, fundProvider),
+                          child: Text(
+                            currentAssocFund.isHeld &&
+                                    ((currentAssocFund.isExchangeTraded &&
+                                            currentAssocFund.shares > 0) ||
+                                        (!currentAssocFund.isExchangeTraded &&
+                                            currentAssocFund.amount > 0))
+                                ? '${currentAssocFund.todayProfitAmount.toThousand(precision: 2, showSign: true)} 元\n${change.toThousand(precision: 2, showSign: true)}%'
+                                : '-\n${change.toThousand(precision: 2, showSign: true)}%',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: changeColor,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
                           ),
                         ),
                       ),
