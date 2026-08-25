@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fl_fund/core/fund_provider.dart';
 import 'package:fl_fund/core/config.dart';
+import 'package:fl_fund/core/backtest_engine.dart';
 
 void main() {
   setUpAll(() {
@@ -119,6 +120,62 @@ void main() {
       expect(fund.costPrice, 0.0);
       expect(fund.amount, 0.0);
       expect(fund.yieldRate, 0.0);
+    });
+
+    test('AppConfig ETF commission settings default and update', () async {
+      final config = AppConfig();
+      expect(config.etfCommissionRate, 0.005); // 万0.5 (0.005%)
+      expect(config.etfMinCommission, 0.4); // 0.4元起收
+
+      await config.updateEtfCommission(rate: 0.003, minFee: 0.0);
+      expect(config.etfCommissionRate, 0.003);
+      expect(config.etfMinCommission, 0.0);
+
+      // 恢复默认
+      await config.updateEtfCommission(rate: 0.005, minFee: 0.4);
+      expect(config.etfCommissionRate, 0.005);
+      expect(config.etfMinCommission, 0.4);
+    });
+
+    test('BacktestEngine handles isExchangeTraded with 0 short hold penalty and commission', () {
+      // 构造快速上涨满足目标止盈（3天内止盈）的数据
+      final navs = [1.0, 0.95, 0.94, 1.05, 1.06, 1.07];
+      final dates = [
+        '2026-01-01',
+        '2026-01-02',
+        '2026-01-03',
+        '2026-01-04',
+        '2026-01-05',
+        '2026-01-06'
+      ];
+
+      // 1. 场外模式：未满7天止盈需承担 1.5% 惩罚赎回费
+      final otcRes = BacktestEngine.runBacktest(
+        allNavs: navs,
+        allDates: dates,
+        buyDays: 2,
+        buyDropPct: 1.0,
+        targetProfitPct: 3.0,
+        isExchangeTraded: false,
+      );
+
+      // 2. 场内模式：免除 7 天 1.5% 惩罚赎回费，按佣金精准扣费
+      final etfRes = BacktestEngine.runBacktest(
+        allNavs: navs,
+        allDates: dates,
+        buyDays: 2,
+        buyDropPct: 1.0,
+        targetProfitPct: 3.0,
+        isExchangeTraded: true,
+        etfCommissionRate: 0.005,
+        etfMinCommission: 0.4,
+      );
+
+      expect(etfRes.totalTrades, greaterThanOrEqualTo(1));
+      // 场内标的收益不扣除 1.5% 惩罚赎回费，收益率显著高于场外
+      if (otcRes.totalTrades > 0) {
+        expect(etfRes.avgProfit, greaterThan(otcRes.avgProfit));
+      }
     });
   });
 }

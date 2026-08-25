@@ -1,17 +1,17 @@
 {
-  "version": "1.8.31",
-  "buildNumber": 113,
+  "version": "1.8.32",
+  "buildNumber": 114,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-24",
-  "releaseNotes": "1. 场内ETF/LOF持仓支持：新增持仓股数与成本均价录入，支持实时市值与浮动盈亏计算\n2. 场内实时行情与折溢价：优化ETF盘中行情、IOPV折溢价率及成交数据展示与缓存保持\n3. 持仓与估值体验优化：优化日期与估值格式解析，提升多标签页交互与数据稳定性",
+  "releaseDate": "2026-08-25",
+  "releaseNotes": "1. 场内ETF策略寻优与回测：支持场内标的免除7天短期赎回惩罚，精准按券商佣金扣费，动态优化寻优边界与持仓周期\n2. 模拟盘场内交易机制对齐：买入加仓与卖出平仓全面支持ETF佣金计算与资金即时结算，完善交易记录提示\n3. 界面与详情体验优化：重构策略中心深度风控指标卡片布局，基金走势图详情弹窗增加场内标的标签与佣金说明",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.31/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.32/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.31/FlFund-v1.8.31.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.32/FlFund-v1.8.32.apk",
       "sha256": "",
       "fileSize": 0
     }

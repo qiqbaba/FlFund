@@ -292,6 +292,10 @@ class BacktestEngine {
     int shortHoldDays = 7,
     double shortHoldPenaltyPct = 1.5,
     double purchaseFeePct = 0.0,
+    // 场内基金与可配置佣金（默认万0.5，0.4元起收，免7天惩罚与T+0即时结算）
+    bool isExchangeTraded = false,
+    double? etfCommissionRate,
+    double? etfMinCommission,
     // 网格加仓次数上限：>0 时持仓基金继续下跌超过网格间距则向同一仓位追加买入并合并均价，
     // 与模拟盘网格加仓语义完全对齐（0=关闭，保持旧的多仓位间距过滤行为）
     int maxGridAdds = 0,
@@ -315,6 +319,28 @@ class BacktestEngine {
         avgEfficiency: 0.0,
       );
     }
+
+    // 场内与场外差异化费率与规则初始化
+    final int effectiveShortHoldDays = isExchangeTraded ? 0 : shortHoldDays;
+    final double effectiveShortHoldPenaltyPct =
+        isExchangeTraded ? 0.0 : shortHoldPenaltyPct;
+    final int effectiveSettlementDays =
+        isExchangeTraded ? 0 : settlementDays;
+
+    // 场内佣金（买入与卖出双向计算，以标准单笔资金折算最低起收摩擦）
+    final double effectiveEtfCommissionRate =
+        etfCommissionRate ?? 0.005; // 万0.5
+    final double effectiveEtfMinCommission =
+        etfMinCommission ?? 0.4; // 0.4元起收
+    const double assumedSlotCapital = 2000.0; // 回测基准单笔资金（元）
+    final double etfFeePctPerSide = math.max(
+      effectiveEtfCommissionRate,
+      (effectiveEtfMinCommission / assumedSlotCapital) * 100.0,
+    );
+    final double effectivePurchaseFeePct = isExchangeTraded
+        ? etfFeePctPerSide
+        : purchaseFeePct;
+    final double etfSellFeePct = isExchangeTraded ? etfFeePctPerSide : 0.0;
 
     final double buyDrop = buyDropPct / 100.0;
     final double targetProfit = targetProfitPct / 100.0;
@@ -553,8 +579,8 @@ class BacktestEngine {
           }
 
           // III. 固定目标止盈平仓判断 (持有期少于 shortHoldDays 天包含惩罚费率)
-          final double shortHoldPenalty = shortHoldPenaltyPct / 100.0;
-          final double requiredProfit = (holdDays < shortHoldDays)
+          final double shortHoldPenalty = effectiveShortHoldPenaltyPct / 100.0;
+          final double requiredProfit = (holdDays < effectiveShortHoldDays)
               ? (targetProfit + shortHoldPenalty)
               : targetProfit;
           final bool isTargetProfitTriggered = profit >= requiredProfit;
@@ -579,16 +605,19 @@ class BacktestEngine {
           if (shouldSell) {
             final double sellNav = currentNav;
             double finalProfit = (sellNav - avgCost) / avgCost;
-            if (holdDays < shortHoldDays) {
+            if (holdDays < effectiveShortHoldDays) {
               finalProfit -= shortHoldPenalty;
             }
             finalProfit -= slippagePct / 100.0;
-            finalProfit -= purchaseFeePct / 100.0;
+            finalProfit -= effectivePurchaseFeePct / 100.0;
+            if (isExchangeTraded) {
+              finalProfit -= etfSellFeePct / 100.0;
+            }
 
             final double returnCash = slot.buyBalance * (1.0 + finalProfit);
-            if (settlementDays > 0) {
+            if (effectiveSettlementDays > 0) {
               // T+n 赎回：资金进入在途队列，到账日后方可再投资
-              final int availDay = i + settlementDays;
+              final int availDay = i + effectiveSettlementDays;
               pendingCashByDay[availDay] =
                   (pendingCashByDay[availDay] ?? 0.0) + returnCash;
             } else {

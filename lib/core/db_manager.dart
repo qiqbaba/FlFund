@@ -65,6 +65,9 @@ class FundHistoryDB {
       slippage_pct REAL,
       max_grid_adds INTEGER,
       oos_validated INTEGER,
+      is_exchange_traded INTEGER,
+      etf_commission_rate REAL,
+      etf_min_commission REAL,
       update_time REAL
     );
   ''';
@@ -97,6 +100,9 @@ class FundHistoryDB {
     ('slippage_pct', 'REAL'),
     ('max_grid_adds', 'INTEGER'),
     ('oos_validated', 'INTEGER'),
+    ('is_exchange_traded', 'INTEGER'),
+    ('etf_commission_rate', 'REAL'),
+    ('etf_min_commission', 'REAL'),
   ];
 
 
@@ -471,18 +477,22 @@ class FundHistoryDB {
     double? slippagePct,
     int? maxGridAdds,
     int? oosValidated,
+    int? isExchangeTraded,
+    double? etfCommissionRate,
+    double? etfMinCommission,
   }) async {
     if (_executor == null) return;
     final double nowTime = DateTime.now().millisecondsSinceEpoch / 1000.0;
     await _executor!.execute('''
       INSERT OR REPLACE INTO fund_optimal_strategy 
-      (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, is_exchange_traded, etf_commission_rate, etf_min_commission, update_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
       fundCode, fundName, buyDays, buyDrop, targetProfit,
       holdMin, holdMax, winRate, totalTrades, avgProfit, sellX, sellWinRate, sellTrades, maPeriod, maEnvelopePct,
       rsiFilterLimit, macdFilterEnabled, pePercentileLimit, pbPercentileLimit,
       stopLossPct, trailingDropPct, trailingActivatePct, shortHoldDays, shortHoldPenaltyPct, purchaseFeePct, slippagePct, maxGridAdds, oosValidated,
+      isExchangeTraded, etfCommissionRate, etfMinCommission,
       nowTime
     ]);
   }
@@ -495,13 +505,14 @@ class FundHistoryDB {
       for (final s in strategies) {
         await txn.execute('''
           INSERT OR REPLACE INTO fund_optimal_strategy 
-          (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, is_exchange_traded, etf_commission_rate, etf_min_commission, update_time)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', [
           s['fund_code'], s['fund_name'], s['buy_days'], s['buy_drop'], s['target_profit'],
           s['hold_min'], s['hold_max'], s['win_rate'], s['total_trades'], s['avg_profit'], s['sell_x'], s['sell_win_rate'], s['sell_trades'], s['ma_period'], s['ma_envelope_pct'],
           s['rsi_filter_limit'], s['macd_filter_enabled'], s['pe_percentile_limit'], s['pb_percentile_limit'],
           s['stop_loss_pct'], s['trailing_drop_pct'], s['trailing_activate_pct'], s['short_hold_days'], s['short_hold_penalty_pct'], s['purchase_fee_pct'], s['slippage_pct'], s['max_grid_adds'], s['oos_validated'],
+          s['is_exchange_traded'], s['etf_commission_rate'], s['etf_min_commission'],
           nowTime
         ]);
       }
@@ -512,7 +523,7 @@ class FundHistoryDB {
   Future<Map<String, dynamic>?> getOptimalStrategy(String fundCode) async {
     if (_executor == null) return null;
     final rows = await _executor!.query('''
-      SELECT buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time 
+      SELECT buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, is_exchange_traded, etf_commission_rate, etf_min_commission, update_time 
       FROM fund_optimal_strategy WHERE fund_code = ? AND buy_days IS NOT NULL
     ''', [fundCode]);
 
@@ -545,6 +556,9 @@ class FundHistoryDB {
         'slippage_pct': (row['slippage_pct'] as num?)?.toDouble(),
         'max_grid_adds': (row['max_grid_adds'] as num?)?.toInt(),
         'oos_validated': (row['oos_validated'] as num?)?.toInt(),
+        'is_exchange_traded': (row['is_exchange_traded'] as num?)?.toInt(),
+        'etf_commission_rate': (row['etf_commission_rate'] as num?)?.toDouble(),
+        'etf_min_commission': (row['etf_min_commission'] as num?)?.toDouble(),
         'update_time': (row['update_time'] as num?)?.toDouble(),
       };
     }
@@ -557,7 +571,7 @@ class FundHistoryDB {
     final Map<String, Map<String, dynamic>> result = {};
 
     final rows = await _executor!.query('''
-      SELECT fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, update_time 
+      SELECT fund_code, fund_name, buy_days, buy_drop, target_profit, hold_min, hold_max, win_rate, total_trades, avg_profit, sell_x, sell_win_rate, sell_trades, ma_period, ma_envelope_pct, rsi_filter_limit, macd_filter_enabled, pe_percentile_limit, pb_percentile_limit, stop_loss_pct, trailing_drop_pct, trailing_activate_pct, short_hold_days, short_hold_penalty_pct, purchase_fee_pct, slippage_pct, max_grid_adds, oos_validated, is_exchange_traded, etf_commission_rate, etf_min_commission, update_time 
       FROM fund_optimal_strategy WHERE buy_days IS NOT NULL
     ''');
 
@@ -590,6 +604,9 @@ class FundHistoryDB {
         'slippage_pct': (row['slippage_pct'] as num?)?.toDouble(),
         'max_grid_adds': (row['max_grid_adds'] as num?)?.toInt(),
         'oos_validated': (row['oos_validated'] as num?)?.toInt(),
+        'is_exchange_traded': (row['is_exchange_traded'] as num?)?.toInt(),
+        'etf_commission_rate': (row['etf_commission_rate'] as num?)?.toDouble(),
+        'etf_min_commission': (row['etf_min_commission'] as num?)?.toDouble(),
         'update_time': (row['update_time'] as num?)?.toDouble(),
       };
     }

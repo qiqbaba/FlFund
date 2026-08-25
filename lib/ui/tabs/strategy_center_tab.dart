@@ -389,6 +389,16 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                     '无缝同步：寻优成功后自动写入本地 SQLite 策略数据库，与主面板的日度信号监控无缝连接。',
                   ],
                 ),
+                buildFeatureItem(
+                  icon: fluent.FluentIcons.money,
+                  title: '📈 场内/场外智能费率分流',
+                  iconBgColor: Colors.indigo,
+                  bulletPoints: [
+                    '智能识别：自动区分场内 ETF/LOF/REITs 与场外开放式基金，应用专属回测费率。',
+                    '场内零惩罚：场内标的免收 7 天 1.5% 赎回惩罚，按券商佣金（默认万0.5，0.4元起收）与资金即时可用进行高频敏捷寻优。',
+                    '场外防摩擦：场外基金严格遵守 7 天 1.5% 惩罚费与 T+n 资金冻结，防止频繁交易磨损。',
+                  ],
+                ),
               ];
 
               // 等高行布局：同行两卡强制等宽等高，奇数末尾卡片横跨整行，保证排版整齐
@@ -592,6 +602,110 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     });
   }
 
+  void _showEtfCommissionDialog(AppConfig appConfig) {
+    // 换算：0.005% 对应万0.5 (即 0.005 * 100 = 0.5)
+    final rateController = TextEditingController(
+        text: (appConfig.etfCommissionRate * 100).toStringAsFixed(2));
+    final minFeeController =
+        TextEditingController(text: appConfig.etfMinCommission.toStringAsFixed(2));
+
+    fluent.showDialog(
+      context: context,
+      builder: (ctx) {
+        return fluent.ContentDialog(
+          title: const Text('⚙️ 场内交易费率设置 (ETF / LOF)'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '场内标的（ETF/LOF/REITs）免收 7 天 1.5% 惩罚性赎回费与印花税。回测、寻优与模拟盘将按以下证券佣金精准计算交易成本：',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 110,
+                    child: Text('交易佣金费率:', style: TextStyle(fontSize: 12)),
+                  ),
+                  Expanded(
+                    child: fluent.TextBox(
+                      controller: rateController,
+                      placeholder: '如 0.5 (代表万0.5)',
+                      suffix: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text('‱ (万分之)', style: TextStyle(fontSize: 11)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 110,
+                    child: Text('单笔最低起收:', style: TextStyle(fontSize: 12)),
+                  ),
+                  Expanded(
+                    child: fluent.TextBox(
+                      controller: minFeeController,
+                      placeholder: '如 0.4',
+                      suffix: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text('元', style: TextStyle(fontSize: 11)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '💡 提示：按券商实盘佣金配置（默认万0.5，最低0.4元起收；若免起步费则最低输入0）。保存后将实时应用到回测、GA寻优与模拟盘中。',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          actions: [
+            fluent.Button(
+              child: const Text('取消'),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+            fluent.FilledButton(
+              child: const Text('保存配置'),
+              onPressed: () async {
+                final double? rateVal = double.tryParse(rateController.text);
+                final double? minFeeVal = double.tryParse(minFeeController.text);
+                if (rateVal != null &&
+                    rateVal >= 0 &&
+                    minFeeVal != null &&
+                    minFeeVal >= 0) {
+                  final double ratePct = rateVal / 100.0;
+                  await appConfig.updateEtfCommission(
+                      rate: ratePct, minFee: minFeeVal);
+                  if (mounted && ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                    fluent.displayInfoBar(
+                      context,
+                      builder: (context, close) => fluent.InfoBar(
+                        title: const Text('场内费率已更新'),
+                        content: Text(
+                            '当前场内佣金: 万${rateVal.toStringAsFixed(2)}，最低 ${minFeeVal.toStringAsFixed(2)} 元起收。已自动生效。'),
+                        severity: fluent.InfoBarSeverity.success,
+                        onClose: close,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final fundProvider = Provider.of<FundProvider>(context);
@@ -660,9 +774,36 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('🎯 寻优模式选择',
-                  style: TextStyle(
-                      fontWeight: fluent.FontWeight.bold, fontSize: 14)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('🎯 寻优模式选择',
+                      style: TextStyle(
+                          fontWeight: fluent.FontWeight.bold, fontSize: 14)),
+                  fluent.Tooltip(
+                    message:
+                        '配置场内 ETF/LOF 佣金与起收金额（当前: 万${(appConfig.etfCommissionRate * 100).toStringAsFixed(2)}, 最低${appConfig.etfMinCommission.toStringAsFixed(2)}元）',
+                    child: fluent.Button(
+                      style: fluent.ButtonStyle(
+                        padding: fluent.WidgetStateProperty.all(
+                            const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3)),
+                      ),
+                      onPressed: () => _showEtfCommissionDialog(appConfig),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(fluent.FluentIcons.settings,
+                              size: 11,
+                              color: isDark ? Colors.cyanAccent : Colors.teal),
+                          const SizedBox(width: 4),
+                          const Text('场内费率', style: TextStyle(fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 10),
               RadioGroup<OptMode>(
                 groupValue: _optMode,
@@ -2067,6 +2208,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           final double stopLossPct =
               (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
 
+          final bool isEtf =
+              FundInfo.autoDetectFundType(fund.code).isExchangeTraded;
           final optResult =
               await safeCompute(_runStrategyOptimizationInIsolate, {
             'navs': navs,
@@ -2081,6 +2224,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
             'useMacdFilter': targetMacd,
             'stopLossPct': stopLossPct,
             'maxGridAdds': 3,
+            'isExchangeTraded': isEtf,
+            'etfCommissionRate': appConfig.etfCommissionRate,
+            'etfMinCommission': appConfig.etfMinCommission,
           });
 
           if (!mounted) return;
@@ -2135,6 +2281,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
               'short_hold_days': opt['short_hold_days'],
               'short_hold_penalty_pct': opt['short_hold_penalty_pct'],
               'purchase_fee_pct': opt['purchase_fee_pct'],
+              'is_exchange_traded': opt['is_exchange_traded'] ?? (isEtf ? 1 : 0),
+              'etf_commission_rate': opt['etf_commission_rate'],
+              'etf_min_commission': opt['etf_min_commission'],
               'slippage_pct': opt['slippage_pct'],
               'max_grid_adds': opt['max_grid_adds'],
               'oos_validated': opt['oos_validated'],
@@ -2529,6 +2678,8 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     // 在后台执行回测与卖出信号寻优，避免阻塞 UI 线程
     final double stopLossPct =
         (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
+    final appConfig = Provider.of<AppConfig>(context, listen: false);
+    final bool isEtf = FundInfo.autoDetectFundType(targetCode).isExchangeTraded;
     final computeResult = await safeCompute(_runSingleBacktestInIsolate, {
       'navs': navs,
       'dates': dates,
@@ -2546,6 +2697,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       'gridSpacingPct': (_buyDrop * 0.3).clamp(1.0, 5.0),
       'stopLossPct': stopLossPct,
       'maxGridAdds': 3,
+      'isExchangeTraded': isEtf,
+      'etfCommissionRate': appConfig.etfCommissionRate,
+      'etfMinCommission': appConfig.etfMinCommission,
     });
     final BacktestResult res = computeResult['result'] as BacktestResult;
     final Map<String, dynamic>? sellOpt =
@@ -2644,6 +2798,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       // 核心优化：将买入和卖出寻优统一合入后台 Isolate 计算，保证主线程零负荷
       final double stopLossPct =
           (optStrategy?['stop_loss_pct'] as num?)?.toDouble() ?? 15.0;
+      final bool isEtf = FundInfo.autoDetectFundType(targetCode).isExchangeTraded;
       final optResult = await safeCompute(_runStrategyOptimizationInIsolate, {
         'navs': navs,
         'dates': dates,
@@ -2657,6 +2812,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
         'useMacdFilter': _useMacdFilter,
         'stopLossPct': stopLossPct,
         'maxGridAdds': 3,
+        'isExchangeTraded': isEtf,
+        'etfCommissionRate': appConfig.etfCommissionRate,
+        'etfMinCommission': appConfig.etfMinCommission,
       });
 
       // 异步完成后校验：若组件已销毁或基金已切换，丢弃本次结果防止写入错误基金
@@ -2705,6 +2863,9 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
           slippagePct: opt['slippage_pct'],
           maxGridAdds: opt['max_grid_adds'],
           oosValidated: opt['oos_validated'],
+          isExchangeTraded: opt['is_exchange_traded'] ?? (isEtf ? 1 : 0),
+          etfCommissionRate: opt['etf_commission_rate'],
+          etfMinCommission: opt['etf_min_commission'],
         );
 
         if (!mounted) return;
@@ -2758,57 +2919,42 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
     }
   }
 
+  // 3. 构建单只回测/寻优风险指标卡片
   Widget _buildRiskMetricsCards(bool isDark) {
     if (_backtestResult == null) return const SizedBox.shrink();
-
     final res = _backtestResult!;
 
-    Widget buildCard(String title, String value, String desc, IconData icon,
-        Color baseColor) {
-      return Container(
-        padding: const EdgeInsets.all(12.0),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.04)
-              : Colors.black.withValues(alpha: 0.02),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-        ),
+    Widget buildCard(String title, String value, String subtitle,
+        IconData icon, Color color) {
+      return fluent.Card(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: baseColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(icon, color: baseColor, size: 20),
+              child: Icon(icon, color: color, size: 18),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
+                  Text(title,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black),
-                  ),
+                  Text(value,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
-                  Text(
-                    desc,
-                    style: const TextStyle(fontSize: 9, color: Colors.grey),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? Colors.white54 : Colors.black45)),
                 ],
               ),
             ),
@@ -2817,26 +2963,42 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
       );
     }
 
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final int crossAxisCount = screenWidth < 640 ? 2 : 4;
-
     return Padding(
       padding: const EdgeInsets.only(top: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('📊 风险调整后收益与波动评估',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 10),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+            child: Text('🛡️ 深度风控与收益风险比指标',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final double itemWidth =
-                  (constraints.maxWidth - (crossAxisCount - 1) * 12) /
-                      crossAxisCount;
+              final double totalWidth = constraints.maxWidth;
+              // 4列自适应：大屏一行4个，中屏2个一行，小屏1个一行
+              int crossCount = 4;
+              if (totalWidth < 500) {
+                crossCount = 1;
+              } else if (totalWidth < 850) {
+                crossCount = 2;
+              }
+              final double itemWidth = (totalWidth - (crossCount - 1) * 8) / crossCount;
+
               return Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
+                  SizedBox(
+                    width: itemWidth,
+                    child: buildCard(
+                      '卡玛比率',
+                      res.calmarRatio.toThousand(precision: 2),
+                      '年化收益 / 最大回撤',
+                      fluent.FluentIcons.speed_high,
+                      Colors.blue,
+                    ),
+                  ),
                   SizedBox(
                     width: itemWidth,
                     child: buildCard(
@@ -2844,7 +3006,7 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                       '${(res.annualizedVolatility * 100).toThousand(precision: 2)}%',
                       '资金收益率的标准偏差',
                       fluent.FluentIcons.diagnostic,
-                      Colors.blue,
+                      Colors.orange,
                     ),
                   ),
                   SizedBox(
@@ -2854,16 +3016,6 @@ class _StrategyCenterTabState extends State<StrategyCenterTab> {
                       res.sharpeRatio.toThousand(precision: 2),
                       '承受每单位总风险的回报',
                       fluent.FluentIcons.financial,
-                      Colors.orange,
-                    ),
-                  ),
-                  SizedBox(
-                    width: itemWidth,
-                    child: buildCard(
-                      '索提诺比率',
-                      res.sortinoRatio.toThousand(precision: 2),
-                      '承受每单位下行风险的回报',
-                      fluent.FluentIcons.market,
                       Colors.redAccent,
                     ),
                   ),
@@ -2894,6 +3046,9 @@ Map<String, dynamic> _runSingleBacktestInIsolate(Map<String, dynamic> params) {
       (params['navs'] as List<dynamic>?)?.cast<double>() ?? [];
   final List<String> dates =
       (params['dates'] as List<dynamic>?)?.cast<String>() ?? [];
+  final bool isExchangeTraded = params['isExchangeTraded'] as bool? ?? false;
+  final double? etfCommissionRate = params['etfCommissionRate'] as double?;
+  final double? etfMinCommission = params['etfMinCommission'] as double?;
 
   final result = BacktestEngine.runBacktest(
     allNavs: navs,
@@ -2915,6 +3070,9 @@ Map<String, dynamic> _runSingleBacktestInIsolate(Map<String, dynamic> params) {
     // 与模拟盘风控参数对齐：止损默认 -15%、网格加仓最多 3 次
     stopLossPct: params['stopLossPct'] as double? ?? 15.0,
     maxGridAdds: params['maxGridAdds'] as int? ?? 3,
+    isExchangeTraded: isExchangeTraded,
+    etfCommissionRate: etfCommissionRate,
+    etfMinCommission: etfMinCommission,
   );
   final sellOpt = SellSignalOptimizer.optimize(allNavs: navs, allDates: dates);
   return {'result': result, 'sellOpt': sellOpt};
@@ -2938,6 +3096,9 @@ Map<String, dynamic>? _runStrategyOptimizationInIsolate(
   final bool useMacdFilter = params['useMacdFilter'] ?? true;
   final double stopLossPct = params['stopLossPct'] ?? 15.0;
   final int maxGridAdds = params['maxGridAdds'] ?? 3;
+  final bool isExchangeTraded = params['isExchangeTraded'] as bool? ?? false;
+  final double? etfCommissionRate = params['etfCommissionRate'] as double?;
+  final double? etfMinCommission = params['etfMinCommission'] as double?;
 
   final opt = GAOptimizer.optimize(
     allNavs: navs,
@@ -2952,6 +3113,9 @@ Map<String, dynamic>? _runStrategyOptimizationInIsolate(
     useMacdFilter: useMacdFilter,
     stopLossPct: stopLossPct,
     maxGridAdds: maxGridAdds,
+    isExchangeTraded: isExchangeTraded,
+    etfCommissionRate: etfCommissionRate,
+    etfMinCommission: etfMinCommission,
   );
   if (opt == null) return null;
 
@@ -3003,6 +3167,9 @@ Map<String, dynamic>? _runStrategyOptimizationInIsolate(
           gridSpacingPct: gridSpacingPct,
           stopLossPct: stopLossPct,
           maxGridAdds: maxGridAdds,
+          isExchangeTraded: isExchangeTraded,
+          etfCommissionRate: etfCommissionRate,
+          etfMinCommission: etfMinCommission,
         );
 
     final resWithSell = runWithSell(candX, candPct);

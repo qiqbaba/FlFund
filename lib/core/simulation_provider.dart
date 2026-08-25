@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'config.dart';
 import 'fund_provider.dart';
 import 'supabase_manager.dart';
 
@@ -357,6 +358,7 @@ class SimulationProvider extends ChangeNotifier {
     final todayStr = now.toIso8601String().substring(0, 10);
     final bool tailTrade = isTailTradeTime();
     int dailyBuyCount = 0; // 当日买入计数器
+    final appConfig = AppConfig();
 
     // 统计当日已发生的买入笔数（防止重启后重复计数）
     for (final tx in transactions) {
@@ -477,15 +479,24 @@ class SimulationProvider extends ChangeNotifier {
           final double shortHoldPenalty =
               (fund.optimalStrategy?['short_hold_penalty_pct'] as num?)
                       ?.toDouble() ??
-                  defaultShortHoldPenaltyPct;
+                  (fund.isExchangeTraded ? 0.0 : defaultShortHoldPenaltyPct);
           final int shortHoldDays =
               (fund.optimalStrategy?['short_hold_days'] as num?)?.toInt() ??
-                  defaultShortHoldDays;
+                  (fund.isExchangeTraded ? 0 : defaultShortHoldDays);
 
           // 更新持仓期最高净值（追踪止盈基准）
           if (price > pos.maxHoldNav) {
             pos.maxHoldNav = price;
             changed = true;
+          }
+
+          int holdDays = 0;
+          if (pos.buyDateStr.isNotEmpty) {
+            try {
+              final buyDate = DateTime.parse(pos.buyDateStr);
+              final tradeDate = DateTime.parse(tradeDateStr);
+              holdDays = tradeDate.difference(buyDate).inDays;
+            } catch (_) {}
           }
 
           // I. 固定止损平仓（基于首次买入价，网格加仓摊低均价不钝化止损）
@@ -502,14 +513,6 @@ class SimulationProvider extends ChangeNotifier {
             final double targetProfit =
                 (fund.optimalStrategy?['target_profit'] as num?)?.toDouble() ??
                     defaultTargetProfit;
-            int holdDays = 0;
-            if (pos.buyDateStr.isNotEmpty) {
-              try {
-                final buyDate = DateTime.parse(pos.buyDateStr);
-                final tradeDate = DateTime.parse(tradeDateStr);
-                holdDays = tradeDate.difference(buyDate).inDays;
-              } catch (_) {}
-            }
             final double requiredProfit = (holdDays < shortHoldDays)
                 ? targetProfit + shortHoldPenalty
                 : targetProfit;
@@ -524,24 +527,24 @@ class SimulationProvider extends ChangeNotifier {
             final int holdMax =
                 fund.optimalStrategy?['hold_max'] ?? defaultHoldMax;
             try {
-              int holdDays = 0;
+              int tradeHoldDays = 0;
               final int buyDateIdx = fund.dates.indexOf(pos.buyDateStr);
               final int curDateIdx = fund.dates.indexOf(tradeDateStr);
               if (buyDateIdx >= 0 && curDateIdx >= 0 && buyDateIdx >= curDateIdx) {
-                holdDays = buyDateIdx - curDateIdx;
+                tradeHoldDays = buyDateIdx - curDateIdx;
               } else if (buyDateIdx >= 0 && curDateIdx == -1 && fund.isTodayValuation) {
                 // 当日为盘中估值时，比昨日收盘多 1 个交易日
-                holdDays = buyDateIdx + 1;
+                tradeHoldDays = buyDateIdx + 1;
               } else {
                 // 兜底：若未在历史净值中找到对应日期，按自然日的工作日比例（5/7）折算为交易日
                 final buyDate = DateTime.parse(pos.buyDateStr);
                 final tradeDate = DateTime.parse(tradeDateStr);
                 final int calendarDays = tradeDate.difference(buyDate).inDays;
-                holdDays = (calendarDays * 5 / 7).round();
+                tradeHoldDays = (calendarDays * 5 / 7).round();
               }
-              if (holdDays >= holdMax) {
+              if (tradeHoldDays >= holdMax) {
                 sellReason =
-                    '到期平仓(持仓$holdDays交易日≥$holdMax交易日)$signalReasonSuffix';
+                    '到期平仓(持仓$tradeHoldDays交易日≥$holdMax交易日)$signalReasonSuffix';
               }
             } catch (_) {/* 日期解析失败则跳过到期判断 */}
           }
@@ -569,14 +572,29 @@ class SimulationProvider extends ChangeNotifier {
             sellReason = '卖出信号触发$signalReasonSuffix';
           }
 
-          // 执行卖出（扣除滑点，与回测 slippagePct 对齐）
+          // 执行卖出（扣除滑点与手续费，与回测对齐）
           if (sellReason != null) {
             final double sellVolume = pos.volume;
             final double sellAmt = sellVolume * price;
-            final double afterSlippage =
-                sellAmt * (1.0 - slippagePct / 100.0);
-            if (afterSlippage.isFinite && afterSlippage > 0) {
-              availableBalance += afterSlippage;
+            double netSellAmt = sellAmt * (1.0 - slippagePct / 100.0);
+            if (fund.isExchangeTraded) {
+              final double commRate =
+                  (fund.optimalStrategy?['etf_commission_rate'] as num?)
+                          ?.toDouble() ??
+                      appConfig.etfCommissionRate;
+              final double minComm =
+                  (fund.optimalStrategy?['etf_min_commission'] as num?)
+                          ?.toDouble() ??
+                      appConfig.etfMinCommission;
+              final double sellFee =
+                  math.max(sellAmt * (commRate / 100.0), minComm);
+              netSellAmt -= sellFee;
+            } else if (holdDays < shortHoldDays && shortHoldPenalty > 0) {
+              netSellAmt -= sellAmt * (shortHoldPenalty / 100.0);
+            }
+
+            if (netSellAmt.isFinite && netSellAmt > 0) {
+              availableBalance += netSellAmt;
               positions.remove(code);
 
               transactions.insert(
@@ -588,7 +606,7 @@ class SimulationProvider extends ChangeNotifier {
                     type: 'SELL',
                     price: price,
                     volume: sellVolume,
-                    amount: afterSlippage,
+                    amount: netSellAmt,
                     dateTime: DateTime.now(),
                     dateTimeStr: tradeDateStr,
                     signalReason: sellReason,
@@ -615,11 +633,6 @@ class SimulationProvider extends ChangeNotifier {
       // 单日买入笔数限制
       if (dailyBuyCount >= maxDailyBuys) continue;
 
-      // 申购费率（与回测 purchaseFeePct 对齐，买入时从余额扣除）
-      final double purchaseFeePct =
-          (fund.optimalStrategy?['purchase_fee_pct'] as num?)?.toDouble() ??
-              defaultPurchaseFeePct;
-
       final bool stillHeld = positions.containsKey(code);
 
       if (!stillHeld) {
@@ -629,7 +642,24 @@ class SimulationProvider extends ChangeNotifier {
         if (availableBalance < 100.0) continue;
 
         final double buyAmt = math.min(defaultBuyAmount, availableBalance);
-        final double fee = buyAmt * purchaseFeePct / 100.0;
+        double fee = 0.0;
+        if (fund.isExchangeTraded) {
+          final double commRate =
+              (fund.optimalStrategy?['etf_commission_rate'] as num?)
+                      ?.toDouble() ??
+                  appConfig.etfCommissionRate;
+          final double minComm =
+              (fund.optimalStrategy?['etf_min_commission'] as num?)
+                      ?.toDouble() ??
+                  appConfig.etfMinCommission;
+          fee = math.max(buyAmt * (commRate / 100.0), minComm);
+        } else {
+          final double purchaseFeePct =
+              (fund.optimalStrategy?['purchase_fee_pct'] as num?)?.toDouble() ??
+                  defaultPurchaseFeePct;
+          fee = buyAmt * purchaseFeePct / 100.0;
+        }
+
         if (buyAmt + fee > availableBalance) continue;
         final double volume = buyAmt / price;
         if (!volume.isFinite) continue;
@@ -661,7 +691,7 @@ class SimulationProvider extends ChangeNotifier {
               dateTime: DateTime.now(),
               dateTimeStr: tradeDateStr,
               signalReason:
-                  '买入信号触发$signalReasonSuffix${fee > 0 ? '(含${fee.toStringAsFixed(2)}元申购费)' : ''}',
+                  '买入信号触发$signalReasonSuffix${fee > 0 ? (fund.isExchangeTraded ? '(含${fee.toStringAsFixed(2)}元佣金)' : '(含${fee.toStringAsFixed(2)}元申购费)') : ''}',
             ));
         dailyBuyCount++;
         changed = true;
@@ -681,7 +711,24 @@ class SimulationProvider extends ChangeNotifier {
         if (dropFromLast > -gridSpacingPct) continue; // 跌幅不够，不加仓
 
         final double buyAmt = math.min(defaultBuyAmount, availableBalance);
-        final double fee = buyAmt * purchaseFeePct / 100.0;
+        double fee = 0.0;
+        if (fund.isExchangeTraded) {
+          final double commRate =
+              (fund.optimalStrategy?['etf_commission_rate'] as num?)
+                      ?.toDouble() ??
+                  appConfig.etfCommissionRate;
+          final double minComm =
+              (fund.optimalStrategy?['etf_min_commission'] as num?)
+                      ?.toDouble() ??
+                  appConfig.etfMinCommission;
+          fee = math.max(buyAmt * (commRate / 100.0), minComm);
+        } else {
+          final double purchaseFeePct =
+              (fund.optimalStrategy?['purchase_fee_pct'] as num?)?.toDouble() ??
+                  defaultPurchaseFeePct;
+          fee = buyAmt * purchaseFeePct / 100.0;
+        }
+
         if (buyAmt + fee > availableBalance) continue;
         final double volume = buyAmt / price;
         if (!volume.isFinite) continue;
@@ -709,7 +756,7 @@ class SimulationProvider extends ChangeNotifier {
               dateTime: DateTime.now(),
               dateTimeStr: tradeDateStr,
               signalReason:
-                  '网格加仓(第${pos.gridCount}次,跌${dropFromLast.toStringAsFixed(1)}%)$signalReasonSuffix${fee > 0 ? '(含${fee.toStringAsFixed(2)}元申购费)' : ''}',
+                  '网格加仓(第${pos.gridCount}次,跌${dropFromLast.toStringAsFixed(1)}%)$signalReasonSuffix${fee > 0 ? (fund.isExchangeTraded ? '(含${fee.toStringAsFixed(2)}元佣金)' : '(含${fee.toStringAsFixed(2)}元申购费)') : ''}',
             ));
         dailyBuyCount++;
         changed = true;

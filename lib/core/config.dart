@@ -58,6 +58,10 @@ class AppConfig extends ChangeNotifier {
   double volatilityHighThreshold = 48.0;
   DateTime? volatilityUpdateTime;
 
+  /// 场内交易费率配置（默认万0.5，0.4元起收，支持用户自定义修改）
+  double etfCommissionRate = 0.005; // 场内交易佣金百分比 (0.005%)
+  double etfMinCommission = 0.4; // 单笔最低起收佣金 (0.4元)
+
   /// 新基金与标的 ETF 的代偿映射表
   static const Map<String, String> indexProxyMap = {
     '025791': '560660', // 新华中证云计算50ETF联接C -> 新华中证云计算50ETF
@@ -363,6 +367,15 @@ class AppConfig extends ChangeNotifier {
           volatilityUpdateTime = null;
         }
 
+        if (jsonMap['etf_commission_rate'] != null) {
+          etfCommissionRate =
+              (jsonMap['etf_commission_rate'] as num).toDouble();
+        }
+        if (jsonMap['etf_min_commission'] != null) {
+          etfMinCommission =
+              (jsonMap['etf_min_commission'] as num).toDouble();
+        }
+
         if (jsonMap['auto_check_update'] != null) {
           autoCheckUpdate = jsonMap['auto_check_update'] as bool;
         }
@@ -446,6 +459,8 @@ class AppConfig extends ChangeNotifier {
         'volatility_low_threshold': volatilityLowThreshold,
         'volatility_high_threshold': volatilityHighThreshold,
         'volatility_update_time': volatilityUpdateTime?.toIso8601String() ?? '',
+        'etf_commission_rate': etfCommissionRate,
+        'etf_min_commission': etfMinCommission,
         'auto_check_update': autoCheckUpdate,
         'ignored_update_version': ignoredUpdateVersion,
       };
@@ -507,6 +522,17 @@ class AppConfig extends ChangeNotifier {
     volatilityLowThreshold = low;
     volatilityHighThreshold = high;
     volatilityUpdateTime = DateTime.now();
+    notifyListeners();
+    await saveConfig();
+  }
+
+  /// 更新场内交易费率并保存配置
+  Future<void> updateEtfCommission({
+    required double rate,
+    required double minFee,
+  }) async {
+    etfCommissionRate = rate;
+    etfMinCommission = minFee;
     notifyListeners();
     await saveConfig();
   }
@@ -1261,6 +1287,8 @@ class AppConfig extends ChangeNotifier {
         'custom_apis': cleanCustomApis,
         'default_ocr_provider': defaultOcrProvider,
         'freeze_columns': freezeColumns,
+        'etf_commission_rate': etfCommissionRate,
+        'etf_min_commission': etfMinCommission,
       };
     }
 
@@ -1504,6 +1532,14 @@ class AppConfig extends ChangeNotifier {
         }
         if (settings['freeze_columns'] != null) {
           freezeColumns = settings['freeze_columns'];
+        }
+        if (settings['etf_commission_rate'] != null) {
+          etfCommissionRate =
+              (settings['etf_commission_rate'] as num).toDouble();
+        }
+        if (settings['etf_min_commission'] != null) {
+          etfMinCommission =
+              (settings['etf_min_commission'] as num).toDouble();
         }
         changed = true;
       }

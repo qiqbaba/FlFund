@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import '../../core/utils/theme_colors.dart';
+import '../../core/models/fund_info.dart';
 
 /// 基金走势图详情弹窗
 class FundChartDialog extends StatefulWidget {
@@ -507,7 +508,12 @@ class _FundChartDialogState extends State<FundChartDialog> {
         }
       }
 
+      final String navLabel =
+          FundInfo.autoDetectFundType(widget.fundCode).isExchangeTraded
+              ? '收盘价'
+              : '单位净值';
       tooltipText = '日期: $dateStr\n'
+          '$navLabel: ${nav.toStringAsFixed(4)}\n'
           '区间涨跌: ${periodChange.toThousand(precision: 2, showSign: true)}%\n';
 
       if (isEstimatePoint) {
@@ -567,6 +573,8 @@ class _FundChartDialogState extends State<FundChartDialog> {
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isSmallScreen = screenWidth < 700;
+    final fundType = FundInfo.autoDetectFundType(widget.fundCode);
+    final bool isEtf = fundType.isExchangeTraded;
 
     return fluent.ContentDialog(
       constraints: BoxConstraints(
@@ -578,13 +586,54 @@ class _FundChartDialogState extends State<FundChartDialog> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Text(
-              '${widget.fundName} (${widget.fundCode})',
-              style: TextStyle(
-                fontWeight: fluent.FontWeight.bold,
-                fontSize: isSmallScreen ? 14 : 16,
-                color: isDark ? Colors.white : Colors.black,
-              ),
+            child: Row(
+              children: [
+                if (isEtf) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                          color: Colors.blue.withValues(alpha: 0.5),
+                          width: 0.8),
+                    ),
+                    child: Text(
+                      fundType.label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ),
+                ],
+                Flexible(
+                  child: Text(
+                    '${widget.fundName} (${widget.fundCode})',
+                    style: TextStyle(
+                      fontWeight: fluent.FontWeight.bold,
+                      fontSize: isSmallScreen ? 14 : 16,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isEtf) ...[
+                  const SizedBox(width: 6),
+                  fluent.Tooltip(
+                    message: '场内交易标的：免收 7 天 1.5% 赎回惩罚，按券商佣金及资金实时可用结算',
+                    child: Icon(
+                      fluent.FluentIcons.info,
+                      size: 13,
+                      color: isDark ? Colors.cyanAccent : Colors.teal,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           fluent.IconButton(

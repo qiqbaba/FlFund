@@ -105,6 +105,9 @@ Map<String, dynamic> _walkForwardEval(
   bool useMacdFilter, {
   double stopLossPct = 0.0,
   int maxGridAdds = 0,
+  bool isExchangeTraded = false,
+  double? etfCommissionRate,
+  double? etfMinCommission,
 }) {
   if (!wf.hasOutSample) {
     return {
@@ -149,6 +152,9 @@ Map<String, dynamic> _walkForwardEval(
       gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
       stopLossPct: stopLossPct,
       maxGridAdds: maxGridAdds,
+      isExchangeTraded: isExchangeTraded,
+      etfCommissionRate: etfCommissionRate,
+      etfMinCommission: etfMinCommission,
     );
     if (res.totalTrades > 0) {
       totalTrades += res.totalTrades;
@@ -178,6 +184,9 @@ Map<String, dynamic> _walkForwardEval(
     gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
     stopLossPct: stopLossPct,
     maxGridAdds: maxGridAdds,
+    isExchangeTraded: isExchangeTraded,
+    etfCommissionRate: etfCommissionRate,
+    etfMinCommission: etfMinCommission,
   );
 
   return {
@@ -284,6 +293,9 @@ bool _isStablePlateau(
   List<double>? precalculatedVol60,
   double stopLossPct = 0.0,
   int maxGridAdds = 0,
+  bool isExchangeTraded = false,
+  double? etfCommissionRate,
+  double? etfMinCommission,
 }) {
   if (baseCalmar <= 0) return true; // 如果原本就未盈利，无需进行高原验证
 
@@ -349,6 +361,9 @@ bool _isStablePlateau(
       gridSpacingPct: (n.buyDrop * 0.3).clamp(1.0, 5.0),
       stopLossPct: stopLossPct,
       maxGridAdds: maxGridAdds,
+      isExchangeTraded: isExchangeTraded,
+      etfCommissionRate: etfCommissionRate,
+      etfMinCommission: etfMinCommission,
     );
     if (res.totalTrades > 0) {
       neighborCalmarSum += res.calmarRatio;
@@ -390,6 +405,10 @@ class GAOptimizer {
     // 与模拟盘风控参数对齐：单笔硬止损（默认 -15%），网格加仓最多 3 次
     double stopLossPct = 15.0,
     int maxGridAdds = 3,
+    // 场内基金与可配置佣金（默认万0.5，0.4元起收，免7天惩罚与T+0即时结算）
+    bool isExchangeTraded = false,
+    double? etfCommissionRate,
+    double? etfMinCommission,
   }) {
     if (allNavs.length < 20) return null;
 
@@ -499,10 +518,16 @@ class GAOptimizer {
     final bool isLowVol = !isTooShort && (totalScore < lowThreshold);
     final bool isHighVol = totalScore >= highThreshold;
 
-    // 2.2 动态设置寻优和回测参数边界 (基于低、中、高波动等级)
-    final int holdMax = isHighVol ? 30 : (isLowVol ? 120 : 75);
-    final int minBuyDays = isHighVol ? 3 : (isLowVol ? 6 : 4);
-    final int maxBuyDays = isHighVol ? 25 : (isLowVol ? 75 : 45);
+    // 2.2 动态设置寻优和回测参数边界 (基于低、中、高波动等级与场内/场外属性)
+    final int holdMax = isExchangeTraded
+        ? (isHighVol ? 20 : (isLowVol ? 90 : 45))
+        : (isHighVol ? 30 : (isLowVol ? 120 : 75));
+    final int minBuyDays = isExchangeTraded
+        ? (isHighVol ? 2 : (isLowVol ? 4 : 3))
+        : (isHighVol ? 3 : (isLowVol ? 6 : 4));
+    final int maxBuyDays = isExchangeTraded
+        ? (isHighVol ? 20 : (isLowVol ? 60 : 35))
+        : (isHighVol ? 25 : (isLowVol ? 75 : 45));
     final double maxTargetProfit = isHighVol ? 25.0 : (isLowVol ? 8.0 : 18.0);
     final double slippagePct = isHighVol ? 0.6 : (isLowVol ? 0.2 : 0.4);
 
@@ -563,6 +588,9 @@ class GAOptimizer {
         gridSpacingPct: (ind.buyDrop * 0.3).clamp(1.0, 5.0),
         stopLossPct: stopLossPct,
         maxGridAdds: maxGridAdds,
+        isExchangeTraded: isExchangeTraded,
+        etfCommissionRate: etfCommissionRate,
+        etfMinCommission: etfMinCommission,
       );
 
       if (inSampleRes.totalTrades == 0) {
@@ -839,6 +867,9 @@ class GAOptimizer {
         gridSpacingPct: (cand.buyDrop * 0.3).clamp(1.0, 5.0),
         stopLossPct: stopLossPct,
         maxGridAdds: maxGridAdds,
+        isExchangeTraded: isExchangeTraded,
+        etfCommissionRate: etfCommissionRate,
+        etfMinCommission: etfMinCommission,
       );
       final bool stable = _isStablePlateau(
         cand,
@@ -861,6 +892,9 @@ class GAOptimizer {
         precalculatedVol60: inSampleVol60,
         stopLossPct: stopLossPct,
         maxGridAdds: maxGridAdds,
+        isExchangeTraded: isExchangeTraded,
+        etfCommissionRate: etfCommissionRate,
+        etfMinCommission: etfMinCommission,
       );
       if (!stable) continue;
 
@@ -880,7 +914,11 @@ class GAOptimizer {
       final wfRes = _walkForwardEval(cand, allNavs, allDates, wf, holdMax,
           trailingDropPct, sellX, sellPct, slippagePct, rsiFilterLimit,
           useMacdFilter,
-          stopLossPct: stopLossPct, maxGridAdds: maxGridAdds);
+          stopLossPct: stopLossPct,
+          maxGridAdds: maxGridAdds,
+          isExchangeTraded: isExchangeTraded,
+          etfCommissionRate: etfCommissionRate,
+          etfMinCommission: etfMinCommission);
       final int validFolds = wfRes['validFolds'] as int;
       final int positiveFolds = wfRes['positiveFolds'] as int;
       final double avgCalmar = wfRes['avgCalmar'] as double;
@@ -907,7 +945,11 @@ class GAOptimizer {
         final wfRes = _walkForwardEval(stableFallback, allNavs, allDates, wf,
             holdMax, trailingDropPct, sellX, sellPct, slippagePct,
             rsiFilterLimit, useMacdFilter,
-            stopLossPct: stopLossPct, maxGridAdds: maxGridAdds);
+            stopLossPct: stopLossPct,
+            maxGridAdds: maxGridAdds,
+            isExchangeTraded: isExchangeTraded,
+            etfCommissionRate: etfCommissionRate,
+            etfMinCommission: etfMinCommission);
         final double fullOosReturn = wfRes['fullOosReturn'] as double;
         final double fullOosWinRate = wfRes['fullOosWinRate'] as double;
         final int fullOosTrades = wfRes['fullOosTrades'] as int;
@@ -948,6 +990,9 @@ class GAOptimizer {
       gridSpacingPct: (finalBest.buyDrop * 0.3).clamp(1.0, 5.0),
       stopLossPct: stopLossPct,
       maxGridAdds: maxGridAdds,
+      isExchangeTraded: isExchangeTraded,
+      etfCommissionRate: etfCommissionRate,
+      etfMinCommission: etfMinCommission,
     );
 
     if (finalRes.totalTrades > 0) {
@@ -955,7 +1000,7 @@ class GAOptimizer {
         'buy_days': finalBest.buyDays,
         'buy_drop': finalBest.buyDrop,
         'target_profit': finalBest.targetProfit,
-        'hold_min': 7,
+        'hold_min': isExchangeTraded ? 1 : 7,
         'hold_max': holdMax,
         'win_rate': finalRes.winRate,
         'total_trades': finalRes.totalTrades,
@@ -966,9 +1011,12 @@ class GAOptimizer {
         'stop_loss_pct': stopLossPct,
         'trailing_drop_pct': trailingDropPct ?? 2.0,
         'slippage_pct': slippagePct,
-        'short_hold_days': 7,
-        'short_hold_penalty_pct': 1.5,
-        'purchase_fee_pct': 0.0,
+        'short_hold_days': isExchangeTraded ? 0 : 7,
+        'short_hold_penalty_pct': isExchangeTraded ? 0.0 : 1.5,
+        'purchase_fee_pct': isExchangeTraded ? (etfCommissionRate ?? 0.005) : 0.0,
+        'is_exchange_traded': isExchangeTraded ? 1 : 0,
+        'etf_commission_rate': etfCommissionRate ?? 0.005,
+        'etf_min_commission': etfMinCommission ?? 0.4,
         'max_grid_adds': maxGridAdds,
         // 样本外验收结果：null=数据不足无样本外，1=通过，0=训练集稳定兜底
         'oos_validated': isOosPassed,
