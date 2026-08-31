@@ -1,17 +1,17 @@
 {
-  "version": "1.8.32",
-  "buildNumber": 114,
+  "version": "1.8.33",
+  "buildNumber": 115,
   "minSupportedVersion": "1.8.0",
-  "releaseDate": "2026-08-25",
-  "releaseNotes": "1. 场内ETF策略寻优与回测：支持场内标的免除7天短期赎回惩罚，精准按券商佣金扣费，动态优化寻优边界与持仓周期\n2. 模拟盘场内交易机制对齐：买入加仓与卖出平仓全面支持ETF佣金计算与资金即时结算，完善交易记录提示\n3. 界面与详情体验优化：重构策略中心深度风控指标卡片布局，基金走势图详情弹窗增加场内标的标签与佣金说明",
+  "releaseDate": "2026-08-31",
+  "releaseNotes": "1. 影子ETF行情扩充：新增国证在线消费ETF联接基金（014578/014579）影子行情映射，支持盘中实时估值\n2. 依赖组件升级：升级 file_picker 与 pub_semver 依赖库至最新版本\n3. 单元测试完善：补充在线消费影子ETF估值拉取与解析测试用例",
   "platforms": {
     "windows": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.32/FlFund-Windows-x64.zip",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.33/FlFund-Windows-x64.zip",
       "sha256": "",
       "fileSize": 0
     },
     "android": {
-      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.32/FlFund-v1.8.32.apk",
+      "url": "https://github.com/qiqbaba/FlFund/releases/download/v1.8.33/FlFund-v1.8.33.apk",
       "sha256": "",
       "fileSize": 0
     }

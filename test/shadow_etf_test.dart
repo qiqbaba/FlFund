@@ -61,9 +61,28 @@ void main() {
       print('估值涨跌幅: ${val['gszzl']}%');
     }, timeout: const Timeout(Duration(seconds: 60)));
 
+    test('Single shadow ETF valuation fetch (014578 -> sz159728)', () async {
+      // 014578 是南方国证在线消费ETF联接A，映射到 sz159728 (在线消费ETF)
+      final val = await gateway.fetchValuation('014578');
+      expect(val, isNotNull);
+      if (val!['source'] == 'ShadowETF') {
+        expect(val['is_shadow'], isTrue);
+      }
+      
+      final double? gsz = double.tryParse(val['gsz'] ?? '');
+      expect(gsz, isNotNull);
+      expect(gsz! > 0, isTrue);
+
+      print('--- 014578 在线消费影子估值结果 (数据源: ${val['source']}) ---');
+      print('名称: ${val['name']}');
+      print('估值: ${val['gsz']}');
+      print('估值涨跌幅: ${val['gszzl']}%');
+      print('更新时间: ${val['gztime']}');
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
     test('Batch shadow ETF valuation fetch (Mix of Shadow and Normal)', () async {
-      // 050025, 008282, 012769 是影子，000001 (华夏成长) 是普通基金
-      final codes = ['050025', '008282', '012769', '000001'];
+      // 050025, 008282, 012769, 014578 是影子，000001 (华夏成长) 是普通基金
+      final codes = ['050025', '008282', '012769', '014578', '000001'];
       final results = <String, Map<String, dynamic>>{};
       for (final code in codes) {
         final val = await gateway.fetchValuation(code);
